@@ -39,10 +39,10 @@ The first usable Windows milestone now includes:
 
 - dependency bootstrap through `winget`
 - latest `llama.cpp` CUDA Windows binary download
-- `TurboQuant` source clone for follow-up work
+- `TurboQuant` source clone and build script
 - recommended `Qwen 3.6 35B A3B` model download through `huggingface_hub`
 - `OpenCode` install through `npm`
-- automatic OpenCode config wiring to the local `llama.cpp` endpoint
+- automatic OpenCode config wiring to the local `llama.cpp` endpoint during install
 - portable PowerShell launchers
 - a GUI control center
 - desktop shortcuts for the control center and OpenCode
@@ -75,3 +75,10 @@ bash install/linux/install.sh
 ```
 
 The Linux installer is still a public skeleton and is not yet at parity with the Windows milestone.
+
+It now also includes:
+
+- local launcher deployment
+- OpenCode config writer
+- terminal control center
+- `start-opencode.sh` helper

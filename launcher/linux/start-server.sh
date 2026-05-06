@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/local_qwen_common.sh"
+
+PROFILE="${1:-balanced}"
+ROOT="$(get_local_qwen_root)"
+STATE_PATH="$(get_install_state_path)"
+SETTINGS_PATH="$(get_settings_path)"
+DEFAULTS_PATH="$(get_defaults_path)"
+
+python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$DEFAULTS_PATH" "$PROFILE"
+import json, os, subprocess, sys, time
+
+state_path, settings_path, defaults_path, profile = sys.argv[1:5]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+with open(settings_path, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+
+profile_data = defaults["profiles"][profile]
+ctx = settings["llama"]["contextSize"]
+out_tokens = settings["llama"]["maxOutputTokens"]
+server = state.get("turboServerExe") or state["llamaServerExe"]
+model = state["modelFile"]
+port = state["port"]
+threads = state["threads"]
+args = [
+    server, "-m", model, "--port", str(port),
+    "-ngl", "999",
+    "-ncmoe", str(profile_data["ncmoe"]),
+    "-c", str(ctx),
+    "-ctk", profile_data["cacheTypeK"],
+    "-ctv", profile_data["cacheTypeV"],
+    "-fa", "on",
+    "-n", str(out_tokens),
+    "-t", str(threads),
+]
+if state.get("noMmap", True):
+    args.append("--no-mmap")
+if state.get("mlock", True):
+    args.append("--mlock")
+
+log_dir = os.path.join(state["installRoot"], "logs")
+os.makedirs(log_dir, exist_ok=True)
+stamp = time.strftime("%Y%m%d-%H%M%S")
+stdout_path = os.path.join(log_dir, f"llama-{profile}-{stamp}.out.log")
+stderr_path = os.path.join(log_dir, f"llama-{profile}-{stamp}.err.log")
+
+with open(stdout_path, "wb") as out, open(stderr_path, "wb") as err:
+    subprocess.Popen(args, stdout=out, stderr=err, start_new_session=True)
+
+print(f"llama.cpp start requested for profile {profile}")
+print(f"stdout: {stdout_path}")
+print(f"stderr: {stderr_path}")
+PY

@@ -4,6 +4,7 @@ param(
     [string]$Profile = "balanced",
     [switch]$SkipDependencies,
     [switch]$SkipLlamaDownload,
+    [switch]$SkipTurboQuantBuild,
     [switch]$SkipModelDownload
 )
 
@@ -144,6 +145,8 @@ if (-not $SkipDependencies) {
     Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
     Ensure-Command -Name "npm" -WingetId "OpenJS.NodeJS.LTS"
     Ensure-Command -Name "py" -WingetId "Python.Python.3.12"
+    Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
+    Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
 }
 
 Ensure-Dir $InstallRoot
@@ -225,6 +228,18 @@ $settings = [ordered]@{
     }
 }
 $settings | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $stateDir "settings.json") -Encoding UTF8
+
+& powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "OpenCode konfiguracija nije uspesno upisana."
+}
+
+if (-not $SkipTurboQuantBuild) {
+    & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        throw "TurboQuant build nije uspeo."
+    }
+}
 
 $controlCenterScript = Join-Path $launchersDir "control-center.ps1"
 $controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"

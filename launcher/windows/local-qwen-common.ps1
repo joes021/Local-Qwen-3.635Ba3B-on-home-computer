@@ -85,11 +85,23 @@ function Test-LlamaHealth {
 
 function Get-LlamaServerExe {
     $state = Get-InstallState
-    $candidate = Join-Path $state.llamaBinDir "llama-server.exe"
-    if (!(Test-Path $candidate)) {
-        throw "llama-server.exe nije pronadjen: $candidate"
+    $candidates = @()
+
+    if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
+        $candidates += [string]$state.turboServerExe
     }
-    return $candidate
+
+    if ($state.PSObject.Properties["llamaBinDir"] -and $state.llamaBinDir) {
+        $candidates += (Join-Path $state.llamaBinDir "llama-server.exe")
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "llama-server.exe nije pronadjen ni u TurboQuant ni u upstream bin folderu."
 }
 
 function Get-LlamaModelPath {

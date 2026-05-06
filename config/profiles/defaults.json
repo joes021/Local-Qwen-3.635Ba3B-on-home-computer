@@ -7,6 +7,10 @@
     "noMmap": true,
     "mlock": true
   },
+  "windowsBuild": {
+    "cmakeGenerator": "Ninja",
+    "cudaArch": "native"
+  },
   "profiles": {
     "speed": {
       "ncmoe": 0,
@@ -48,6 +52,13 @@
   },
   "turboquant": {
     "repo": "https://github.com/TheTom/llama-cpp-turboquant.git",
-    "branch": "feature/turboquant-kv-cache"
+    "branch": "feature/turboquant-kv-cache",
+    "buildDir": "build-cuda",
+    "dllNames": [
+      "cublas64_13.dll",
+      "cublasLt64_13.dll",
+      "cudart64_13.dll",
+      "libomp140.x86_64.dll"
+    ]
   }
 }
