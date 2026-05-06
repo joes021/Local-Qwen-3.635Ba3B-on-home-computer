@@ -15,6 +15,7 @@ The current Windows installer now handles:
 - icon deployment
 - desktop shortcut creation
 - OpenCode config generation
+- post-install verification script
 
 Still being finalized:
 
@@ -36,6 +37,8 @@ It currently handles:
 - OpenCode config writer
 - terminal control center
 - `start-opencode.sh`
+- desktop launcher files
+- post-install verification script
 
 Still being finalized:
 

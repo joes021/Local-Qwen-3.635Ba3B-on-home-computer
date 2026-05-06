@@ -38,6 +38,7 @@ This repository is being built from a real working local setup and is currently 
 The first usable Windows milestone now includes:
 
 - dependency bootstrap through `winget`
+- `Visual Studio Build Tools 2022` and `CUDA Toolkit` bootstrap attempts
 - latest `llama.cpp` CUDA Windows binary download
 - `TurboQuant` source clone and build script
 - recommended `Qwen 3.6 35B A3B` model download through `huggingface_hub`
@@ -65,6 +66,13 @@ Then launch:
 
 - `Local Qwen Control Center`
 - `OpenCode - Local Qwen`
+- `Verify Local Qwen Install`
+
+Optional manual verify:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\launcher\windows\verify-install.ps1
+```
 
 ### Linux
 
@@ -82,3 +90,10 @@ It now also includes:
 - OpenCode config writer
 - terminal control center
 - `start-opencode.sh` helper
+- `verify-install.sh`
+
+Optional manual verify:
+
+```bash
+bash launcher/linux/verify-install.sh
+```

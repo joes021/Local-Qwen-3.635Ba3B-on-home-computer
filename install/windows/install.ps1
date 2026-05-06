@@ -59,6 +59,30 @@ function Ensure-Command {
     Invoke-Native winget install --id $WingetId --silent --accept-package-agreements --accept-source-agreements
 }
 
+function Ensure-VsBuildTools {
+    $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $vcvars) {
+        return
+    }
+
+    Write-Host "Instaliram Visual Studio Build Tools 2022..." -ForegroundColor Cyan
+    Invoke-Native winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+}
+
+function Ensure-CudaToolkit {
+    if (Get-Command nvcc -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $cudaDir = Get-ChildItem "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cudaDir) {
+        return
+    }
+
+    Write-Host "Instaliram NVIDIA CUDA Toolkit..." -ForegroundColor Cyan
+    Invoke-Native winget install --id Nvidia.CUDA --silent --accept-package-agreements --accept-source-agreements
+}
+
 function Copy-FolderContent {
     param(
         [string]$Source,
@@ -147,6 +171,8 @@ if (-not $SkipDependencies) {
     Ensure-Command -Name "py" -WingetId "Python.Python.3.12"
     Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
     Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
+    Ensure-VsBuildTools
+    Ensure-CudaToolkit
 }
 
 Ensure-Dir $InstallRoot
@@ -261,6 +287,14 @@ New-Shortcut `
     -WorkingDirectory $launchersDir `
     -IconLocation "$opencodeIcon,0" `
     -Description "Launch OpenCode wired to local Qwen"
+
+New-Shortcut `
+    -ShortcutPath (Join-Path $desktopTargetDir "Verify Local Qwen Install.lnk") `
+    -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+    -Arguments "-ExecutionPolicy Bypass -File `"$($launchersDir)\verify-install.ps1`"" `
+    -WorkingDirectory $launchersDir `
+    -IconLocation "$controlCenterIcon,0" `
+    -Description "Verify local Qwen installation"
 
 $summary = @"
 Windows install state written to:

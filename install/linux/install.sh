@@ -13,8 +13,34 @@ MODELS_DIR="$INSTALL_ROOT/models"
 LAUNCHERS_DIR="$INSTALL_ROOT/launchers"
 CONFIG_DIR="$INSTALL_ROOT/config"
 ASSETS_DIR="$INSTALL_ROOT/assets"
+DESKTOP_DIR="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+
+ensure_cmd() {
+  local name="$1"
+  if command -v "$name" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_packages_linux() {
+  local pkgs=(git curl python3 python3-pip nodejs npm cmake ninja-build build-essential pkg-config)
+
+  if ensure_cmd apt-get; then
+    sudo apt-get update
+    sudo apt-get install -y "${pkgs[@]}" || true
+  elif ensure_cmd dnf; then
+    sudo dnf install -y git curl python3 python3-pip nodejs npm cmake ninja-build gcc-c++ make pkgconfig || true
+  elif ensure_cmd pacman; then
+    sudo pacman -Sy --noconfirm git curl python python-pip nodejs npm cmake ninja base-devel pkgconf || true
+  elif ensure_cmd zypper; then
+    sudo zypper install -y git curl python3 python3-pip nodejs npm cmake ninja gcc-c++ make pkg-config || true
+  fi
+}
 
 mkdir -p "$STATE_DIR" "$APPS_DIR" "$BIN_DIR" "$MODELS_DIR" "$LAUNCHERS_DIR" "$CONFIG_DIR" "$ASSETS_DIR"
+
+ensure_packages_linux
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git nije instaliran. Instaliraj ga pa ponovo pokreni installer."
@@ -106,6 +132,29 @@ EOF
 
 "$LAUNCHERS_DIR/configure-settings.sh"
 
+mkdir -p "$DESKTOP_DIR"
+cat > "$DESKTOP_DIR/local-qwen-control-center.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Local Qwen Control Center
+Exec=$LAUNCHERS_DIR/control-center.sh
+Terminal=true
+Icon=$ASSETS_DIR/icons/control-center.ico
+Categories=Development;
+EOF
+
+cat > "$DESKTOP_DIR/opencode-local-qwen.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=OpenCode - Local Qwen
+Exec=$LAUNCHERS_DIR/start-opencode.sh balanced
+Terminal=true
+Icon=$ASSETS_DIR/icons/opencode-local-qwen.ico
+Categories=Development;
+EOF
+
+chmod +x "$DESKTOP_DIR/local-qwen-control-center.desktop" "$DESKTOP_DIR/opencode-local-qwen.desktop"
+
 cat <<EOF
 Linux installer je pripremio lokalni stack.
 
@@ -121,6 +170,7 @@ $LAUNCHERS_DIR
 Primary commands:
 - $LAUNCHERS_DIR/control-center.sh
 - $LAUNCHERS_DIR/start-opencode.sh
+- $LAUNCHERS_DIR/verify-install.sh
 
 Model:
 $MODEL_PATH

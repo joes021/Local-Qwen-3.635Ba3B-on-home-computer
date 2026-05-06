@@ -8,7 +8,7 @@
     "mlock": true
   },
   "windowsBuild": {
-    "cmakeGenerator": "Ninja",
+    "cmakeGenerator": "Visual Studio 17 2022",
     "cudaArch": "native"
   },
   "profiles": {
