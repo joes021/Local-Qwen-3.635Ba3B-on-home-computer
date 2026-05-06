@@ -45,5 +45,9 @@
       "source": "Qwen/Qwen3.6-35B-A3B-GGUF",
       "filename": "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
     }
+  },
+  "turboquant": {
+    "repo": "https://github.com/TheTom/llama-cpp-turboquant.git",
+    "branch": "feature/turboquant-kv-cache"
   }
 }

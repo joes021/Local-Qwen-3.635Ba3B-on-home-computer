@@ -2,19 +2,24 @@
 
 ## Windows
 
-The current Windows installer already scaffolds:
+The current Windows installer now handles:
 
 - install root
 - state directory
-- repo clones for `llama.cpp` and `TurboQuant`
+- latest upstream `llama.cpp` CUDA Windows release download
+- `TurboQuant` source clone
+- recommended model download through Python + `huggingface_hub`
 - `OpenCode` global install through `npm`
+- launcher deployment
+- icon deployment
+- desktop shortcut creation
+- OpenCode config generation
 
 Still being finalized:
 
-- automatic model download
-- portable runtime config generation
-- desktop shortcuts
-- final control center deployment
+- automatic `TurboQuant` Windows build
+- hardware-aware fallback logic for more GPUs
+- fuller verification pipeline after install
 
 ## Linux
 

@@ -1,0 +1,161 @@
+$ErrorActionPreference = "Stop"
+
+function Get-LocalQwenRoot {
+    $installedRoot = Join-Path $PSScriptRoot ".."
+    if (Test-Path (Join-Path $installedRoot "state\install-state.json")) {
+        return (Resolve-Path $installedRoot).Path
+    }
+
+    return (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+}
+
+function Get-InstallState {
+    $root = Get-LocalQwenRoot
+    $statePath = Join-Path $root "state\install-state.json"
+    if (!(Test-Path $statePath)) {
+        throw "Install state nije pronadjen: $statePath"
+    }
+
+    return Get-Content -Raw $statePath | ConvertFrom-Json
+}
+
+function Get-Defaults {
+    $root = Get-LocalQwenRoot
+    $defaultsPath = Join-Path $root "config\profiles\defaults.json"
+    if (!(Test-Path $defaultsPath)) {
+        throw "Defaults config nije pronadjen: $defaultsPath"
+    }
+
+    return Get-Content -Raw $defaultsPath | ConvertFrom-Json
+}
+
+function Get-Settings {
+    $root = Get-LocalQwenRoot
+    $settingsPath = Join-Path $root "state\settings.json"
+    if (Test-Path $settingsPath) {
+        return Get-Content -Raw $settingsPath | ConvertFrom-Json
+    }
+
+    $defaults = Get-Defaults
+    return [pscustomobject]@{
+        profile = "balanced"
+        llama = [pscustomobject]@{
+            contextSize = $defaults.profiles.balanced.contextSize
+            maxOutputTokens = 8192
+        }
+        opencode = [pscustomobject]@{
+            buildSteps = $defaults.opencode.steps.build
+            planSteps = $defaults.opencode.steps.plan
+            generalSteps = $defaults.opencode.steps.general
+            exploreSteps = $defaults.opencode.steps.explore
+        }
+    }
+}
+
+function Save-Settings {
+    param([Parameter(Mandatory = $true)]$Settings)
+
+    $root = Get-LocalQwenRoot
+    $settingsPath = Join-Path $root "state\settings.json"
+    $Settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsPath -Encoding UTF8
+}
+
+function Get-OpenCodeConfigPath {
+    return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
+}
+
+function Ensure-Directory {
+    param([string]$Path)
+    New-Item -ItemType Directory -Force -Path $Path | Out-Null
+}
+
+function Get-LlamaHealthUrl {
+    $state = Get-InstallState
+    return "http://127.0.0.1:$($state.port)/health"
+}
+
+function Test-LlamaHealth {
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri (Get-LlamaHealthUrl) -TimeoutSec 5
+        return $response.Content -match '"status"\s*:\s*"ok"'
+    } catch {
+        return $false
+    }
+}
+
+function Get-LlamaServerExe {
+    $state = Get-InstallState
+    $candidate = Join-Path $state.llamaBinDir "llama-server.exe"
+    if (!(Test-Path $candidate)) {
+        throw "llama-server.exe nije pronadjen: $candidate"
+    }
+    return $candidate
+}
+
+function Get-LlamaModelPath {
+    $state = Get-InstallState
+    if (!(Test-Path $state.modelFile)) {
+        throw "Model nije pronadjen: $($state.modelFile)"
+    }
+    return $state.modelFile
+}
+
+function Update-OpenCodeConfig {
+    $state = Get-InstallState
+    $settings = Get-Settings
+    $configPath = Get-OpenCodeConfigPath
+    Ensure-Directory (Split-Path -Parent $configPath)
+
+    $existing = $null
+    if (Test-Path $configPath) {
+        try {
+            $existing = Get-Content -Raw $configPath | ConvertFrom-Json
+        } catch {
+            $existing = [pscustomobject]@{}
+        }
+    } else {
+        $existing = [pscustomobject]@{}
+    }
+
+    if (-not $existing.PSObject.Properties["provider"]) {
+        $existing | Add-Member -NotePropertyName "provider" -NotePropertyValue ([pscustomobject]@{})
+    }
+
+    $existing.provider | Add-Member -Force -NotePropertyName "local-llamacpp" -NotePropertyValue ([pscustomobject]@{
+        npm = "@ai-sdk/openai-compatible"
+        name = "Local llama.cpp"
+        options = [pscustomobject]@{
+            baseURL = "http://127.0.0.1:$($state.port)/v1"
+            apiKey = "llama.cpp"
+        }
+        models = [pscustomobject]@{
+            ($state.modelId) = [pscustomobject]@{
+                name = "Qwen 3.6 35B A3B Local (llama.cpp)"
+            }
+        }
+    })
+
+    $existing | Add-Member -Force -NotePropertyName "model" -NotePropertyValue "local-llamacpp/$($state.modelId)"
+
+    if (-not $existing.PSObject.Properties["small_model"]) {
+        $existing | Add-Member -NotePropertyName "small_model" -NotePropertyValue "local-llamacpp/$($state.modelId)"
+    }
+
+    if (-not $existing.PSObject.Properties["agent"]) {
+        $existing | Add-Member -NotePropertyName "agent" -NotePropertyValue ([pscustomobject]@{})
+    }
+
+    foreach ($name in @("build", "plan", "general", "explore")) {
+        if (-not $existing.agent.PSObject.Properties[$name]) {
+            $existing.agent | Add-Member -NotePropertyName $name -NotePropertyValue ([pscustomobject]@{})
+        }
+    }
+
+    $existing.agent.build.steps = [int]$settings.opencode.buildSteps
+    $existing.agent.plan.steps = [int]$settings.opencode.planSteps
+    $existing.agent.general.steps = [int]$settings.opencode.generalSteps
+    $existing.agent.explore.steps = [int]$settings.opencode.exploreSteps
+
+    $existing | ConvertTo-Json -Depth 20 | Set-Content -Path $configPath -Encoding UTF8
+    return $configPath
+}
