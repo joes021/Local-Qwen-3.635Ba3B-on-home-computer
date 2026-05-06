@@ -1,0 +1,49 @@
+{
+  "projectName": "Local Qwen 3.635Ba3B on home computer",
+  "service": {
+    "port": 8091,
+    "threads": 16,
+    "flashAttention": true,
+    "noMmap": true,
+    "mlock": true
+  },
+  "profiles": {
+    "speed": {
+      "ncmoe": 0,
+      "contextSize": 131072,
+      "cacheTypeK": "turbo4",
+      "cacheTypeV": "turbo3",
+      "note": "Fastest profile with the least free VRAM headroom."
+    },
+    "balanced": {
+      "ncmoe": 20,
+      "contextSize": 262144,
+      "cacheTypeK": "turbo4",
+      "cacheTypeV": "turbo3",
+      "note": "Recommended daily profile for a 12 GB RTX 3060 class GPU."
+    },
+    "video": {
+      "ncmoe": 35,
+      "contextSize": 262144,
+      "cacheTypeK": "turbo4",
+      "cacheTypeV": "turbo3",
+      "note": "Closest to the original video logic with more experts on CPU."
+    }
+  },
+  "opencode": {
+    "steps": {
+      "build": 120,
+      "plan": 80,
+      "general": 100,
+      "explore": 60
+    },
+    "smallModelFallback": "local-ollama/qwen3:8b"
+  },
+  "modelChoices": {
+    "recommendedWindows3060_12gb": {
+      "id": "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
+      "source": "Qwen/Qwen3.6-35B-A3B-GGUF",
+      "filename": "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
+    }
+  }
+}
