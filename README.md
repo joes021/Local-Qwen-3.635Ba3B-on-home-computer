@@ -22,6 +22,26 @@ The goal is simple:
 3. Let it prepare the local stack
 4. Get 1-2 launchers that are actually useful
 
+## What It Does
+
+After install, this setup:
+
+- installs or prepares the local `llama.cpp` runtime
+- prepares `TurboQuant`
+- downloads a local `Qwen 3.6 35B A3B` GGUF profile
+- wires `OpenCode` to the local `llama.cpp` server
+- saves local settings for:
+  - profile
+  - context size
+  - max output tokens
+  - OpenCode step limits
+  - working directory
+- gives you launchers for:
+  - starting the model server
+  - starting OpenCode
+  - changing settings later
+  - verifying the install
+
 ## What You Get
 
 - local `llama.cpp` runtime
@@ -70,6 +90,47 @@ wget https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/d
 chmod +x ./Local-Qwen-Setup-1.2.1.run
 ./Local-Qwen-Setup-1.2.1.run
 ```
+
+## How To Start After Install
+
+### Windows
+
+After install, open the desktop folder:
+
+`Local Qwen Home Computer`
+
+Main things you can start:
+
+- `Local Qwen Control Center`
+- `OpenCode - Local Qwen`
+- `Verify Local Qwen Install`
+
+### Ubuntu 24.04
+
+After install, the main commands are:
+
+```bash
+/home/$USER/local-qwen-home/launchers/control-center.sh
+```
+
+```bash
+/home/$USER/local-qwen-home/launchers/start-opencode.sh
+```
+
+```bash
+/home/$USER/local-qwen-home/launchers/start-server.sh
+```
+
+```bash
+/home/$USER/local-qwen-home/launchers/settings-tui.sh
+```
+
+What they do:
+
+- `control-center.sh` opens the main Linux TUI menu
+- `start-opencode.sh` starts the local server if needed and then opens `OpenCode`
+- `start-server.sh` starts only the `llama.cpp` server
+- `settings-tui.sh` changes saved settings without reinstalling
 
 ## Current Release
 
