@@ -305,6 +305,44 @@ function New-Shortcut {
     $shortcut.Save()
 }
 
+function Write-DesktopShortcuts {
+    param(
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$AssetsDir,
+        [Parameter(Mandatory = $true)][string]$DesktopTargetDir
+    )
+
+    Ensure-Dir $DesktopTargetDir
+
+    $controlCenterScript = Join-Path $LaunchersDir "control-center.ps1"
+    $controlCenterIcon = Join-Path $AssetsDir "icons\control-center.ico"
+    $opencodeIcon = Join-Path $AssetsDir "icons\opencode-local-qwen.ico"
+
+    New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk") `
+        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+        -Arguments "-ExecutionPolicy Bypass -File `"$controlCenterScript`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$controlCenterIcon,0" `
+        -Description "Control center for local Qwen + OpenCode"
+
+    New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "OpenCode - Local Qwen.lnk") `
+        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+        -Arguments "-ExecutionPolicy Bypass -File `"$($LaunchersDir)\start-opencode.ps1`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$opencodeIcon,0" `
+        -Description "Launch OpenCode wired to local Qwen"
+
+    New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "Verify Local Qwen Install.lnk") `
+        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+        -Arguments "-ExecutionPolicy Bypass -File `"$($LaunchersDir)\verify-install.ps1`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$controlCenterIcon,0" `
+        -Description "Verify local Qwen installation"
+}
+
 if (-not $SkipDependencies) {
     Ensure-Command -Name "git" -WingetId "Git.Git"
     Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
@@ -331,6 +369,7 @@ $turboDir = Join-Path $appsDir "llama.cpp-turboquant"
 $llamaBinDir = Join-Path $binDir "llama.cpp"
 $modelChoice = $defaults.modelChoices.recommendedWindows3060_12gb
 $modelFile = Join-Path $modelsDir $modelChoice.filename
+$warnings = New-Object System.Collections.Generic.List[string]
 
 Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
 Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
@@ -347,6 +386,8 @@ Write-InstallState `
     -Profile $Profile `
     -StatePath $statePath `
     -Defaults $defaults
+
+Write-DesktopShortcuts -LaunchersDir $launchersDir -AssetsDir $assetsDir -DesktopTargetDir $desktopTargetDir
 
 if (!(Test-Path $upstreamDir)) {
     Invoke-Native git clone https://github.com/ggml-org/llama.cpp.git $upstreamDir
@@ -405,13 +446,13 @@ Write-InstallState `
 
 & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
 if ($LASTEXITCODE -ne 0) {
-    throw "OpenCode konfiguracija nije uspesno upisana."
+    $warnings.Add("OpenCode konfiguracija nije uspesno upisana tokom install toka. Pokreni configure-settings.ps1 ili Verify Local Qwen Install nakon instalacije.") | Out-Null
 }
 
 if (-not $SkipTurboQuantBuild) {
     & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
     if ($LASTEXITCODE -ne 0) {
-        throw "TurboQuant build nije uspeo."
+        $warnings.Add("TurboQuant build nije uspeo. Instalacija ostaje upotrebljiva kroz upstream llama.cpp fallback.") | Out-Null
     }
 }
 
@@ -429,35 +470,6 @@ Write-InstallState `
     -Defaults $defaults `
     -TurboServerExe $(if (Test-Path $turboServerExe) { $turboServerExe } else { $null })
 
-$controlCenterScript = Join-Path $launchersDir "control-center.ps1"
-$controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"
-$agentIcon = Join-Path $assetsDir "icons\agent-mode.ico"
-$opencodeIcon = Join-Path $assetsDir "icons\opencode-local-qwen.ico"
-
-New-Shortcut `
-    -ShortcutPath (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk") `
-    -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-    -Arguments "-ExecutionPolicy Bypass -File `"$controlCenterScript`"" `
-    -WorkingDirectory $launchersDir `
-    -IconLocation "$controlCenterIcon,0" `
-    -Description "Control center for local Qwen + OpenCode"
-
-New-Shortcut `
-    -ShortcutPath (Join-Path $desktopTargetDir "OpenCode - Local Qwen.lnk") `
-    -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-    -Arguments "-ExecutionPolicy Bypass -File `"$($launchersDir)\start-opencode.ps1`"" `
-    -WorkingDirectory $launchersDir `
-    -IconLocation "$opencodeIcon,0" `
-    -Description "Launch OpenCode wired to local Qwen"
-
-New-Shortcut `
-    -ShortcutPath (Join-Path $desktopTargetDir "Verify Local Qwen Install.lnk") `
-    -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-    -Arguments "-ExecutionPolicy Bypass -File `"$($launchersDir)\verify-install.ps1`"" `
-    -WorkingDirectory $launchersDir `
-    -IconLocation "$controlCenterIcon,0" `
-    -Description "Verify local Qwen installation"
-
 $summary = @"
 Windows install state written to:
 $statePath
@@ -474,6 +486,10 @@ $launchersDir
 Model path:
 $modelFile
 "@
+
+if ($warnings.Count -gt 0) {
+    $summary += "`r`nWarnings:`r`n- " + ($warnings -join "`r`n- ")
+}
 
 Set-Content -Path (Join-Path $stateDir "install-summary.txt") -Value $summary -Encoding UTF8
 Write-Host $summary
