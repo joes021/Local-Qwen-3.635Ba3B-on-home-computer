@@ -40,17 +40,26 @@ function Test-WingetPackageInstalled {
     return ($LASTEXITCODE -eq 0) -and ($output -match [regex]::Escape($WingetId))
 }
 
-function Test-PythonCandidate {
+function Resolve-PythonExecutableFromCommand {
     param(
         [Parameter(Mandatory = $true)][string]$Command,
         [string[]]$Arguments = @()
     )
 
     try {
-        & $Command @Arguments -c "import sys; print(sys.executable)" *> $null
-        return $LASTEXITCODE -eq 0
+        $output = & $Command @Arguments -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            return $null
+        }
+
+        $resolved = [string]($output | Select-Object -Last 1)
+        if (-not [string]::IsNullOrWhiteSpace($resolved) -and (Test-Path $resolved)) {
+            return $resolved.Trim()
+        }
+
+        return $null
     } catch {
-        return $false
+        return $null
     }
 }
 
@@ -62,8 +71,14 @@ function Get-PythonLauncher {
     )
 
     foreach ($candidate in $commandCandidates) {
-        if ((Get-Command $candidate.Command -ErrorAction SilentlyContinue) -and (Test-PythonCandidate -Command $candidate.Command -Arguments $candidate.Arguments)) {
-            return [pscustomobject]$candidate
+        if (Get-Command $candidate.Command -ErrorAction SilentlyContinue) {
+            $resolved = Resolve-PythonExecutableFromCommand -Command $candidate.Command -Arguments $candidate.Arguments
+            if ($resolved) {
+                return [pscustomobject]@{
+                    Command = $resolved
+                    Arguments = @()
+                }
+            }
         }
     }
 
@@ -75,7 +90,7 @@ function Get-PythonLauncher {
     ) | Where-Object { $_ -and (Test-Path $_) }
 
     foreach ($path in $pathCandidates) {
-        if (Test-PythonCandidate -Command $path -Arguments @()) {
+        if (Resolve-PythonExecutableFromCommand -Command $path -Arguments @()) {
             return [pscustomobject]@{
                 Command = $path
                 Arguments = @()
@@ -228,6 +243,44 @@ hf_hub_download(
     Remove-Item -LiteralPath $tmpPy -Force
 }
 
+function Write-InstallState {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][string]$DesktopTargetDir,
+        [Parameter(Mandatory = $true)][string]$UpstreamDir,
+        [Parameter(Mandatory = $true)][string]$TurboDir,
+        [Parameter(Mandatory = $true)][string]$LlamaBinDir,
+        [Parameter(Mandatory = $true)][string]$ModelFile,
+        [Parameter(Mandatory = $true)][string]$ModelId,
+        [Parameter(Mandatory = $true)][string]$Profile,
+        [Parameter(Mandatory = $true)][string]$StatePath,
+        [Parameter(Mandatory = $true)]$Defaults,
+        [string]$TurboServerExe
+    )
+
+    $state = [ordered]@{
+        installRoot = $InstallRoot
+        desktopTargetDir = $DesktopTargetDir
+        upstreamDir = $UpstreamDir
+        turboDir = $TurboDir
+        llamaBinDir = $LlamaBinDir
+        modelFile = $ModelFile
+        modelId = $ModelId
+        defaultProfile = $Profile
+        port = $Defaults.service.port
+        threads = $Defaults.service.threads
+        noMmap = $Defaults.service.noMmap
+        mlock = $Defaults.service.mlock
+        installedAt = (Get-Date).ToString("s")
+    }
+
+    if ($TurboServerExe) {
+        $state.turboServerExe = $TurboServerExe
+    }
+
+    $state | ConvertTo-Json -Depth 10 | Set-Content -Path $StatePath -Encoding UTF8
+}
+
 function New-Shortcut {
     param(
         [string]$ShortcutPath,
@@ -276,6 +329,24 @@ Ensure-Dir $desktopTargetDir
 $upstreamDir = Join-Path $appsDir "llama.cpp"
 $turboDir = Join-Path $appsDir "llama.cpp-turboquant"
 $llamaBinDir = Join-Path $binDir "llama.cpp"
+$modelChoice = $defaults.modelChoices.recommendedWindows3060_12gb
+$modelFile = Join-Path $modelsDir $modelChoice.filename
+
+Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
+Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
+Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
+
+Write-InstallState `
+    -InstallRoot $InstallRoot `
+    -DesktopTargetDir $desktopTargetDir `
+    -UpstreamDir $upstreamDir `
+    -TurboDir $turboDir `
+    -LlamaBinDir $llamaBinDir `
+    -ModelFile $modelFile `
+    -ModelId $modelChoice.id `
+    -Profile $Profile `
+    -StatePath $statePath `
+    -Defaults $defaults
 
 if (!(Test-Path $upstreamDir)) {
     Invoke-Native git clone https://github.com/ggml-org/llama.cpp.git $upstreamDir
@@ -298,35 +369,12 @@ if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
     Invoke-Native npm install -g opencode-ai
 }
 
-$modelFile = Join-Path $modelsDir $defaults.modelChoices.recommendedWindows3060_12gb.filename
 if ((-not $SkipModelDownload) -and !(Test-Path $modelFile)) {
     Download-RecommendedModel `
-        -RepoId $defaults.modelChoices.recommendedWindows3060_12gb.source `
-        -Filename $defaults.modelChoices.recommendedWindows3060_12gb.filename `
+        -RepoId $modelChoice.source `
+        -Filename $modelChoice.filename `
         -TargetPath $modelFile
 }
-
-Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
-Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
-Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
-
-$state = [ordered]@{
-    installRoot = $InstallRoot
-    desktopTargetDir = $desktopTargetDir
-    upstreamDir = $upstreamDir
-    turboDir = $turboDir
-    llamaBinDir = $llamaBinDir
-    modelFile = $modelFile
-    modelId = $defaults.modelChoices.recommendedWindows3060_12gb.id
-    defaultProfile = $Profile
-    port = $defaults.service.port
-    threads = $defaults.service.threads
-    noMmap = $defaults.service.noMmap
-    mlock = $defaults.service.mlock
-    installedAt = (Get-Date).ToString("s")
-}
-
-$state | ConvertTo-Json -Depth 10 | Set-Content -Path $statePath -Encoding UTF8
 
 $settings = [ordered]@{
     profile = $Profile
@@ -343,6 +391,18 @@ $settings = [ordered]@{
 }
 $settings | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $stateDir "settings.json") -Encoding UTF8
 
+Write-InstallState `
+    -InstallRoot $InstallRoot `
+    -DesktopTargetDir $desktopTargetDir `
+    -UpstreamDir $upstreamDir `
+    -TurboDir $turboDir `
+    -LlamaBinDir $llamaBinDir `
+    -ModelFile $modelFile `
+    -ModelId $modelChoice.id `
+    -Profile $Profile `
+    -StatePath $statePath `
+    -Defaults $defaults
+
 & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw "OpenCode konfiguracija nije uspesno upisana."
@@ -354,6 +414,20 @@ if (-not $SkipTurboQuantBuild) {
         throw "TurboQuant build nije uspeo."
     }
 }
+
+$turboServerExe = Join-Path $turboDir "$($defaults.turboquant.buildDir)\bin\llama-server.exe"
+Write-InstallState `
+    -InstallRoot $InstallRoot `
+    -DesktopTargetDir $desktopTargetDir `
+    -UpstreamDir $upstreamDir `
+    -TurboDir $turboDir `
+    -LlamaBinDir $llamaBinDir `
+    -ModelFile $modelFile `
+    -ModelId $modelChoice.id `
+    -Profile $Profile `
+    -StatePath $statePath `
+    -Defaults $defaults `
+    -TurboServerExe $(if (Test-Path $turboServerExe) { $turboServerExe } else { $null })
 
 $controlCenterScript = Join-Path $launchersDir "control-center.ps1"
 $controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"

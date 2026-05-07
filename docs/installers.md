@@ -17,6 +17,7 @@ The current Windows installer now handles:
 - OpenCode config generation
 - post-install verification script
 - versioned `Inno Setup` packaging for `Local-Qwen-Setup-a.b.c.exe`
+- repair/retry flow for partially completed `LocalQwenHome` installs
 
 Recommended mental model for Windows install order:
 
@@ -30,6 +31,11 @@ Recommended mental model for Windows install order:
 8. Write config and saved settings
 9. Build `TurboQuant`
 10. Create desktop shortcuts
+
+Repair note:
+
+- if a Windows install stops after creating `LocalQwenHome`, rerunning the newest `Setup.exe` is now the intended recovery path
+- the installer writes launcher/config/state scaffolding early so retry can continue without manual file copies
 
 Still being finalized:
 

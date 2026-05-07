@@ -1,12 +1,28 @@
 $ErrorActionPreference = "Stop"
 
 function Get-LocalQwenRoot {
-    $installedRoot = Join-Path $PSScriptRoot ".."
-    if (Test-Path (Join-Path $installedRoot "state\install-state.json")) {
-        return (Resolve-Path $installedRoot).Path
+    $oneLevelUp = Join-Path $PSScriptRoot ".."
+    $twoLevelsUp = Join-Path $PSScriptRoot "..\.."
+
+    $candidateRoots = @($oneLevelUp, $twoLevelsUp)
+    foreach ($candidate in $candidateRoots) {
+        $resolved = $null
+        try {
+            $resolved = (Resolve-Path $candidate -ErrorAction Stop).Path
+        } catch {
+            continue
+        }
+
+        if (
+            (Test-Path (Join-Path $resolved "state\install-state.json")) -or
+            (Test-Path (Join-Path $resolved "config\profiles\defaults.json")) -or
+            (Test-Path (Join-Path $resolved "launchers"))
+        ) {
+            return $resolved
+        }
     }
 
-    return (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    return (Resolve-Path $twoLevelsUp).Path
 }
 
 function Get-InstallState {

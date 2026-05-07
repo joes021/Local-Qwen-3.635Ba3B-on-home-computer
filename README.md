@@ -133,6 +133,8 @@ When you run the Linux `.run` installer, it goes roughly in this order:
 
 3. Run the installer.
 
+If a previous Windows install stopped halfway, rerunning the latest Windows `Setup.exe` is the supported repair path. The installer now restores the local launcher/config layout early and can continue from a partial `LocalQwenHome` state instead of requiring manual file copies.
+
 ### Ubuntu 24.04
 
 1. Open the latest release:
@@ -201,11 +203,11 @@ What they do:
 
 ## Current Release
 
-Current public release:
+Current public releases:
 
-- [Local Qwen Setup 1.2.1](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
-- [Windows installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.exe)
-- [Ubuntu 24.04 installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.run)
+- [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
+- Windows hotfix release: `v1.2.2`
+- Latest Ubuntu 24.04 release remains available from the releases page
 
 ## Windows Installer Notes
 
