@@ -18,6 +18,19 @@ The current Windows installer now handles:
 - post-install verification script
 - versioned `Inno Setup` packaging for `Local-Qwen-Setup-a.b.c.exe`
 
+Recommended mental model for Windows install order:
+
+1. Bootstrap folders and state
+2. Bootstrap CLI/tool dependencies
+3. Bootstrap VS Build Tools and CUDA
+4. Clone source repos
+5. Download upstream `llama.cpp` CUDA binaries
+6. Install `OpenCode`
+7. Download the default model
+8. Write config and saved settings
+9. Build `TurboQuant`
+10. Create desktop shortcuts
+
 Still being finalized:
 
 - more robust CUDA/toolchain auto-recovery when build prerequisites are missing
@@ -52,6 +65,19 @@ It currently handles:
 - runtime build through `launcher/linux/build-runtime.sh`
 - Ubuntu 24.04-oriented package bootstrap
 - self-extract `.run` packaging through `packaging/linux/build-run-installer.sh`
+
+Recommended mental model for Ubuntu 24.04 install order:
+
+1. Open TUI and collect desired settings
+2. Bootstrap folders and state
+3. Bootstrap package dependencies
+4. Clone source repos
+5. Install `OpenCode`
+6. Download the default model through local `venv`
+7. Write config and saved settings
+8. Build upstream `llama.cpp`
+9. Attempt `TurboQuant` CUDA build
+10. Create launchers and desktop entries
 
 Still being finalized:
 

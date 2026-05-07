@@ -52,6 +52,73 @@ After install, this setup:
 - local control center
 - configurable context, output, and agent-step tuning
 
+## Install Order
+
+### Windows install order
+
+When you run the Windows installer, it goes roughly in this order:
+
+1. Creates the install folders and state directories
+2. Checks or installs:
+   - `git`
+   - `node`
+   - `npm`
+   - `python`
+   - `cmake`
+   - `ninja`
+3. Checks or installs:
+   - `Visual Studio Build Tools 2022`
+   - `CUDA Toolkit`
+4. Clones:
+   - upstream `llama.cpp`
+   - `llama.cpp-turboquant`
+5. Downloads upstream `llama.cpp` CUDA Windows binaries
+6. Installs `OpenCode`
+7. Downloads the default GGUF model
+8. Copies launchers, config, and icons into the local install root
+9. Writes the local install state and saved settings
+10. Writes the `OpenCode` config pointing to the local `llama.cpp` endpoint
+11. Builds `TurboQuant` if build prerequisites are available
+12. Creates desktop shortcuts
+
+### Ubuntu 24.04 install order
+
+When you run the Linux `.run` installer, it goes roughly in this order:
+
+1. Opens the interactive `TUI` installer
+2. Collects your chosen settings:
+   - profile
+   - context size
+   - max output tokens
+   - OpenCode steps
+   - working directory
+3. Creates the install folders and state directories
+4. Checks or installs:
+   - `git`
+   - `curl`
+   - `python3`
+   - `python3-pip`
+   - `python3-venv`
+   - `node`
+   - `npm`
+   - `cmake`
+   - `ninja`
+   - `build-essential`
+5. On Ubuntu 24.04, also tries to install:
+   - `libcurl4-openssl-dev`
+   - `libopenblas-dev`
+   - `nvidia-cuda-toolkit`
+6. Clones:
+   - upstream `llama.cpp`
+   - `llama.cpp-turboquant`
+7. Installs `OpenCode`
+8. Downloads the default GGUF model through a local Python `venv`
+9. Writes the local install state and saved settings
+10. Writes the `OpenCode` config pointing to the local `llama.cpp` endpoint
+11. Builds upstream `llama.cpp`
+12. Tries a `TurboQuant` CUDA build if `nvcc` is available
+13. Creates desktop launchers and local TUI launchers
+
 ## Quick Start
 
 ### Windows
