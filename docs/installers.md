@@ -29,7 +29,7 @@ Release packaging now exists in two forms:
 - local build through `packaging/windows/build-setup.ps1`
 - GitHub Actions workflow `.github/workflows/windows-setup.yml`
 
-If a tag like `v1.0.0` is pushed, the workflow publishes `Local-Qwen-Setup-1.0.0.exe` to the GitHub release.
+If a tag like `vX.Y.Z` is pushed, the workflow publishes `Local-Qwen-Setup-X.Y.Z.exe` to the GitHub release.
 
 ## Linux
 
@@ -47,10 +47,11 @@ It currently handles:
 - `start-opencode.sh`
 - desktop launcher files
 - post-install verification script
+- runtime build through `launcher/linux/build-runtime.sh`
+- Ubuntu 24.04-oriented package bootstrap
+- self-extract `.run` packaging through `packaging/linux/build-run-installer.sh`
 
 Still being finalized:
 
-- distro-aware dependency install
-- full build pipeline automation
-- desktop integration
-- end-to-end validation on a real Linux target
+- deeper distro coverage beyond Ubuntu 24.04
+- end-to-end validation on a real clean Ubuntu 24.04 target

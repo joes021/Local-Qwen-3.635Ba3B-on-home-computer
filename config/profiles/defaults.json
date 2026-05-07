@@ -11,6 +11,11 @@
     "cmakeGenerator": "Visual Studio 17 2022",
     "cudaArch": "native"
   },
+  "linuxBuild": {
+    "generator": "Ninja",
+    "targetDistro": "ubuntu24.04",
+    "enableCudaWhenAvailable": true
+  },
   "profiles": {
     "speed": {
       "ncmoe": 0,

@@ -18,17 +18,21 @@ while true; do
   show_status
   echo "1) Start server (balanced)"
   echo "2) Stop server"
-  echo "3) Write OpenCode config"
-  echo "4) Start OpenCode"
-  echo "5) Exit"
+  echo "3) Build runtime"
+  echo "4) Write OpenCode config"
+  echo "5) Start OpenCode"
+  echo "6) Verify install"
+  echo "7) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
     1) "$SCRIPT_DIR/start-server.sh" balanced ;;
     2) "$SCRIPT_DIR/stop-server.sh" ;;
-    3) "$SCRIPT_DIR/configure-settings.sh" ;;
-    4) "$SCRIPT_DIR/start-opencode.sh" balanced ;;
-    5) exit 0 ;;
+    3) "$SCRIPT_DIR/build-runtime.sh" ;;
+    4) "$SCRIPT_DIR/configure-settings.sh" ;;
+    5) "$SCRIPT_DIR/start-opencode.sh" balanced ;;
+    6) "$SCRIPT_DIR/verify-install.sh" ;;
+    7) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

@@ -4,6 +4,7 @@ set -euo pipefail
 INSTALL_ROOT="${INSTALL_ROOT:-$HOME/local-qwen-home}"
 PROFILE="${PROFILE:-balanced}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
+SKIP_RUNTIME_BUILD="${SKIP_RUNTIME_BUILD:-0}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULTS_PATH="$REPO_ROOT/config/profiles/defaults.json"
 STATE_DIR="$INSTALL_ROOT/state"
@@ -14,6 +15,13 @@ LAUNCHERS_DIR="$INSTALL_ROOT/launchers"
 CONFIG_DIR="$INSTALL_ROOT/config"
 ASSETS_DIR="$INSTALL_ROOT/assets"
 DESKTOP_DIR="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+
+if [ -f /etc/os-release ]; then
+  . /etc/os-release
+else
+  ID=""
+  VERSION_ID=""
+fi
 
 ensure_cmd() {
   local name="$1"
@@ -29,6 +37,12 @@ ensure_packages_linux() {
   if ensure_cmd apt-get; then
     sudo apt-get update
     sudo apt-get install -y "${pkgs[@]}" || true
+    if [ "${ID:-}" = "ubuntu" ] && [ "${VERSION_ID:-}" = "24.04" ]; then
+      sudo apt-get install -y libcurl4-openssl-dev libopenblas-dev || true
+      if ! command -v nvcc >/dev/null 2>&1; then
+        sudo apt-get install -y nvidia-cuda-toolkit || true
+      fi
+    fi
   elif ensure_cmd dnf; then
     sudo dnf install -y git curl python3 python3-pip nodejs npm cmake ninja-build gcc-c++ make pkgconfig || true
   elif ensure_cmd pacman; then
@@ -126,11 +140,16 @@ cat > "$STATE_DIR/install-state.json" <<EOF
   "port": 8091,
   "threads": 16,
   "noMmap": true,
-  "mlock": true
+  "mlock": true,
+  "targetDistro": "ubuntu24.04"
 }
 EOF
 
 "$LAUNCHERS_DIR/configure-settings.sh"
+
+if [ "$SKIP_RUNTIME_BUILD" != "1" ]; then
+  "$LAUNCHERS_DIR/build-runtime.sh"
+fi
 
 mkdir -p "$DESKTOP_DIR"
 cat > "$DESKTOP_DIR/local-qwen-control-center.desktop" <<EOF
@@ -169,6 +188,7 @@ $LAUNCHERS_DIR
 
 Primary commands:
 - $LAUNCHERS_DIR/control-center.sh
+- $LAUNCHERS_DIR/build-runtime.sh
 - $LAUNCHERS_DIR/start-opencode.sh
 - $LAUNCHERS_DIR/verify-install.sh
 
@@ -176,6 +196,6 @@ Model:
 $MODEL_PATH
 
 Napomena:
-- Linux build i runtime parity jos nisu na nivou Windows milestone-a
-- ako $LLAMA_SERVER_EXE nije postavljen, treba prvo build-ovati llama.cpp
+- Linux tok je sada usmeren na Ubuntu 24.04
+- ako CUDA/TurboQuant build ne prodje, installer zadrzava upstream llama.cpp server fallback
 EOF

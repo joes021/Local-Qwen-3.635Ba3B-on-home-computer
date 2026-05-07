@@ -20,6 +20,7 @@ checks = [
     ("Install root", os.path.isdir(root), root),
     ("State file", os.path.isfile(state_path), state_path),
     ("Settings file", os.path.isfile(settings_path), settings_path),
+    ("llama server", os.path.isfile(state.get("turboServerExe") or state.get("llamaServerExe", "")), state.get("turboServerExe") or state.get("llamaServerExe", "")),
     ("Model file", os.path.isfile(state.get("modelFile", "")), state.get("modelFile", "")),
     ("OpenCode config", os.path.isfile(opencode_path), opencode_path),
 ]

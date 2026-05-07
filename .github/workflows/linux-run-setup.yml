@@ -1,0 +1,55 @@
+name: linux-run-setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version in a.b.c format
+        required: false
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-run-installer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="$(python3 - <<'PY'
+import json
+with open('version.json', 'r', encoding='utf-8') as f:
+    print(json.load(f)['version'])
+PY
+)"
+          fi
+
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build .run installer
+        shell: bash
+        run: ./packaging/linux/build-run-installer.sh "${{ steps.version.outputs.value }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Local-Qwen-Setup-${{ steps.version.outputs.value }}-linux
+          path: dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run
+
+      - name: Publish GitHub release asset
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run

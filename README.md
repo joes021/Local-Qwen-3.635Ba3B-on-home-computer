@@ -69,7 +69,31 @@ If `Inno Setup 6` is installed, the setup file will be created under:
 GitHub Actions can also build and publish the same installer:
 
 - manual workflow run: `windows-setup`
-- tag release flow: push tag `v1.0.0`
+- tag release flow: push tag `vX.Y.Z`
+
+### Ubuntu 24.04 release installer
+
+The repo can now also produce a self-extract Linux installer aimed at `Ubuntu 24.04`:
+
+`Local-Qwen-Setup-a.b.c.run`
+
+Build it with:
+
+```bash
+bash ./packaging/linux/build-run-installer.sh
+```
+
+Run it on Ubuntu 24.04 with:
+
+```bash
+chmod +x ./Local-Qwen-Setup-a.b.c.run
+./Local-Qwen-Setup-a.b.c.run
+```
+
+GitHub Actions can also build and publish the same `.run` release asset:
+
+- manual workflow run: `linux-run-setup`
+- tag release flow: push tag `vX.Y.Z`
 
 ### Windows
 
@@ -103,11 +127,13 @@ Run:
 bash install/linux/install.sh
 ```
 
-The Linux installer is still a public skeleton and is not yet at parity with the Windows milestone.
+The Linux installer is now oriented toward `Ubuntu 24.04` and is no longer just a skeleton.
 
 It now also includes:
 
 - local launcher deployment
+- runtime build step for upstream `llama.cpp`
+- best-effort `TurboQuant` CUDA build when `nvcc` is available
 - OpenCode config writer
 - terminal control center
 - `start-opencode.sh` helper
