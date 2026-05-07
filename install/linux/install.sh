@@ -32,7 +32,7 @@ ensure_cmd() {
 }
 
 ensure_packages_linux() {
-  local pkgs=(git curl python3 python3-pip nodejs npm cmake ninja-build build-essential pkg-config)
+  local pkgs=(git curl python3 python3-pip python3-venv nodejs npm cmake ninja-build build-essential pkg-config)
 
   if ensure_cmd apt-get; then
     sudo apt-get update
@@ -116,10 +116,13 @@ fi
 MODEL_FILENAME="Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
 MODEL_REPO="Qwen/Qwen3.6-35B-A3B-GGUF"
 MODEL_PATH="$MODELS_DIR/$MODEL_FILENAME"
+MODEL_VENV_DIR="$STATE_DIR/model-download-venv"
 
 if [ "$SKIP_MODEL_DOWNLOAD" != "1" ] && [ ! -f "$MODEL_PATH" ]; then
-  python3 -m pip install --user -U huggingface_hub
-  python3 - <<'PY' "$MODEL_REPO" "$MODEL_FILENAME" "$MODELS_DIR"
+  python3 -m venv "$MODEL_VENV_DIR"
+  "$MODEL_VENV_DIR/bin/python" -m pip install -U pip
+  "$MODEL_VENV_DIR/bin/python" -m pip install -U huggingface_hub
+  "$MODEL_VENV_DIR/bin/python" - <<'PY' "$MODEL_REPO" "$MODEL_FILENAME" "$MODELS_DIR"
 from huggingface_hub import hf_hub_download
 import sys
 repo_id, filename, local_dir = sys.argv[1:4]
