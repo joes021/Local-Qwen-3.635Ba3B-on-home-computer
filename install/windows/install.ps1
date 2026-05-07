@@ -29,6 +29,47 @@ function Ensure-Dir {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
 }
 
+function Test-WingetPackageInstalled {
+    param([string]$WingetId)
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+
+    $output = & winget list --id $WingetId --exact --accept-source-agreements 2>$null | Out-String
+    return ($LASTEXITCODE -eq 0) -and ($output -match [regex]::Escape($WingetId))
+}
+
+function Get-PythonLauncher {
+    $commandCandidates = @(
+        @{ Command = "py"; Arguments = @("-3") },
+        @{ Command = "python"; Arguments = @() },
+        @{ Command = "python3"; Arguments = @() }
+    )
+
+    foreach ($candidate in $commandCandidates) {
+        if (Get-Command $candidate.Command -ErrorAction SilentlyContinue) {
+            return [pscustomobject]$candidate
+        }
+    }
+
+    $pathCandidates = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:ProgramFiles\Python312\python.exe",
+        "${env:ProgramFiles(x86)}\Python312\python.exe"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    foreach ($path in $pathCandidates) {
+        return [pscustomobject]@{
+            Command = $path
+            Arguments = @()
+        }
+    }
+
+    return $null
+}
+
 function Invoke-Native {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -56,7 +97,38 @@ function Ensure-Command {
     }
 
     Write-Host "Instaliram $Name preko winget..." -ForegroundColor Cyan
-    Invoke-Native winget install --id $WingetId --silent --accept-package-agreements --accept-source-agreements
+    & winget install --id $WingetId --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        if ((Get-Command $Name -ErrorAction SilentlyContinue) -or (Test-WingetPackageInstalled -WingetId $WingetId)) {
+            Write-Host "$Name je vec instaliran ili je dostupan nakon winget pokusaja." -ForegroundColor Yellow
+            return
+        }
+        throw "Komanda nije uspela: winget install --id $WingetId --silent --accept-package-agreements --accept-source-agreements"
+    }
+}
+
+function Ensure-PythonRuntime {
+    $python = Get-PythonLauncher
+    if ($python) {
+        return $python
+    }
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw "Python nije pronadjen, a winget nije dostupan za automatsku instalaciju."
+    }
+
+    Write-Host "Instaliram Python 3.12 preko winget..." -ForegroundColor Cyan
+    & winget install --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0 -and -not (Test-WingetPackageInstalled -WingetId "Python.Python.3.12")) {
+        throw "Python instalacija preko winget nije uspela."
+    }
+
+    $python = Get-PythonLauncher
+    if (-not $python) {
+        throw "Python deluje instaliran, ali py/python jos nije dostupan u ovoj sesiji. Otvori novi PowerShell i pokreni installer ponovo sa -SkipDependencies."
+    }
+
+    return $python
 }
 
 function Ensure-VsBuildTools {
@@ -118,8 +190,8 @@ function Download-RecommendedModel {
         [string]$TargetPath
     )
 
-    Ensure-Command -Name "py" -WingetId "Python.Python.3.12"
-    Invoke-Native py -3 -m pip install --user -U huggingface_hub
+    $python = Ensure-PythonRuntime
+    Invoke-Native $python.Command @($python.Arguments + @("-m", "pip", "install", "--user", "-U", "huggingface_hub"))
 
     $targetDir = Split-Path -Parent $TargetPath
     Ensure-Dir $targetDir
@@ -136,7 +208,7 @@ hf_hub_download(
 
     $tmpPy = Join-Path $env:TEMP "local_qwen_hf_download.py"
     Set-Content -Path $tmpPy -Value $pyCode -Encoding UTF8
-    Invoke-Native py -3 $tmpPy
+    Invoke-Native $python.Command @($python.Arguments + @($tmpPy))
     Remove-Item -LiteralPath $tmpPy -Force
 }
 
@@ -168,7 +240,7 @@ if (-not $SkipDependencies) {
     Ensure-Command -Name "git" -WingetId "Git.Git"
     Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
     Ensure-Command -Name "npm" -WingetId "OpenJS.NodeJS.LTS"
-    Ensure-Command -Name "py" -WingetId "Python.Python.3.12"
+    [void](Ensure-PythonRuntime)
     Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
     Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
     Ensure-VsBuildTools
