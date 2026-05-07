@@ -40,6 +40,20 @@ function Test-WingetPackageInstalled {
     return ($LASTEXITCODE -eq 0) -and ($output -match [regex]::Escape($WingetId))
 }
 
+function Test-PythonCandidate {
+    param(
+        [Parameter(Mandatory = $true)][string]$Command,
+        [string[]]$Arguments = @()
+    )
+
+    try {
+        & $Command @Arguments -c "import sys; print(sys.executable)" *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
+}
+
 function Get-PythonLauncher {
     $commandCandidates = @(
         @{ Command = "py"; Arguments = @("-3") },
@@ -48,7 +62,7 @@ function Get-PythonLauncher {
     )
 
     foreach ($candidate in $commandCandidates) {
-        if (Get-Command $candidate.Command -ErrorAction SilentlyContinue) {
+        if ((Get-Command $candidate.Command -ErrorAction SilentlyContinue) -and (Test-PythonCandidate -Command $candidate.Command -Arguments $candidate.Arguments)) {
             return [pscustomobject]$candidate
         }
     }
@@ -61,9 +75,11 @@ function Get-PythonLauncher {
     ) | Where-Object { $_ -and (Test-Path $_) }
 
     foreach ($path in $pathCandidates) {
-        return [pscustomobject]@{
-            Command = $path
-            Arguments = @()
+        if (Test-PythonCandidate -Command $path -Arguments @()) {
+            return [pscustomobject]@{
+                Command = $path
+                Arguments = @()
+            }
         }
     }
 
