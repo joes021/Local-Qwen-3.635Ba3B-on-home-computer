@@ -200,10 +200,14 @@ function Download-LlamaCppWindowsCuda {
     param([string]$DestinationDir)
 
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
-    $asset = $release.assets | Where-Object { $_.name -match 'cudart-llama-bin-win-cuda-12\.4-x64\.zip' } | Select-Object -First 1
+    $asset = $release.assets | Where-Object { $_.name -match '^llama-.*-bin-win-cuda-12\.4-x64\.zip$' } | Select-Object -First 1
 
     if (-not $asset) {
-        throw "Nisam nasao odgovarajuci Windows CUDA release asset za llama.cpp."
+        $asset = $release.assets | Where-Object { $_.name -match '^llama-.*-bin-win-cuda-13\.1-x64\.zip$' } | Select-Object -First 1
+    }
+
+    if (-not $asset) {
+        throw "Nisam nasao odgovarajuci kompletan Windows CUDA release asset za llama.cpp."
     }
 
     $zipPath = Join-Path $env:TEMP $asset.name
@@ -212,6 +216,22 @@ function Download-LlamaCppWindowsCuda {
     Ensure-Dir $DestinationDir
     Expand-Archive -LiteralPath $zipPath -DestinationPath $DestinationDir -Force
     Remove-Item -LiteralPath $zipPath -Force
+    Get-ChildItem -LiteralPath $DestinationDir -Recurse -File | Unblock-File -ErrorAction SilentlyContinue
+
+    if (-not (Test-Path (Join-Path $DestinationDir "llama-server.exe"))) {
+        throw "llama.cpp ZIP je raspakovan, ali llama-server.exe nije pronadjen u $DestinationDir"
+    }
+}
+
+function Test-LlamaBinaryRunnable {
+    param([Parameter(Mandatory = $true)][string]$ServerExe)
+
+    try {
+        & $ServerExe --version *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
 }
 
 function Download-RecommendedModel {
@@ -438,6 +458,13 @@ if (!(Test-Path $turboDir)) {
 
 if ((-not $SkipLlamaDownload) -and !(Test-Path (Join-Path $llamaBinDir "llama-server.exe"))) {
     Download-LlamaCppWindowsCuda -DestinationDir $llamaBinDir
+}
+
+$upstreamServerExe = Join-Path $llamaBinDir "llama-server.exe"
+if (Test-Path $upstreamServerExe) {
+    if (-not (Test-LlamaBinaryRunnable -ServerExe $upstreamServerExe)) {
+        $warnings.Add("Windows je blokirao pokretanje llama-server.exe. Moguca je Application Control / WDAC politika na masini. Ako prečice postoje ali server ne kreće, proveri da li sistem dozvoljava lokalne unsigned exe fajlove.") | Out-Null
+    }
 }
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
