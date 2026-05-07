@@ -305,6 +305,42 @@ function New-Shortcut {
     $shortcut.Save()
 }
 
+function Write-CmdLauncher {
+    param(
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$CmdName,
+        [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [string]$ExtraArguments = ""
+    )
+
+    $cmdPath = Join-Path $LaunchersDir $CmdName
+    $content = @"
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "PS_SCRIPT=%SCRIPT_DIR%$PsScriptName"
+
+if not exist "%PS_SCRIPT%" (
+  echo Launcher script not found: %PS_SCRIPT%
+  pause
+  exit /b 1
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
+set "EXITCODE=%ERRORLEVEL%"
+if not "%EXITCODE%"=="0" (
+  echo.
+  echo Launcher failed with exit code %EXITCODE%.
+  echo.
+  pause
+)
+exit /b %EXITCODE%
+"@
+
+    Set-Content -Path $cmdPath -Value $content -Encoding ASCII
+    return $cmdPath
+}
+
 function Write-DesktopShortcuts {
     param(
         [Parameter(Mandatory = $true)][string]$LaunchersDir,
@@ -314,30 +350,32 @@ function Write-DesktopShortcuts {
 
     Ensure-Dir $DesktopTargetDir
 
-    $controlCenterScript = Join-Path $LaunchersDir "control-center.ps1"
     $controlCenterIcon = Join-Path $AssetsDir "icons\control-center.ico"
     $opencodeIcon = Join-Path $AssetsDir "icons\opencode-local-qwen.ico"
+    $controlCenterCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-control-center.cmd" -PsScriptName "control-center.ps1"
+    $openCodeCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
+    $verifyCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk") `
-        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-        -Arguments "-ExecutionPolicy Bypass -File `"$controlCenterScript`"" `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$controlCenterCmd`"" `
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$controlCenterIcon,0" `
         -Description "Control center for local Qwen + OpenCode"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "OpenCode - Local Qwen.lnk") `
-        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-        -Arguments "-ExecutionPolicy Bypass -File `"$($LaunchersDir)\start-opencode.ps1`"" `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$openCodeCmd`"" `
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$opencodeIcon,0" `
         -Description "Launch OpenCode wired to local Qwen"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Verify Local Qwen Install.lnk") `
-        -TargetPath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-        -Arguments "-ExecutionPolicy Bypass -File `"$($LaunchersDir)\verify-install.ps1`"" `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$verifyCmd`"" `
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$controlCenterIcon,0" `
         -Description "Verify local Qwen installation"
