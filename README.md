@@ -2,8 +2,8 @@
 
 > One-click local AI setup for a strong home PC.
 
-[![Windows Setup](https://img.shields.io/badge/Windows-Setup.exe-0078D6?logo=windows&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.0)
-[![Ubuntu 24.04 Setup](https://img.shields.io/badge/Ubuntu%2024.04-Setup.run-E95420?logo=ubuntu&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.0)
+[![Windows Setup](https://img.shields.io/badge/Windows-Setup.exe-0078D6?logo=windows&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
+[![Ubuntu 24.04 Setup](https://img.shields.io/badge/Ubuntu%2024.04-Setup.run-E95420?logo=ubuntu&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
 [![Release](https://img.shields.io/github/v/release/joes021/Local-Qwen-3.635Ba3B-on-home-computer)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 [![Repo](https://img.shields.io/badge/GitHub-public%20repo-181717?logo=github)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer)
 
@@ -42,7 +42,7 @@ The goal is simple:
 
 2. Download:
 
-`Local-Qwen-Setup-1.2.0.exe`
+`Local-Qwen-Setup-1.2.1.exe`
 
 3. Run the installer.
 
@@ -54,30 +54,30 @@ The goal is simple:
 
 2. Download:
 
-`Local-Qwen-Setup-1.2.0.run`
+`Local-Qwen-Setup-1.2.1.run`
 
 3. Run:
 
 ```bash
-chmod +x ./Local-Qwen-Setup-1.2.0.run
-./Local-Qwen-Setup-1.2.0.run
+chmod +x ./Local-Qwen-Setup-1.2.1.run
+./Local-Qwen-Setup-1.2.1.run
 ```
 
 Or directly from terminal:
 
 ```bash
-wget https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.0/Local-Qwen-Setup-1.2.0.run
-chmod +x ./Local-Qwen-Setup-1.2.0.run
-./Local-Qwen-Setup-1.2.0.run
+wget https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.run
+chmod +x ./Local-Qwen-Setup-1.2.1.run
+./Local-Qwen-Setup-1.2.1.run
 ```
 
 ## Current Release
 
 Current public release:
 
-- [Local Qwen Setup 1.2.0](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.0)
-- [Windows installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.0/Local-Qwen-Setup-1.2.0.exe)
-- [Ubuntu 24.04 installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.0/Local-Qwen-Setup-1.2.0.run)
+- [Local Qwen Setup 1.2.1](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
+- [Windows installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.exe)
+- [Ubuntu 24.04 installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.run)
 
 ## Windows Installer Notes
 
@@ -107,6 +107,7 @@ It currently includes:
 - public IQ2_M GGUF source for the default 12 GB class profile
 - local `OpenCode` configuration
 - richer terminal control center with saved settings
+- separate `settings-tui.sh` for post-install reconfiguration
 - post-install verification helper
 
 ## Manual Source Install

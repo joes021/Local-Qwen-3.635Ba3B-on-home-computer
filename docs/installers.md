@@ -45,6 +45,7 @@ It currently handles:
 - launcher deployment
 - OpenCode config writer
 - richer terminal control center with settings editing
+- separate post-install settings TUI launcher
 - `start-opencode.sh`
 - desktop launcher files
 - post-install verification script
