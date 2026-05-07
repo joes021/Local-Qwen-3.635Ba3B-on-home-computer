@@ -113,8 +113,18 @@ if [ -x "$APPS_DIR/llama.cpp/build/bin/llama-server" ]; then
   LLAMA_SERVER_EXE="$APPS_DIR/llama.cpp/build/bin/llama-server"
 fi
 
-MODEL_FILENAME="Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
-MODEL_REPO="Qwen/Qwen3.6-35B-A3B-GGUF"
+MODEL_REPO="$(python3 - <<'PY' "$DEFAULTS_PATH"
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"]["source"])
+PY
+)"
+MODEL_FILENAME="$(python3 - <<'PY' "$DEFAULTS_PATH"
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"]["filename"])
+PY
+)"
 MODEL_PATH="$MODELS_DIR/$MODEL_FILENAME"
 MODEL_VENV_DIR="$STATE_DIR/model-download-venv"
 
