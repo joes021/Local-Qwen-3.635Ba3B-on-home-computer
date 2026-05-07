@@ -4,11 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
-PROFILE="${1:-balanced}"
+PROFILE="${1:-}"
 ROOT="$(get_local_qwen_root)"
 STATE_PATH="$(get_install_state_path)"
 SETTINGS_PATH="$(get_settings_path)"
 DEFAULTS_PATH="$(get_defaults_path)"
+
+if [ -z "$PROFILE" ]; then
+  PROFILE="$(get_saved_profile)"
+fi
 
 python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$DEFAULTS_PATH" "$PROFILE"
 import json, os, subprocess, sys, time

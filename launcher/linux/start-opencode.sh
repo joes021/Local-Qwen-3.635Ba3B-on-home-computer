@@ -5,8 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
 PROFILE="${1:-balanced}"
+WORKDIR="$(get_saved_working_directory)"
+if [ -z "${1:-}" ]; then
+  PROFILE="$(get_saved_profile)"
+fi
 
-"$SCRIPT_DIR/configure-settings.sh"
+PROFILE="$PROFILE" "$SCRIPT_DIR/configure-settings.sh"
 
 if ! test_llama_health; then
   "$SCRIPT_DIR/start-server.sh" "$PROFILE"
@@ -21,6 +25,10 @@ fi
 if ! test_llama_health; then
   echo "llama.cpp server nije dostupan."
   exit 1
+fi
+
+if [ -d "$WORKDIR" ]; then
+  cd "$WORKDIR"
 fi
 
 exec opencode

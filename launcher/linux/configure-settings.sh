@@ -5,36 +5,64 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
 ROOT="$(get_local_qwen_root)"
+STATE_PATH="$(get_install_state_path)"
 SETTINGS_PATH="$(get_settings_path)"
 DEFAULTS_PATH="$(get_defaults_path)"
 OPENCODE_CONFIG_PATH="${HOME}/.config/opencode/opencode.json"
 
-PROFILE="${PROFILE:-balanced}"
-CONTEXT_SIZE="${CONTEXT_SIZE:-262144}"
-MAX_OUTPUT_TOKENS="${MAX_OUTPUT_TOKENS:-8192}"
-BUILD_STEPS="${BUILD_STEPS:-120}"
-PLAN_STEPS="${PLAN_STEPS:-80}"
-GENERAL_STEPS="${GENERAL_STEPS:-100}"
-EXPLORE_STEPS="${EXPLORE_STEPS:-60}"
+PROFILE="${PROFILE:-}"
+CONTEXT_SIZE="${CONTEXT_SIZE:-}"
+MAX_OUTPUT_TOKENS="${MAX_OUTPUT_TOKENS:-}"
+BUILD_STEPS="${BUILD_STEPS:-}"
+PLAN_STEPS="${PLAN_STEPS:-}"
+GENERAL_STEPS="${GENERAL_STEPS:-}"
+EXPLORE_STEPS="${EXPLORE_STEPS:-}"
+WORKING_DIRECTORY="${WORKING_DIRECTORY:-}"
 
 mkdir -p "$(dirname "$SETTINGS_PATH")" "$(dirname "$OPENCODE_CONFIG_PATH")"
 
-python3 - <<'PY' "$SETTINGS_PATH" "$OPENCODE_CONFIG_PATH" "$PROFILE" "$CONTEXT_SIZE" "$MAX_OUTPUT_TOKENS" "$BUILD_STEPS" "$PLAN_STEPS" "$GENERAL_STEPS" "$EXPLORE_STEPS"
+python3 - <<'PY' "$STATE_PATH" "$DEFAULTS_PATH" "$SETTINGS_PATH" "$OPENCODE_CONFIG_PATH" "$PROFILE" "$CONTEXT_SIZE" "$MAX_OUTPUT_TOKENS" "$BUILD_STEPS" "$PLAN_STEPS" "$GENERAL_STEPS" "$EXPLORE_STEPS" "$WORKING_DIRECTORY"
 import json, os, sys
 
-settings_path, opencode_path, profile, ctx, out_tok, build, plan, general, explore = sys.argv[1:10]
+state_path, defaults_path, settings_path, opencode_path, profile_in, ctx_in, out_tok_in, build_in, plan_in, general_in, explore_in, workdir_in = sys.argv[1:13]
+
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+
+existing_settings = {}
+if os.path.exists(settings_path):
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            existing_settings = json.load(f)
+    except Exception:
+        existing_settings = {}
+
+existing_llama = existing_settings.get("llama", {})
+existing_opencode = existing_settings.get("opencode", {})
+
+profile = profile_in or existing_settings.get("profile", "balanced")
+ctx = int(ctx_in or existing_llama.get("contextSize", defaults["profiles"][profile]["contextSize"]))
+out_tok = int(out_tok_in or existing_llama.get("maxOutputTokens", 8192))
+build = int(build_in or existing_opencode.get("buildSteps", defaults["opencode"]["steps"]["build"]))
+plan = int(plan_in or existing_opencode.get("planSteps", defaults["opencode"]["steps"]["plan"]))
+general = int(general_in or existing_opencode.get("generalSteps", defaults["opencode"]["steps"]["general"]))
+explore = int(explore_in or existing_opencode.get("exploreSteps", defaults["opencode"]["steps"]["explore"]))
+working_directory = workdir_in or existing_opencode.get("workingDirectory", os.path.expanduser("~"))
 
 settings = {
     "profile": profile,
     "llama": {
-        "contextSize": int(ctx),
-        "maxOutputTokens": int(out_tok),
+        "contextSize": ctx,
+        "maxOutputTokens": out_tok,
     },
     "opencode": {
-        "buildSteps": int(build),
-        "planSteps": int(plan),
-        "generalSteps": int(general),
-        "exploreSteps": int(explore),
+        "buildSteps": build,
+        "planSteps": plan,
+        "generalSteps": general,
+        "exploreSteps": explore,
+        "workingDirectory": working_directory,
     },
 }
 with open(settings_path, "w", encoding="utf-8") as f:
@@ -57,19 +85,19 @@ provider["local-llamacpp"] = {
         "apiKey": "llama.cpp",
     },
     "models": {
-        "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf": {
-            "name": "Qwen 3.6 35B A3B Local (llama.cpp)"
+        state["modelId"]: {
+            "name": f"Local model ({state['modelId']})"
         }
     },
 }
-config["model"] = "local-llamacpp/Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
-config["small_model"] = config.get("small_model", "local-llamacpp/Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf")
+config["model"] = f"local-llamacpp/{state['modelId']}"
+config["small_model"] = config.get("small_model", f"local-llamacpp/{state['modelId']}")
 agent = config.setdefault("agent", {})
 for name, steps in {
-    "build": int(build),
-    "plan": int(plan),
-    "general": int(general),
-    "explore": int(explore),
+    "build": build,
+    "plan": plan,
+    "general": general,
+    "explore": explore,
 }.items():
     agent.setdefault(name, {})
     agent[name]["steps"] = steps

@@ -23,6 +23,36 @@ get_settings_path() {
   echo "$(get_local_qwen_root)/state/settings.json"
 }
 
+get_saved_working_directory() {
+  local settings_path
+  settings_path="$(get_settings_path)"
+  python3 - <<'PY' "$settings_path"
+import json, os, sys
+path = sys.argv[1]
+if os.path.exists(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    print(data.get("opencode", {}).get("workingDirectory", os.path.expanduser("~")))
+else:
+    print(os.path.expanduser("~"))
+PY
+}
+
+get_saved_profile() {
+  local settings_path
+  settings_path="$(get_settings_path)"
+  python3 - <<'PY' "$settings_path"
+import json, os, sys
+path = sys.argv[1]
+if os.path.exists(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    print(data.get("profile", "balanced"))
+else:
+    print("balanced")
+PY
+}
+
 get_health_url() {
   local state_path port
   state_path="$(get_install_state_path)"

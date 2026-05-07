@@ -41,9 +41,10 @@ It currently handles:
 - repo clone for `llama.cpp` and `TurboQuant`
 - `OpenCode` install via `npm`
 - install state output
+- interactive installer TUI for Ubuntu 24.04 release flow
 - launcher deployment
 - OpenCode config writer
-- terminal control center
+- richer terminal control center with settings editing
 - `start-opencode.sh`
 - desktop launcher files
 - post-install verification script

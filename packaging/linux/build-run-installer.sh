@@ -34,7 +34,7 @@ cat > "$PAYLOAD_DIR/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "$SCRIPT_DIR/install/linux/install.sh" "$@"
+exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"
 EOF
 chmod +x "$PAYLOAD_DIR/install.sh"
 find "$PAYLOAD_DIR" -type f \( -name "*.sh" -o -name "*.run" \) -exec chmod +x {} \;
