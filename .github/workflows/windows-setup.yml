@@ -1,0 +1,57 @@
+name: windows-setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version in a.b.c format
+        required: false
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-setup:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart('v')
+          } elseif ("${{ inputs.version }}") {
+            $version = "${{ inputs.version }}"
+          } else {
+            $version = (Get-Content -Raw version.json | ConvertFrom-Json).version
+          }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version mora biti u obliku a.b.c"
+          }
+
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build setup
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-setup.ps1 -Version ${{ steps.version.outputs.value }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Local-Qwen-Setup-${{ steps.version.outputs.value }}
+          path: dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe
+
+      - name: Publish GitHub release asset
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe

@@ -50,6 +50,27 @@ The first usable Windows milestone now includes:
 
 ## Quick start
 
+### Windows release installer
+
+The repo can now produce a versioned Windows installer:
+
+`Local-Qwen-Setup-a.b.c.exe`
+
+Build it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-setup.ps1
+```
+
+If `Inno Setup 6` is installed, the setup file will be created under:
+
+`dist\windows\`
+
+GitHub Actions can also build and publish the same installer:
+
+- manual workflow run: `windows-setup`
+- tag release flow: push tag `v1.0.0`
+
 ### Windows
 
 Run:

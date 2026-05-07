@@ -16,12 +16,20 @@ The current Windows installer now handles:
 - desktop shortcut creation
 - OpenCode config generation
 - post-install verification script
+- versioned `Inno Setup` packaging for `Local-Qwen-Setup-a.b.c.exe`
 
 Still being finalized:
 
 - more robust CUDA/toolchain auto-recovery when build prerequisites are missing
 - hardware-aware fallback logic for more GPUs
 - fuller verification pipeline after install
+
+Release packaging now exists in two forms:
+
+- local build through `packaging/windows/build-setup.ps1`
+- GitHub Actions workflow `.github/workflows/windows-setup.yml`
+
+If a tag like `v1.0.0` is pushed, the workflow publishes `Local-Qwen-Setup-1.0.0.exe` to the GitHub release.
 
 ## Linux
 
