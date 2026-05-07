@@ -1,146 +1,171 @@
 # Local Qwen 3.635Ba3B on home computer
 
-One-click local AI setup for home computers with:
+> One-click local AI setup for a strong home PC.
+
+[![Windows Setup](https://img.shields.io/badge/Windows-Setup.exe-0078D6?logo=windows&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.1.0)
+[![Ubuntu 24.04 Setup](https://img.shields.io/badge/Ubuntu%2024.04-Setup.run-E95420?logo=ubuntu&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/github/v/release/joes021/Local-Qwen-3.635Ba3B-on-home-computer)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
+[![Repo](https://img.shields.io/badge/GitHub-public%20repo-181717?logo=github)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer)
+
+This project packages a real working local setup around:
 
 - `llama.cpp`
 - `TurboQuant`
-- a GPU-fit `Qwen 3.6 35B A3B` model profile
+- `Qwen 3.6 35B A3B`
+- `OpenCode`
+- local launchers and a control center
+
+The goal is simple:
+
+1. Download one installer
+2. Run it on your machine
+3. Let it prepare the local stack
+4. Get 1-2 launchers that are actually useful
+
+## What You Get
+
+- local `llama.cpp` runtime
+- `TurboQuant` source and build flow
+- recommended `Qwen 3.6 35B A3B` GGUF profile
 - `OpenCode` wired to the local model
-- a local control center for launch, tuning, and agent modes
-- Windows and Linux installers
+- desktop launchers
+- local control center
+- configurable context, output, and agent-step tuning
 
-## Goal
-
-This project aims to make local `Qwen 3.6 35B A3B` usable on a normal home computer with as little manual setup as possible.
-
-The target experience is:
-
-1. Run one installer
-2. Let it detect the machine
-3. Download and configure the right local stack
-4. Get one or two desktop launchers that do the real work
-
-## Planned features
-
-- Windows all-in-one installer
-- Linux all-in-one installer
-- Hardware-aware model/profile selection
-- `OpenCode` auto-configuration
-- local GUI control center
-- safe agent modes with selectable working directory
-
-## Status
-
-This repository is being built from a real working local setup and is currently in the first public packaging phase.
-
-## Current Windows milestone
-
-The first usable Windows milestone now includes:
-
-- dependency bootstrap through `winget`
-- `Visual Studio Build Tools 2022` and `CUDA Toolkit` bootstrap attempts
-- latest `llama.cpp` CUDA Windows binary download
-- `TurboQuant` source clone and build script
-- recommended `Qwen 3.6 35B A3B` model download through `huggingface_hub`
-- `OpenCode` install through `npm`
-- automatic OpenCode config wiring to the local `llama.cpp` endpoint during install
-- portable PowerShell launchers
-- a GUI control center
-- desktop shortcuts for the control center and OpenCode
-
-## Quick start
-
-### Windows release installer
-
-The repo can now produce a versioned Windows installer:
-
-`Local-Qwen-Setup-a.b.c.exe`
-
-Build it with:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-setup.ps1
-```
-
-If `Inno Setup 6` is installed, the setup file will be created under:
-
-`dist\windows\`
-
-GitHub Actions can also build and publish the same installer:
-
-- manual workflow run: `windows-setup`
-- tag release flow: push tag `vX.Y.Z`
-
-### Ubuntu 24.04 release installer
-
-The repo can now also produce a self-extract Linux installer aimed at `Ubuntu 24.04`:
-
-`Local-Qwen-Setup-a.b.c.run`
-
-Build it with:
-
-```bash
-bash ./packaging/linux/build-run-installer.sh
-```
-
-Run it on Ubuntu 24.04 with:
-
-```bash
-chmod +x ./Local-Qwen-Setup-a.b.c.run
-./Local-Qwen-Setup-a.b.c.run
-```
-
-GitHub Actions can also build and publish the same `.run` release asset:
-
-- manual workflow run: `linux-run-setup`
-- tag release flow: push tag `vX.Y.Z`
+## Quick Start
 
 ### Windows
 
-Run:
+1. Open the latest release:
+
+[Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
+
+2. Download:
+
+`Local-Qwen-Setup-1.1.0.exe`
+
+3. Run the installer.
+
+### Ubuntu 24.04
+
+1. Open the latest release:
+
+[Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
+
+2. Download:
+
+`Local-Qwen-Setup-1.1.0.run`
+
+3. Run:
+
+```bash
+chmod +x ./Local-Qwen-Setup-1.1.0.run
+./Local-Qwen-Setup-1.1.0.run
+```
+
+Or directly from terminal:
+
+```bash
+wget https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.1.0/Local-Qwen-Setup-1.1.0.run
+chmod +x ./Local-Qwen-Setup-1.1.0.run
+./Local-Qwen-Setup-1.1.0.run
+```
+
+## Current Release
+
+Current public release:
+
+- [Local Qwen Setup 1.1.0](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.1.0)
+- [Windows installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.1.0/Local-Qwen-Setup-1.1.0.exe)
+- [Ubuntu 24.04 installer](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.1.0/Local-Qwen-Setup-1.1.0.run)
+
+## Windows Installer Notes
+
+The current Windows setup includes:
+
+- dependency bootstrap through `winget`
+- `Visual Studio Build Tools 2022`
+- `CUDA Toolkit`
+- latest upstream `llama.cpp` CUDA Windows binary download
+- `TurboQuant` source clone and build flow
+- recommended model download via `huggingface_hub`
+- `OpenCode` install through `npm`
+- automatic local endpoint wiring
+- desktop shortcuts and control center
+
+## Ubuntu 24.04 Notes
+
+The current Linux setup is focused on `Ubuntu 24.04`.
+
+It currently includes:
+
+- dependency bootstrap for Ubuntu-style systems
+- local launcher deployment
+- upstream `llama.cpp` runtime build
+- best-effort `TurboQuant` CUDA build when `nvcc` is available
+- local `OpenCode` configuration
+- terminal control center
+- post-install verification helper
+
+## Manual Source Install
+
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install\windows\install.ps1
 ```
 
-After install, open the desktop folder:
-
-`Local Qwen Home Computer`
-
-Then launch:
-
-- `Local Qwen Control Center`
-- `OpenCode - Local Qwen`
-- `Verify Local Qwen Install`
-
-Optional manual verify:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\launcher\windows\verify-install.ps1
-```
-
 ### Linux
-
-Run:
 
 ```bash
 bash install/linux/install.sh
 ```
 
-The Linux installer is now oriented toward `Ubuntu 24.04` and is no longer just a skeleton.
+## Build Release Packages
 
-It now also includes:
+### Windows release package
 
-- local launcher deployment
-- runtime build step for upstream `llama.cpp`
-- best-effort `TurboQuant` CUDA build when `nvcc` is available
-- OpenCode config writer
-- terminal control center
-- `start-opencode.sh` helper
-- `verify-install.sh`
+```powershell
+powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-setup.ps1
+```
 
-Optional manual verify:
+### Linux release package
 
 ```bash
-bash launcher/linux/verify-install.sh
+bash ./packaging/linux/build-run-installer.sh
 ```
+
+## Repo Layout
+
+- `install/` installer entry points
+- `launcher/` local launchers and control flows
+- `packaging/` release packaging
+- `config/` default profiles
+- `assets/` icons
+- `docs/` implementation notes and installer status
+
+## Status
+
+This repo is public and usable, but still evolving.
+
+Most mature path today:
+
+- `Windows Setup.exe`
+- `Ubuntu 24.04 Setup.run`
+
+The Linux path is public and packaged, but still needs more real-world validation on clean machines.
+
+## Documentation
+
+- [Installer status](./docs/installers.md)
+- [Design notes](./docs/superpowers/specs/2026-05-07-local-qwen-home-computer-design.md)
+
+## Feedback
+
+If something breaks on a clean machine, open an issue with:
+
+- OS version
+- GPU
+- RAM
+- full installer log
+- where it stopped
