@@ -41,6 +41,10 @@ After install, this setup:
   - starting OpenCode
   - changing settings later
   - verifying the install
+- gives Windows a unified Control Center with tabs for:
+  - `Pokretanje`
+  - `Podesavanja`
+  - `Agent`
 
 ## What You Get
 
@@ -174,6 +178,12 @@ Main things you can start:
 - `OpenCode - Local Qwen`
 - `Verify Local Qwen Install`
 - `Repair Windows App Control`
+
+The Windows `Local Qwen Control Center` now includes:
+
+- `Pokretanje`: `Start balanced`, `Start video`, `Start speed`, `Stop server`, `Otvori OpenCode`, `Otvori llama.cpp web`, `Osvezi status`, `Otvori folder`
+- `Podesavanja`: `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
+- `Agent`: security mode, autonomy mode, working folder, save and launch actions
 
 ### Ubuntu 24.04
 

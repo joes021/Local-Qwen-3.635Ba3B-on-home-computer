@@ -14,6 +14,7 @@ The current Windows installer now handles:
 - launcher deployment
 - icon deployment
 - desktop shortcut creation
+- unified Windows Control Center with `Pokretanje`, `Podesavanja`, and `Agent` sections
 - OpenCode config generation
 - post-install verification script
 - versioned `Inno Setup` packaging for `Local-Qwen-Setup-a.b.c.exe`
@@ -37,6 +38,7 @@ Repair note:
 - if a Windows install stops after creating `LocalQwenHome`, rerunning the newest `Setup.exe` is now the intended recovery path
 - the installer writes launcher/config/state scaffolding early so retry can continue without manual file copies
 - the desktop folder now also includes `Repair Windows App Control` for the common Smart App Control block case
+- the Windows Control Center is intended to be the same across machines, instead of a reduced laptop-only variant
 
 Still being finalized:
 
