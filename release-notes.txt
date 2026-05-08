@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.2.3
+- Dodat stalni Quick status / Quick actions blok u vrhu Windows Control Center-a sa pregledom Server, Health, OpenCode, Model i poslednjeg throughput signala
+- Dodate su i brze akcije Start, Stop, OpenCode i Osvezi direktno u tom gornjem bloku
+- Linux Control Center sada takodje prikazuje kompaktan Quick status pregled pre detaljnih sekcija
+
 v2.2.2
 - Shared runtime engine sada ume da parsira llama.cpp timing blokove iz stderr loga i iz njih izvuce prompt, output i total tokene po sekundi
 - Windows i Linux throughput panel sada mogu da se pune i iz realnih lokalnih zahteva koji prolaze kroz server, ne samo kroz Test prompt

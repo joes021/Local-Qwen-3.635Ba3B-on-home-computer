@@ -22,6 +22,30 @@ else:
 PY
 }
 
+show_quick_panel() {
+  python3 - <<'PY' "$(get_effective_service_status_json)" "$(get_install_state_path)" "$(get_settings_path)" "$(get_token_metrics_summary_json)" "$HOME/.config/opencode/opencode.json"
+import json, os, sys
+status = json.loads(sys.argv[1])
+state_path, settings_path, throughput_json, opencode_config = sys.argv[2:6]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(settings_path, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+throughput = json.loads(throughput_json)
+current = throughput.get("current")
+print("Quick status")
+print(f"- Server: {status.get('title', status.get('state', 'unknown'))}")
+print(f"- Health: {'ok' if status.get('state') == 'active' else 'not-ready'}")
+print(f"- OpenCode: {'config ok' if os.path.isfile(opencode_config) else 'nema config'}")
+print(f"- Model: {state.get('modelId', 'n/a')}")
+if current:
+    print(f"- Throughput: {current.get('totalTokensPerSecond', 0)} tok/s (last)")
+else:
+    print("- Throughput: nema podataka")
+print(f"- Profil: {settings.get('profile', 'balanced')}")
+PY
+}
+
 show_settings() {
   python3 - <<'PY' "$(get_settings_path)" "$(get_install_state_path)"
 import json, os, sys
@@ -302,6 +326,7 @@ PY
 while true; do
   echo
   echo "Local Qwen Control Center"
+  show_quick_panel
   show_status
   show_settings
   show_hardware

@@ -307,8 +307,8 @@ $recommendationBundle = $null
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local Qwen Home Computer v$(Get-AppVersion)"
 $form.StartPosition = "CenterScreen"
-$form.Size = New-Object System.Drawing.Size(760, 720)
-$form.MinimumSize = New-Object System.Drawing.Size(760, 720)
+$form.Size = New-Object System.Drawing.Size(760, 800)
+$form.MinimumSize = New-Object System.Drawing.Size(760, 800)
 $form.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 251)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $form.MaximizeBox = $true
@@ -349,8 +349,75 @@ $workerStatusLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 $workerStatusLabel.Text = "Status: Idle"
 $statusStrip.Items.Add($workerStatusLabel) | Out-Null
 
+$quickPanel = New-Object System.Windows.Forms.GroupBox
+$quickPanel.Text = "Quick status / Quick actions"
+$quickPanel.Location = New-Object System.Drawing.Point(18, 74)
+$quickPanel.Size = New-Object System.Drawing.Size(706, 76)
+$form.Controls.Add($quickPanel)
+
+$quickServerLabel = New-Object System.Windows.Forms.Label
+$quickServerLabel.Location = New-Object System.Drawing.Point(16, 22)
+$quickServerLabel.Size = New-Object System.Drawing.Size(210, 20)
+$quickServerLabel.Text = "Server: --"
+$quickPanel.Controls.Add($quickServerLabel)
+
+$quickModelLabel = New-Object System.Windows.Forms.Label
+$quickModelLabel.Location = New-Object System.Drawing.Point(16, 46)
+$quickModelLabel.Size = New-Object System.Drawing.Size(320, 20)
+$quickModelLabel.Text = "Model: --"
+$quickPanel.Controls.Add($quickModelLabel)
+
+$quickHealthLabel = New-Object System.Windows.Forms.Label
+$quickHealthLabel.Location = New-Object System.Drawing.Point(232, 22)
+$quickHealthLabel.Size = New-Object System.Drawing.Size(150, 20)
+$quickHealthLabel.Text = "Health: --"
+$quickPanel.Controls.Add($quickHealthLabel)
+
+$quickOpenCodeLabel = New-Object System.Windows.Forms.Label
+$quickOpenCodeLabel.Location = New-Object System.Drawing.Point(232, 46)
+$quickOpenCodeLabel.Size = New-Object System.Drawing.Size(150, 20)
+$quickOpenCodeLabel.Text = "OpenCode: --"
+$quickPanel.Controls.Add($quickOpenCodeLabel)
+
+$quickThroughputLabel = New-Object System.Windows.Forms.Label
+$quickThroughputLabel.Location = New-Object System.Drawing.Point(388, 22)
+$quickThroughputLabel.Size = New-Object System.Drawing.Size(160, 20)
+$quickThroughputLabel.Text = "Throughput: --"
+$quickPanel.Controls.Add($quickThroughputLabel)
+
+$quickSignalLabel = New-Object System.Windows.Forms.Label
+$quickSignalLabel.Location = New-Object System.Drawing.Point(388, 46)
+$quickSignalLabel.Size = New-Object System.Drawing.Size(160, 20)
+$quickSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+$quickSignalLabel.Text = "Signal: --"
+$quickPanel.Controls.Add($quickSignalLabel)
+
+$quickStartButton = New-Object System.Windows.Forms.Button
+$quickStartButton.Text = "Start"
+$quickStartButton.Location = New-Object System.Drawing.Point(556, 18)
+$quickStartButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickPanel.Controls.Add($quickStartButton)
+
+$quickStopButton = New-Object System.Windows.Forms.Button
+$quickStopButton.Text = "Stop"
+$quickStopButton.Location = New-Object System.Drawing.Point(622, 18)
+$quickStopButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickPanel.Controls.Add($quickStopButton)
+
+$quickOpenCodeButton = New-Object System.Windows.Forms.Button
+$quickOpenCodeButton.Text = "OpenCode"
+$quickOpenCodeButton.Location = New-Object System.Drawing.Point(556, 44)
+$quickOpenCodeButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickPanel.Controls.Add($quickOpenCodeButton)
+
+$quickRefreshButton = New-Object System.Windows.Forms.Button
+$quickRefreshButton.Text = "Osvezi"
+$quickRefreshButton.Location = New-Object System.Drawing.Point(622, 44)
+$quickRefreshButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickPanel.Controls.Add($quickRefreshButton)
+
 $tabs = New-Object System.Windows.Forms.TabControl
-$tabs.Location = New-Object System.Drawing.Point(18, 78)
+$tabs.Location = New-Object System.Drawing.Point(18, 158)
 $tabs.Size = New-Object System.Drawing.Size(706, 562)
 $form.Controls.Add($tabs)
 
@@ -741,6 +808,11 @@ function Refresh-LaunchStatus {
     } else {
         $profileNote.Text = "Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps) | Lifecycle: $summaryState$(if ($reason) { ' - ' + $reason } else { '' })"
     }
+
+    $quickServerLabel.Text = "Server: $([string]$statusBundle.Summary.title)"
+    $quickHealthLabel.Text = "Health: $(if ($statusBundle.Health) { 'ok' } else { 'not-ready' })"
+    $quickOpenCodeLabel.Text = "OpenCode: $(if (Test-Path (Get-OpenCodeConfigPath)) { 'config ok' } else { 'nema config' })"
+    $quickModelLabel.Text = "Model: $([string]$state.modelId)"
 }
 
 function Refresh-DiagnosticsView {
@@ -841,6 +913,8 @@ function Refresh-ThroughputView {
         $liveOutputLabel.Text = "Output: -- tok/s"
         $liveTotalLabel.Text = "Total: -- tok/s"
         $liveSignalLabel.Text = "Signal: nema podataka"
+        $quickThroughputLabel.Text = "Throughput: --"
+        $quickSignalLabel.Text = "Signal: nema podataka"
         $throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
@@ -862,6 +936,8 @@ function Refresh-ThroughputView {
     $liveOutputLabel.Text = "Output: $($tokenMetrics.current.completionTokensPerSecond) tok/s"
     $liveTotalLabel.Text = "Total: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
     $liveSignalLabel.Text = "Signal: poslednji zahtev $ageText | merenja: $($tokenMetrics.historyCount)"
+    $quickThroughputLabel.Text = "Throughput: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
+    $quickSignalLabel.Text = "Signal: $ageText"
 
     $historyLines = @()
     foreach ($item in @($tokenMetrics.history)) {
@@ -1030,6 +1106,15 @@ $openFolderButton.Text = "Otvori folder"
 $openFolderButton.Location = New-Object System.Drawing.Point(538, 132)
 $openFolderButton.Size = New-Object System.Drawing.Size(128, 36)
 $launchTab.Controls.Add($openFolderButton)
+
+$quickStartButton.Add_Click({ $startLlama.PerformClick() })
+$quickStopButton.Add_Click({ $stopServer.PerformClick() })
+$quickOpenCodeButton.Add_Click({ $openOpenCode.PerformClick() })
+$quickRefreshButton.Add_Click({
+    Refresh-LaunchStatus
+    Refresh-ThroughputView
+    Write-LaunchMessage @("Quick status je osvezen.")
+})
 
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
