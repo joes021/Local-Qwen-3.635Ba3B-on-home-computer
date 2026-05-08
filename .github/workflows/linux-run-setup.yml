@@ -2,13 +2,12 @@ name: linux-run-setup
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version in a.b.c format
-        required: false
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-run-installer:
@@ -24,8 +23,6 @@ jobs:
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
             version="${GITHUB_REF_NAME#v}"
-          elif [[ -n "${{ inputs.version }}" ]]; then
-            version="${{ inputs.version }}"
           else
             version="$(python3 - <<'PY'
 import json

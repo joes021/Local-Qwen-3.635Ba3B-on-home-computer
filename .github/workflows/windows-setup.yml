@@ -2,13 +2,12 @@ name: windows-setup
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version in a.b.c format
-        required: false
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-setup:
@@ -24,8 +23,6 @@ jobs:
         run: |
           if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
             $version = "${{ github.ref_name }}".TrimStart('v')
-          } elseif ("${{ inputs.version }}") {
-            $version = "${{ inputs.version }}"
           } else {
             $version = (Get-Content -Raw version.json | ConvertFrom-Json).version
           }
