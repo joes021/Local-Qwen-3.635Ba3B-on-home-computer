@@ -23,6 +23,7 @@ copy_if_present "$ROOT/state/install-state.json"
 copy_if_present "$ROOT/state/settings.json"
 copy_if_present "$ROOT/state/install-report.json"
 copy_if_present "$ROOT/state/install-summary.txt"
+copy_if_present "$ROOT/state/agent-launch-settings.json"
 copy_if_present "$ROOT/version.json"
 copy_if_present "$HOME/.config/opencode/opencode.json"
 

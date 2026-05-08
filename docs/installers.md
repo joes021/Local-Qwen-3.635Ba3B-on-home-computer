@@ -41,6 +41,7 @@ The current Windows installer now handles:
 - multi-model catalog with compact and quality quant choices
 - diagnostics bundle export
 - release update checker
+- shared agent risk audit
 
 Recommended mental model for Windows install order:
 
@@ -115,6 +116,7 @@ It currently handles:
 - multi-model catalog helper via `launcher/linux/manage-models.sh`
 - diagnostics bundle export
 - release update checker
+- shared agent risk audit
 
 If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
 

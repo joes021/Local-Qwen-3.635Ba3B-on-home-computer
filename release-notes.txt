@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.8.0
+- Dodat shared agent risk audit koji Windows i Linux koriste za isti safety signal
+- Windows Agent tab sada prikazuje zivi risk audit prema security mode, autonomy mode i radnom folderu
+- Linux TUI dobio agent-audit komandu i diagnostics bundle sada ukljucuje agent meta podatke
+
 v1.7.0
 - Dodat shared scripts/local_qwen_runtime.py da Windows i Linux dele isti model katalog i isti hardware recommendation engine
 - Uveden vise-modelski katalog sa IQ2_M i Q4_K_M varijantama, plus mirror-aware source lista

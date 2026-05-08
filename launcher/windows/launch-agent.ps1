@@ -172,6 +172,7 @@ function Save-SessionConfig {
         capabilityMode = $Capability
         workingFolder = $RootFolder
         profile = $SelectedProfile
+        audit = (Get-AgentAudit -SecurityMode $Security -CapabilityMode $Capability -WorkingFolder $RootFolder)
         generatedAt = (Get-Date).ToString("s")
     }
 
@@ -184,6 +185,7 @@ if (-not (Test-Path $WorkingFolder)) {
 
 $resolvedFolder = (Resolve-Path -LiteralPath $WorkingFolder).Path
 $selectedProfile = if ($Profile) { $Profile } else { [string](Get-Settings).profile }
+$audit = Get-AgentAudit -SecurityMode $SecurityMode -CapabilityMode $CapabilityMode -WorkingFolder $resolvedFolder
 
 Save-SessionConfig -Security $SecurityMode -Capability $CapabilityMode -RootFolder $resolvedFolder -SelectedProfile $selectedProfile
 
@@ -192,8 +194,14 @@ if ($NoLaunch) {
     Write-Host "Security mode: $SecurityMode"
     Write-Host "Capability mode: $CapabilityMode"
     Write-Host "Working folder: $resolvedFolder"
+    Write-Host "Risk level: $($audit.riskLevel)"
     Write-Host "Session config: $sessionConfigPath"
     exit 0
+}
+
+if ($audit.requiresWarning) {
+    Write-Host "Agent risk: $($audit.riskLevel)" -ForegroundColor Yellow
+    $audit.reasons | ForEach-Object { Write-Host "- $_" -ForegroundColor Yellow }
 }
 
 if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {

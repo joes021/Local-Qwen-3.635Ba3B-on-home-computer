@@ -172,6 +172,34 @@ function Set-TextboxLines {
     }
 }
 
+function Get-AgentAuditSummary {
+    param(
+        [string]$SecurityMode,
+        [string]$CapabilityMode,
+        [string]$WorkingFolder
+    )
+
+    try {
+        $audit = Get-AgentAudit -SecurityMode $SecurityMode -CapabilityMode $CapabilityMode -WorkingFolder $WorkingFolder
+        return [pscustomobject]@{
+            Text = @(
+                "Risk: $($audit.riskLevel.ToUpper())",
+                ($audit.reasons -join [Environment]::NewLine)
+            ) -join [Environment]::NewLine
+            Color = switch ($audit.riskLevel) {
+                "high" { [System.Drawing.Color]::FromArgb(176, 45, 45) }
+                "medium" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
+                default { [System.Drawing.Color]::FromArgb(20, 120, 50) }
+            }
+        }
+    } catch {
+        return [pscustomobject]@{
+            Text = "Risk audit nije dostupan."
+            Color = [System.Drawing.Color]::FromArgb(70, 70, 70)
+        }
+    }
+}
+
 function Get-AgentMetaPath {
     return Join-Path $root "state\agent-launch-settings.json"
 }
@@ -760,31 +788,37 @@ $agentPanel.Controls.Add($browseFolderButton)
 $agentWarning = New-Object System.Windows.Forms.Label
 $agentWarning.Text = "AUTO + C:\ je skoro puna sloboda nad sistemom."
 $agentWarning.Location = New-Object System.Drawing.Point(18, 392)
-$agentWarning.Size = New-Object System.Drawing.Size(460, 22)
+$agentWarning.Size = New-Object System.Drawing.Size(620, 54)
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(176, 72, 18)
 $agentPanel.Controls.Add($agentWarning)
 
 $agentStatus = New-Object System.Windows.Forms.Label
 $agentStatus.Text = "Konfiguracija se cuva pre starta."
-$agentStatus.Location = New-Object System.Drawing.Point(18, 462)
+$agentStatus.Location = New-Object System.Drawing.Point(18, 470)
 $agentStatus.Size = New-Object System.Drawing.Size(360, 24)
 $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $agentPanel.Controls.Add($agentStatus)
 
 $saveAgentButton = New-Object System.Windows.Forms.Button
 $saveAgentButton.Text = "Sacuvaj agent rezim"
-$saveAgentButton.Location = New-Object System.Drawing.Point(365, 452)
+$saveAgentButton.Location = New-Object System.Drawing.Point(365, 466)
 $saveAgentButton.Size = New-Object System.Drawing.Size(140, 34)
 $agentPanel.Controls.Add($saveAgentButton)
 
 $launchAgentButton = New-Object System.Windows.Forms.Button
 $launchAgentButton.Text = "Pokreni agent"
-$launchAgentButton.Location = New-Object System.Drawing.Point(520, 452)
+$launchAgentButton.Location = New-Object System.Drawing.Point(520, 466)
 $launchAgentButton.Size = New-Object System.Drawing.Size(128, 34)
 $launchAgentButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $launchAgentButton.ForeColor = [System.Drawing.Color]::White
 $launchAgentButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $agentPanel.Controls.Add($launchAgentButton)
+
+$refreshAuditButton = New-Object System.Windows.Forms.Button
+$refreshAuditButton.Text = "Osvezi audit"
+$refreshAuditButton.Location = New-Object System.Drawing.Point(18, 506)
+$refreshAuditButton.Size = New-Object System.Drawing.Size(120, 30)
+$agentPanel.Controls.Add($refreshAuditButton)
 
 if ($agentMeta -and $agentMeta.securityMode) {
     switch ([string]$agentMeta.securityMode) {
@@ -816,8 +850,22 @@ $browseFolderButton.Add_Click({
     }
     if ($folderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $folderBox.Text = $folderDialog.SelectedPath
+        Refresh-AgentAudit
     }
 })
+
+$refreshAuditButton.Add_Click({
+    Refresh-AgentAudit
+    Write-LaunchMessage @("Agent risk audit je osvezen.")
+})
+$strictRadio.Add_CheckedChanged({ if ($strictRadio.Checked) { Refresh-AgentAudit } })
+$blacklistRadio.Add_CheckedChanged({ if ($blacklistRadio.Checked) { Refresh-AgentAudit } })
+$openRadio.Add_CheckedChanged({ if ($openRadio.Checked) { Refresh-AgentAudit } })
+$readOnlyRadio.Add_CheckedChanged({ if ($readOnlyRadio.Checked) { Refresh-AgentAudit } })
+$readWriteRadio.Add_CheckedChanged({ if ($readWriteRadio.Checked) { Refresh-AgentAudit } })
+$confirmRadio.Add_CheckedChanged({ if ($confirmRadio.Checked) { Refresh-AgentAudit } })
+$autoRadio.Add_CheckedChanged({ if ($autoRadio.Checked) { Refresh-AgentAudit } })
+$folderBox.Add_TextChanged({ Refresh-AgentAudit })
 
 $resetSettingsButton.Add_Click({
     $contextRow.Track.Value = 3
@@ -898,6 +946,18 @@ function Get-AgentValues {
         CapabilityMode = $capability
         WorkingFolder = $folderBox.Text
         Profile = [string](Get-Settings).profile
+    }
+}
+
+function Refresh-AgentAudit {
+    try {
+        $values = Get-AgentValues
+        $audit = Get-AgentAuditSummary -SecurityMode $values.SecurityMode -CapabilityMode $values.CapabilityMode -WorkingFolder $values.WorkingFolder
+        $agentWarning.Text = $audit.Text
+        $agentWarning.ForeColor = $audit.Color
+    } catch {
+        $agentWarning.Text = "Risk audit nije dostupan."
+        $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(176, 72, 18)
     }
 }
 
@@ -1069,6 +1129,7 @@ $refreshTimer.Start()
 
 Refresh-LaunchStatus
 Refresh-LogsView
+Refresh-AgentAudit
 
 $form.Add_Shown({
     if (-not (Test-LlamaHealth)) {

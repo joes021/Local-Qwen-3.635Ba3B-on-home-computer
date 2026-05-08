@@ -198,6 +198,7 @@ The Windows `Local Qwen Control Center` now includes:
 - `Pokretanje`: `Repair install`, `Test prompt`, `Model manager`, `Diagnostics`, `Check updates`
 - `Podesavanja`: `model variant`, `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
+- `Agent`: zivi risk audit koji pokazuje koliko je izabrani rezim opasan za sistem
 - `Logovi`: latest `stdout`, `stderr`, `install summary`, `install report`
 
 ### Ubuntu 24.04
@@ -244,6 +245,7 @@ What they do:
 - `test-prompt.sh` sends a tiny smoke-test prompt to the local model
 - `export-diagnostics.sh` pravi jedan arhivirani bundle za debug
 - `check-updates.sh` proverava da li na GitHub-u postoji noviji release
+- `agent-audit.sh` vraca shared procenu rizika za agent mode i radni folder
 
 ## Windows App Control / Smart App Control edge case
 

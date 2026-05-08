@@ -36,6 +36,32 @@ print(f"Model: {state.get('modelFile', 'n/a')}")
 PY
 }
 
+show_agent_audit() {
+  python3 - <<'PY' "$(get_local_qwen_root)/state/agent-launch-settings.json" "$(get_saved_working_directory)" "$(get_runtime_engine_path)"
+import json, os, subprocess, sys
+meta_path, fallback_workdir, runtime_script = sys.argv[1:4]
+security = "strict"
+capability = "confirm-commands"
+workdir = fallback_workdir
+if os.path.exists(meta_path):
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    security = meta.get("securityMode", security)
+    capability = meta.get("capabilityMode", capability)
+    workdir = meta.get("workingFolder", workdir)
+payload = subprocess.run(
+    [sys.executable, runtime_script, "agent-audit", "--security-mode", security, "--capability-mode", capability, "--working-folder", workdir],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+audit = json.loads(payload.stdout)
+print(f"Agent risk: {audit['riskLevel']}")
+for reason in audit["reasons"]:
+    print(f"- {reason}")
+PY
+}
+
 show_hardware() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_defaults_path)" "$(get_runtime_engine_path)"
 import json, os, subprocess, sys
@@ -108,6 +134,7 @@ while true; do
   show_status
   show_settings
   show_hardware
+  show_agent_audit
   echo "1) Start server (saved profile)"
   echo "2) Start server (choose profile)"
   echo "3) Stop server"
@@ -122,7 +149,8 @@ while true; do
   echo "12) Model manager"
   echo "13) Export diagnostics"
   echo "14) Check updates"
-  echo "15) Exit"
+  echo "15) Agent audit"
+  echo "16) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -140,7 +168,8 @@ while true; do
     12) "$SCRIPT_DIR/manage-models.sh" ;;
     13) "$SCRIPT_DIR/export-diagnostics.sh" ;;
     14) "$SCRIPT_DIR/check-updates.sh" ;;
-    15) exit 0 ;;
+    15) "$SCRIPT_DIR/agent-audit.sh" ;;
+    16) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

@@ -165,6 +165,65 @@ def command_latest_release(args: argparse.Namespace) -> int:
     return 0
 
 
+def audit_agent_risk(security_mode: str, capability_mode: str, working_folder: str) -> dict:
+    score = 0
+    reasons: list[str] = []
+    normalized = working_folder.replace("/", "\\").lower()
+
+    if security_mode == "open":
+        score += 4
+        reasons.append("Otvoren security mode dozvoljava izlazak van radnog foldera.")
+    elif security_mode == "blacklist":
+        score += 2
+        reasons.append("Blacklist mode je srednji nivo zastite i zavisi od deny pravila.")
+    else:
+        reasons.append("Strict mode drzi agenta unutar radnog foldera.")
+
+    if capability_mode == "auto-commands":
+        score += 5
+        reasons.append("Auto command mode dozvoljava samostalno izvrsavanje komandi.")
+    elif capability_mode == "confirm-commands":
+        score += 3
+        reasons.append("Command mode uz potvrdu je umereno rizican.")
+    elif capability_mode == "read-write":
+        score += 1
+        reasons.append("Read-write mod menja fajlove, ali bez shell komandi.")
+    else:
+        reasons.append("Read-only mod ne menja fajlove i ne izvrsava komande.")
+
+    if normalized in {"c:\\", "c:"} or normalized.startswith("\\\\"):
+        score += 3
+        reasons.append("Radni folder obuhvata ceo sistem ili veoma sirok opseg.")
+    elif normalized.endswith("\\desktop") or normalized.endswith("\\documents"):
+        score += 1
+        reasons.append("Radni folder je sirok korisnicki opseg.")
+    else:
+        reasons.append("Radni folder izgleda ciljano i ograniceno.")
+
+    if score >= 8:
+        risk = "high"
+    elif score >= 4:
+        risk = "medium"
+    else:
+        risk = "low"
+
+    return {
+        "securityMode": security_mode,
+        "capabilityMode": capability_mode,
+        "workingFolder": working_folder,
+        "riskLevel": risk,
+        "riskScore": score,
+        "requiresWarning": risk != "low",
+        "reasons": reasons,
+    }
+
+
+def command_agent_audit(args: argparse.Namespace) -> int:
+    payload = audit_agent_risk(args.security_mode, args.capability_mode, args.working_folder)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Shared runtime helper for Local Qwen installers and launchers.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -184,6 +243,12 @@ def build_parser() -> argparse.ArgumentParser:
     latest.add_argument("--repo", required=True)
     latest.add_argument("--current-version", required=True)
     latest.set_defaults(func=command_latest_release)
+
+    audit = subparsers.add_parser("agent-audit")
+    audit.add_argument("--security-mode", required=True, choices=["strict", "blacklist", "open"])
+    audit.add_argument("--capability-mode", required=True, choices=["read-only", "read-write", "confirm-commands", "auto-commands"])
+    audit.add_argument("--working-folder", required=True)
+    audit.set_defaults(func=command_agent_audit)
 
     return parser
 

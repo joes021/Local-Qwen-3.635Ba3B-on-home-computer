@@ -540,6 +540,21 @@ function Get-LatestReleaseInfo {
     )
 }
 
+function Get-AgentAudit {
+    param(
+        [Parameter(Mandatory = $true)][string]$SecurityMode,
+        [Parameter(Mandatory = $true)][string]$CapabilityMode,
+        [Parameter(Mandatory = $true)][string]$WorkingFolder
+    )
+
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "agent-audit",
+        "--security-mode", $SecurityMode,
+        "--capability-mode", $CapabilityMode,
+        "--working-folder", $WorkingFolder
+    )
+}
+
 function Get-ModelMetadata {
     param([string]$ModelId = $null)
 
@@ -861,6 +876,7 @@ function Export-DiagnosticsBundle {
             cpu = Get-CpuName
             ramGiB = Get-SystemMemoryGiB
         }
+        agent = if (Test-Path (Join-Path $root "state\agent-launch-settings.json")) { Get-Content -Raw (Join-Path $root "state\agent-launch-settings.json") | ConvertFrom-Json } else { $null }
     }
     $meta | ConvertTo-Json -Depth 20 | Set-Content -Path (Join-Path $bundleDir "diagnostics-meta.json") -Encoding UTF8
 

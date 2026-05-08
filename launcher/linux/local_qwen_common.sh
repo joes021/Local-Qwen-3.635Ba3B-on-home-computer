@@ -117,6 +117,13 @@ get_recommendation_json() {
   run_runtime_engine_json recommend --defaults "$(get_defaults_path)" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$cpu_threads"
 }
 
+get_agent_audit_json() {
+  local security_mode="$1"
+  local capability_mode="$2"
+  local working_folder="$3"
+  run_runtime_engine_json agent-audit --security-mode "$security_mode" --capability-mode "$capability_mode" --working-folder "$working_folder"
+}
+
 model_file_looks_complete() {
   local path="$1"
   local min_bytes

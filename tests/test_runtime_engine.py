@@ -64,6 +64,36 @@ class RuntimeEngineTests(unittest.TestCase):
         iq2 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
         self.assertGreaterEqual(len(iq2["sources"]), 2)
 
+    def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
+        code, stdout, stderr = run_runtime_command(
+            "agent-audit",
+            "--security-mode",
+            "open",
+            "--capability-mode",
+            "auto-commands",
+            "--working-folder",
+            "C:\\",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["riskLevel"], "high")
+        self.assertTrue(payload["requiresWarning"])
+
+    def test_agent_audit_marks_strict_read_only_as_low_risk(self):
+        code, stdout, stderr = run_runtime_command(
+            "agent-audit",
+            "--security-mode",
+            "strict",
+            "--capability-mode",
+            "read-only",
+            "--working-folder",
+            "C:\\Users\\demo\\Desktop",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["riskLevel"], "low")
+        self.assertFalse(payload["requiresWarning"])
+
 
 if __name__ == "__main__":
     unittest.main()
