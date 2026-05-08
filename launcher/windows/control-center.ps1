@@ -175,6 +175,84 @@ function Set-TextboxLines {
     }
 }
 
+function Set-WorkerStatus {
+    param(
+        [string]$State,
+        [string]$Detail
+    )
+
+    $workerStatusLabel.Text = "Status: $State$(if ($Detail) { ' | ' + $Detail } else { '' })"
+}
+
+function Invoke-BackgroundShellScript {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [string[]]$ArgumentList = @(),
+        [scriptblock]$OnSuccess = $null,
+        [scriptblock]$OnFinally = $null
+    )
+
+    Set-WorkerStatus -State "Working" -Detail $Name
+    Write-LaunchMessage @("$Name je pokrenut u pozadini.")
+
+    $job = Start-Job -ScriptBlock {
+        param($Path, $Args)
+        $lines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Path @Args 2>&1
+        $code = $LASTEXITCODE
+        [pscustomobject]@{
+            ExitCode = $code
+            Output = @($lines)
+        }
+    } -ArgumentList $ScriptPath, $ArgumentList
+
+    $poller = New-Object System.Windows.Forms.Timer
+    $poller.Interval = 800
+    $poller.Add_Tick({
+        if ($job.State -in @('Completed', 'Failed', 'Stopped')) {
+            $poller.Stop()
+            $result = $null
+            try {
+                $result = Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue | Select-Object -Last 1
+            } catch {
+            }
+
+            $outputLines = @()
+            if ($result -and $result.Output) {
+                $outputLines = @($result.Output)
+            } else {
+                try {
+                    $outputLines = @(Receive-Job -Job $job -ErrorAction SilentlyContinue)
+                } catch {
+                    $outputLines = @()
+                }
+            }
+
+            $exitCode = if ($result -and $null -ne $result.ExitCode) { [int]$result.ExitCode } else { if ($job.State -eq 'Completed') { 0 } else { 1 } }
+            if ($outputLines.Count -gt 0) {
+                Write-LaunchMessage $outputLines
+            }
+
+            if ($exitCode -eq 0) {
+                Set-WorkerStatus -State "Idle" -Detail "$Name zavrsen"
+                if ($OnSuccess) {
+                    & $OnSuccess
+                }
+            } else {
+                Set-WorkerStatus -State "Error" -Detail "$Name nije uspeo"
+            }
+
+            if ($OnFinally) {
+                & $OnFinally
+            }
+
+            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+            $poller.Dispose()
+        }
+    })
+    $poller.Start()
+}
+
 function Get-AgentAuditSummary {
     param(
         [string]$SecurityMode,
@@ -260,9 +338,20 @@ $aboutButton.Location = New-Object System.Drawing.Point(620, 24)
 $aboutButton.Size = New-Object System.Drawing.Size(104, 34)
 $form.Controls.Add($aboutButton)
 
+$statusStrip = New-Object System.Windows.Forms.StatusStrip
+$statusStrip.SizingGrip = $false
+$statusStrip.Dock = [System.Windows.Forms.DockStyle]::Bottom
+$form.Controls.Add($statusStrip)
+
+$workerStatusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
+$workerStatusLabel.Spring = $true
+$workerStatusLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$workerStatusLabel.Text = "Status: Idle"
+$statusStrip.Items.Add($workerStatusLabel) | Out-Null
+
 $tabs = New-Object System.Windows.Forms.TabControl
 $tabs.Location = New-Object System.Drawing.Point(18, 78)
-$tabs.Size = New-Object System.Drawing.Size(706, 586)
+$tabs.Size = New-Object System.Drawing.Size(706, 562)
 $form.Controls.Add($tabs)
 
 $onboardingTab = New-Object System.Windows.Forms.TabPage
@@ -1248,16 +1337,14 @@ $saveSettingsButton.Add_Click({
 
 $downloadModelButton.Add_Click({
     try {
+        Ensure-ModelUiState
         $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) -Download 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw ($result -join [Environment]::NewLine)
+        Invoke-BackgroundShellScript -Name "Model download" -ScriptPath $manageModelsScript -ArgumentList @("-ModelId", ([string]$selectedModel.id), "-Download") -OnSuccess {
+            $settingsStatus.Text = "Model je osvezen: $($selectedModel.id)"
+            $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+            Refresh-LaunchStatus
+            Refresh-LogsView
         }
-        Write-LaunchMessage @($result)
-        $settingsStatus.Text = "Model je osvezen: $($selectedModel.id)"
-        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
-        Refresh-LaunchStatus
-        Refresh-LogsView
     } catch {
         $settingsStatus.Text = "Model download nije uspeo."
         $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
@@ -1443,11 +1530,11 @@ $openFolderButton.Add_Click({
 })
 $repairInstallButton.Add_Click({
     try {
-        $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
-        Write-LaunchMessage @($result)
-        Refresh-LaunchStatus
-        Refresh-LogsView
-        Refresh-DiagnosticsView
+        Invoke-BackgroundShellScript -Name "Repair install" -ScriptPath (Join-Path $PSScriptRoot "repair-install.ps1") -OnSuccess {
+            Refresh-LaunchStatus
+            Refresh-LogsView
+            Refresh-DiagnosticsView
+        }
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1455,11 +1542,11 @@ $repairInstallButton.Add_Click({
 $testPromptButton.Add_Click({
     try {
         $profile = [string](Get-Settings).profile
-        $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-prompt.ps1") -Profile $profile 2>&1
-        Write-LaunchMessage @($result)
-        Refresh-LogsView
-        Refresh-DiagnosticsView
-        Refresh-ThroughputView
+        Invoke-BackgroundShellScript -Name "Test prompt" -ScriptPath (Join-Path $PSScriptRoot "test-prompt.ps1") -ArgumentList @("-Profile", $profile) -OnSuccess {
+            Refresh-LogsView
+            Refresh-DiagnosticsView
+            Refresh-ThroughputView
+        }
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1474,9 +1561,9 @@ $modelManagerButton.Add_Click({
 })
 $diagnosticsButton.Add_Click({
     try {
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $exportDiagnosticsScript 2>&1
-        Write-LaunchMessage @($result)
-        Refresh-DiagnosticsView
+        Invoke-BackgroundShellScript -Name "Diagnostics export" -ScriptPath $exportDiagnosticsScript -OnSuccess {
+            Refresh-DiagnosticsView
+        }
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1488,17 +1575,16 @@ $refreshDiagnosticsButton.Add_Click({
 })
 $exportDiagnosticsButton.Add_Click({
     try {
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $exportDiagnosticsScript 2>&1
-        Write-LaunchMessage @($result)
-        Refresh-DiagnosticsView
+        Invoke-BackgroundShellScript -Name "Diagnostics export" -ScriptPath $exportDiagnosticsScript -OnSuccess {
+            Refresh-DiagnosticsView
+        }
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
 })
 $updatesButton.Add_Click({
     try {
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $checkUpdatesScript 2>&1
-        Write-LaunchMessage @($result)
+        Invoke-BackgroundShellScript -Name "Check updates" -ScriptPath $checkUpdatesScript
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
