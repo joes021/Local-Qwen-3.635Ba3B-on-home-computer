@@ -515,6 +515,8 @@ $settings = [ordered]@{
     llama = [ordered]@{
         contextSize = $defaults.profiles.$Profile.contextSize
         maxOutputTokens = 8192
+        contextSizeCustomized = $false
+        maxOutputTokensCustomized = $false
     }
     opencode = [ordered]@{
         buildSteps = $defaults.opencode.steps.build

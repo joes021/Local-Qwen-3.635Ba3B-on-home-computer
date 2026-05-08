@@ -58,6 +58,8 @@ function Get-Settings {
         llama = [pscustomobject]@{
             contextSize = $defaults.profiles.balanced.contextSize
             maxOutputTokens = 8192
+            contextSizeCustomized = $false
+            maxOutputTokensCustomized = $false
         }
         opencode = [pscustomobject]@{
             buildSteps = $defaults.opencode.steps.build

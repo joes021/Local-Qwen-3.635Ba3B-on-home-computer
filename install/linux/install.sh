@@ -184,6 +184,18 @@ EXPLORE_STEPS="${EXPLORE_STEPS:-}" \
 WORKING_DIRECTORY="${WORKING_DIRECTORY:-}" \
 "$LAUNCHERS_DIR/configure-settings.sh"
 
+python3 - <<'PY' "$STATE_DIR/settings.json"
+import json, sys
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+data.setdefault("llama", {})
+data["llama"]["contextSizeCustomized"] = False
+data["llama"]["maxOutputTokensCustomized"] = False
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+PY
+
 if [ "$SKIP_RUNTIME_BUILD" != "1" ]; then
   "$LAUNCHERS_DIR/build-runtime.sh"
 fi

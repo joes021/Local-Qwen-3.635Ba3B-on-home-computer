@@ -14,8 +14,21 @@ param(
 $settings = Get-Settings
 
 if ($Profile) { $settings.profile = $Profile }
-if ($ContextSize) { $settings.llama.contextSize = $ContextSize }
-if ($MaxOutputTokens) { $settings.llama.maxOutputTokens = $MaxOutputTokens }
+if (-not $settings.llama.PSObject.Properties["contextSizeCustomized"]) {
+    $settings.llama | Add-Member -NotePropertyName "contextSizeCustomized" -NotePropertyValue $false
+}
+if (-not $settings.llama.PSObject.Properties["maxOutputTokensCustomized"]) {
+    $settings.llama | Add-Member -NotePropertyName "maxOutputTokensCustomized" -NotePropertyValue $false
+}
+
+if ($ContextSize) {
+    $settings.llama.contextSize = $ContextSize
+    $settings.llama.contextSizeCustomized = $true
+}
+if ($MaxOutputTokens) {
+    $settings.llama.maxOutputTokens = $MaxOutputTokens
+    $settings.llama.maxOutputTokensCustomized = $true
+}
 if ($BuildSteps) { $settings.opencode.buildSteps = $BuildSteps }
 if ($PlanSteps) { $settings.opencode.planSteps = $PlanSteps }
 if ($GeneralSteps) { $settings.opencode.generalSteps = $GeneralSteps }

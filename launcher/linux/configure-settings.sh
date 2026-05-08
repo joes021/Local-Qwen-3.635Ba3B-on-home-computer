@@ -56,6 +56,8 @@ settings = {
     "llama": {
         "contextSize": ctx,
         "maxOutputTokens": out_tok,
+        "contextSizeCustomized": bool(ctx_in) if ctx_in else existing_llama.get("contextSizeCustomized", False),
+        "maxOutputTokensCustomized": bool(out_tok_in) if out_tok_in else existing_llama.get("maxOutputTokensCustomized", False),
     },
     "opencode": {
         "buildSteps": build,

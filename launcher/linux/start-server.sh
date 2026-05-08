@@ -28,6 +28,17 @@ with open(settings_path, "r", encoding="utf-8") as f:
 profile_data = defaults["profiles"][profile]
 ctx = settings["llama"]["contextSize"]
 out_tokens = settings["llama"]["maxOutputTokens"]
+context_customized = settings.get("llama", {}).get("contextSizeCustomized")
+if context_customized is None:
+    context_customized = int(ctx) != int(profile_data["contextSize"])
+else:
+    context_customized = bool(context_customized)
+
+output_customized = settings.get("llama", {}).get("maxOutputTokensCustomized")
+if output_customized is None:
+    output_customized = int(out_tokens) != 8192
+else:
+    output_customized = bool(output_customized)
 server = state.get("turboServerExe") or state["llamaServerExe"]
 model = state["modelFile"]
 port = state["port"]
@@ -51,20 +62,28 @@ if not uses_turbo:
 
     if detected_vram_mib is not None and detected_vram_mib <= 8192:
         gpu_layers = 10
-        ctx = min(ctx, 4096)
-        out_tokens = min(out_tokens, 1024)
+        if not context_customized:
+            ctx = min(ctx, 4096)
+        if not output_customized:
+            out_tokens = min(out_tokens, 1024)
     elif detected_vram_mib is not None and detected_vram_mib <= 12288:
         gpu_layers = 20
-        ctx = min(ctx, 8192)
-        out_tokens = min(out_tokens, 2048)
+        if not context_customized:
+            ctx = min(ctx, 8192)
+        if not output_customized:
+            out_tokens = min(out_tokens, 2048)
     elif detected_vram_mib is not None:
         gpu_layers = 28
-        ctx = min(ctx, 16384)
-        out_tokens = min(out_tokens, 4096)
+        if not context_customized:
+            ctx = min(ctx, 16384)
+        if not output_customized:
+            out_tokens = min(out_tokens, 4096)
     else:
         gpu_layers = 20
-        ctx = min(ctx, 8192)
-        out_tokens = min(out_tokens, 2048)
+        if not context_customized:
+            ctx = min(ctx, 8192)
+        if not output_customized:
+            out_tokens = min(out_tokens, 2048)
 
 args = [
     server, "-m", model, "--port", str(port),

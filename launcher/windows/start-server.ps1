@@ -28,6 +28,16 @@ $modelPath = Get-LlamaModelPath
 $ctx = if ($settings.llama.contextSize) { [int]$settings.llama.contextSize } else { [int]$profileData.contextSize }
 $maxOutput = if ($settings.llama.maxOutputTokens) { [int]$settings.llama.maxOutputTokens } else { 8192 }
 $gpuLayers = 999
+$contextCustomized = if ($settings.llama.PSObject.Properties["contextSizeCustomized"]) {
+    [bool]$settings.llama.contextSizeCustomized
+} else {
+    ([int]$ctx -ne [int]$profileData.contextSize)
+}
+$outputCustomized = if ($settings.llama.PSObject.Properties["maxOutputTokensCustomized"]) {
+    [bool]$settings.llama.maxOutputTokensCustomized
+} else {
+    ([int]$maxOutput -ne 8192)
+}
 
 $args = @(
     "-m", $modelPath,
@@ -61,21 +71,21 @@ if ($usesTurboQuant) {
     } elseif ($detectedGpuMiB) {
         if ($detectedGpuMiB -le 8192) {
             $gpuLayers = 10
-            $ctx = [math]::Min($ctx, 4096)
-            $maxOutput = [math]::Min($maxOutput, 1024)
+            if (-not $contextCustomized) { $ctx = [math]::Min($ctx, 4096) }
+            if (-not $outputCustomized) { $maxOutput = [math]::Min($maxOutput, 1024) }
         } elseif ($detectedGpuMiB -le 12288) {
             $gpuLayers = 20
-            $ctx = [math]::Min($ctx, 8192)
-            $maxOutput = [math]::Min($maxOutput, 2048)
+            if (-not $contextCustomized) { $ctx = [math]::Min($ctx, 8192) }
+            if (-not $outputCustomized) { $maxOutput = [math]::Min($maxOutput, 2048) }
         } else {
             $gpuLayers = 28
-            $ctx = [math]::Min($ctx, 16384)
-            $maxOutput = [math]::Min($maxOutput, 4096)
+            if (-not $contextCustomized) { $ctx = [math]::Min($ctx, 16384) }
+            if (-not $outputCustomized) { $maxOutput = [math]::Min($maxOutput, 4096) }
         }
     } else {
         $gpuLayers = 20
-        $ctx = [math]::Min($ctx, 8192)
-        $maxOutput = [math]::Min($maxOutput, 2048)
+        if (-not $contextCustomized) { $ctx = [math]::Min($ctx, 8192) }
+        if (-not $outputCustomized) { $maxOutput = [math]::Min($maxOutput, 2048) }
     }
 }
 
