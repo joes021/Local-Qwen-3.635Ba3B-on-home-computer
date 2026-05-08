@@ -1,0 +1,22 @@
+Local Qwen Home Computer - recent fixes
+
+v1.2.13
+- Control Center ponovo ima posebno dugme "Start llama.cpp"
+- Control Center sada automatski pokusava da podigne llama.cpp pri otvaranju
+- Profil start dugmad rade u pozadini da UI ostane responzivan
+
+v1.2.12
+- Windows launcher ceka duze na /health potvrdu
+- Smanjen broj laznih "start failed" poruka na sporijim masinama
+
+v1.2.11
+- Dodato posebno polje za hardver i efektivni runtime plan
+- Poruke i rezultati akcija sada se jasnije ispisuju u UI-ju
+
+v1.2.10
+- Rucno zadati context size i output tokens sada imaju prednost
+- Automatski fallback ih vise ne prepisuje ako su korisnicki menjani
+
+v1.2.9
+- Windows release workflow popravljen za latest setup objave
+- Ujednacen bogatiji Windows Control Center izmedju masina

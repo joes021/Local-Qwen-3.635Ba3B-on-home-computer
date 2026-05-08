@@ -21,6 +21,7 @@ $modelsDir = Join-Path $InstallRoot "models"
 $launchersDir = Join-Path $InstallRoot "launchers"
 $configDir = Join-Path $InstallRoot "config"
 $assetsDir = Join-Path $InstallRoot "assets"
+$docsDir = Join-Path $InstallRoot "docs"
 $desktopTargetDir = Join-Path $DesktopFolder "Local Qwen Home Computer"
 $statePath = Join-Path $stateDir "install-state.json"
 
@@ -447,6 +448,7 @@ Ensure-Dir $modelsDir
 Ensure-Dir $launchersDir
 Ensure-Dir $configDir
 Ensure-Dir $assetsDir
+Ensure-Dir $docsDir
 Ensure-Dir $desktopTargetDir
 
 $upstreamDir = Join-Path $appsDir "llama.cpp"
@@ -459,6 +461,8 @@ $warnings = New-Object System.Collections.Generic.List[string]
 Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
 Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
 Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
+Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
 
 Write-InstallState `
     -InstallRoot $InstallRoot `

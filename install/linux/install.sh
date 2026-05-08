@@ -53,6 +53,7 @@ ensure_packages_linux() {
 }
 
 mkdir -p "$STATE_DIR" "$APPS_DIR" "$BIN_DIR" "$MODELS_DIR" "$LAUNCHERS_DIR" "$CONFIG_DIR" "$ASSETS_DIR"
+mkdir -p "$INSTALL_ROOT/docs"
 
 ensure_packages_linux
 
@@ -105,6 +106,8 @@ cp -R "$REPO_ROOT/launcher/linux/." "$LAUNCHERS_DIR/"
 cp -R "$REPO_ROOT/config/profiles/." "$CONFIG_DIR/profiles/"
 mkdir -p "$ASSETS_DIR/icons"
 cp -R "$REPO_ROOT/assets/icons/." "$ASSETS_DIR/icons/"
+cp "$REPO_ROOT/version.json" "$INSTALL_ROOT/version.json"
+cp "$REPO_ROOT/release-notes.txt" "$INSTALL_ROOT/docs/release-notes.txt"
 
 chmod +x "$LAUNCHERS_DIR/"*.sh
 

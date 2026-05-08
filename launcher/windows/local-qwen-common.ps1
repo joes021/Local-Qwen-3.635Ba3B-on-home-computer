@@ -78,6 +78,54 @@ function Save-Settings {
     $Settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsPath -Encoding UTF8
 }
 
+function Get-VersionFilePath {
+    $root = Get-LocalQwenRoot
+    $path = Join-Path $root "version.json"
+    if (Test-Path $path) {
+        return $path
+    }
+    return $null
+}
+
+function Get-AppVersion {
+    $versionPath = Get-VersionFilePath
+    if (-not $versionPath) {
+        return "unknown"
+    }
+
+    try {
+        $data = Get-Content -Raw $versionPath | ConvertFrom-Json
+        if ($data.version) {
+            return [string]$data.version
+        }
+    } catch {
+    }
+
+    return "unknown"
+}
+
+function Get-ReleaseNotesPath {
+    $root = Get-LocalQwenRoot
+    $path = Join-Path $root "docs\release-notes.txt"
+    if (Test-Path $path) {
+        return $path
+    }
+    return $null
+}
+
+function Get-ReleaseNotesText {
+    $notesPath = Get-ReleaseNotesPath
+    if (-not $notesPath) {
+        return "Release notes nisu dostupne u ovoj instalaciji."
+    }
+
+    try {
+        return Get-Content -Raw $notesPath
+    } catch {
+        return "Release notes nisu mogle da se procitaju."
+    }
+}
+
 function Get-OpenCodeConfigPath {
     return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
 }

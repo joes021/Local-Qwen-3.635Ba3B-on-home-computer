@@ -212,6 +212,12 @@ $subtitle.Size = New-Object System.Drawing.Size(520, 22)
 $subtitle.ForeColor = [System.Drawing.Color]::FromArgb(85, 85, 85)
 $form.Controls.Add($subtitle)
 
+$aboutButton = New-Object System.Windows.Forms.Button
+$aboutButton.Text = "About"
+$aboutButton.Location = New-Object System.Drawing.Point(620, 24)
+$aboutButton.Size = New-Object System.Drawing.Size(104, 34)
+$form.Controls.Add($aboutButton)
+
 $tabs = New-Object System.Windows.Forms.TabControl
 $tabs.Location = New-Object System.Drawing.Point(18, 78)
 $tabs.Size = New-Object System.Drawing.Size(706, 586)
@@ -340,6 +346,52 @@ function Refresh-LaunchStatus {
 
     $profileNote.Text = "Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps)"
     $hardwareBox.Text = Format-ServerPlan -Plan $plan
+}
+
+function Show-AboutDialog {
+    $aboutForm = New-Object System.Windows.Forms.Form
+    $aboutForm.Text = "About"
+    $aboutForm.StartPosition = "CenterParent"
+    $aboutForm.Size = New-Object System.Drawing.Size(640, 540)
+    $aboutForm.MinimumSize = New-Object System.Drawing.Size(640, 540)
+    $aboutForm.BackColor = [System.Drawing.Color]::WhiteSmoke
+    $aboutForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    if (Test-Path $iconPath) {
+        $aboutForm.Icon = New-Object System.Drawing.Icon($iconPath)
+    }
+
+    $versionLabel = New-Object System.Windows.Forms.Label
+    $versionLabel.Text = "Verzija: v$(Get-AppVersion)"
+    $versionLabel.Location = New-Object System.Drawing.Point(18, 18)
+    $versionLabel.Size = New-Object System.Drawing.Size(260, 24)
+    $versionLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 11, [System.Drawing.FontStyle]::Bold)
+    $aboutForm.Controls.Add($versionLabel)
+
+    $notesLabel = New-Object System.Windows.Forms.Label
+    $notesLabel.Text = "Poslednji fix log"
+    $notesLabel.Location = New-Object System.Drawing.Point(18, 52)
+    $notesLabel.Size = New-Object System.Drawing.Size(220, 22)
+    $aboutForm.Controls.Add($notesLabel)
+
+    $notesBox = New-Object System.Windows.Forms.TextBox
+    $notesBox.Location = New-Object System.Drawing.Point(18, 78)
+    $notesBox.Size = New-Object System.Drawing.Size(588, 380)
+    $notesBox.Multiline = $true
+    $notesBox.ScrollBars = "Vertical"
+    $notesBox.ReadOnly = $true
+    $notesBox.BackColor = [System.Drawing.Color]::White
+    $notesBox.Text = Get-ReleaseNotesText
+    $aboutForm.Controls.Add($notesBox)
+
+    $closeButton = New-Object System.Windows.Forms.Button
+    $closeButton.Text = "Zatvori"
+    $closeButton.Location = New-Object System.Drawing.Point(496, 468)
+    $closeButton.Size = New-Object System.Drawing.Size(110, 32)
+    $closeButton.Add_Click({ $aboutForm.Close() })
+    $aboutForm.Controls.Add($closeButton)
+
+    [void]$aboutForm.ShowDialog($form)
 }
 
 function Start-LlamaBackground {
@@ -761,6 +813,10 @@ $refreshStatus.Add_Click({
 $openFolderButton.Add_Click({
     Start-Process explorer.exe $root
     Write-LaunchMessage @("Otvoren install folder: $root")
+})
+$aboutButton.Add_Click({
+    Show-AboutDialog
+    Write-LaunchMessage @("Otvoren About prozor.")
 })
 
 $refreshTimer = New-Object System.Windows.Forms.Timer
