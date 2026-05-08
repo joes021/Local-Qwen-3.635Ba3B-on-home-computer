@@ -19,6 +19,7 @@ $binDir = Join-Path $InstallRoot "bin"
 $appsDir = Join-Path $InstallRoot "apps"
 $modelsDir = Join-Path $InstallRoot "models"
 $launchersDir = Join-Path $InstallRoot "launchers"
+$scriptsDir = Join-Path $InstallRoot "scripts"
 $configDir = Join-Path $InstallRoot "config"
 $assetsDir = Join-Path $InstallRoot "assets"
 $docsDir = Join-Path $InstallRoot "docs"
@@ -583,6 +584,7 @@ Ensure-Dir $binDir
 Ensure-Dir $appsDir
 Ensure-Dir $modelsDir
 Ensure-Dir $launchersDir
+Ensure-Dir $scriptsDir
 Ensure-Dir $configDir
 Ensure-Dir $assetsDir
 Ensure-Dir $docsDir
@@ -596,6 +598,7 @@ $modelFile = Join-Path $modelsDir $modelChoice.filename
 $warnings = New-Object System.Collections.Generic.List[string]
 
 Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
+Copy-FolderContent -Source (Join-Path $repoRoot "scripts") -Destination $scriptsDir
 Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
 Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
 Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force

@@ -8,6 +8,7 @@ $messages = New-Object System.Collections.Generic.List[string]
 Ensure-Directory (Join-Path $root "logs")
 Ensure-Directory (Join-Path $root "state")
 Ensure-Directory (Join-Path $root "launchers")
+Ensure-Directory (Join-Path $root "scripts")
 Ensure-Directory (Join-Path $root "config")
 Ensure-Directory (Join-Path $root "assets")
 Ensure-Directory (Join-Path $root "docs")
@@ -17,6 +18,12 @@ try {
     $messages.Add("Desktop shortcuts su ponovo napravljeni.") | Out-Null
 } catch {
     $messages.Add("Shortcut repair warning: $($_.Exception.Message)") | Out-Null
+}
+
+$bootstrapScriptDir = Join-Path ${env:ProgramFiles} "LocalQwenSetupBootstrap\scripts"
+if ((Test-Path $bootstrapScriptDir) -and -not (Test-Path (Join-Path $root "scripts\local_qwen_runtime.py"))) {
+    Copy-Item -Path (Join-Path $bootstrapScriptDir "*") -Destination (Join-Path $root "scripts") -Recurse -Force
+    $messages.Add("Shared runtime scripts su obnovljeni iz bootstrap instalacije.") | Out-Null
 }
 
 if (-not (Test-Path (Join-Path $state.llamaBinDir "llama-server.exe"))) {
