@@ -663,6 +663,144 @@ def command_next_action(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_health_center(
+    has_server: bool,
+    has_model: bool,
+    has_runtime: bool,
+    has_opencode_config: bool,
+    has_install_report: bool,
+    lifecycle_state: str,
+    current_model_id: str,
+    profile: str,
+    warnings: list[str],
+) -> dict:
+    checks = [
+        {
+            "id": "runtime",
+            "title": "llama.cpp runtime",
+            "ok": has_runtime,
+            "description": "llama-server postoji i spreman je za start." if has_runtime else "llama-server nedostaje ili je runtime polomljen.",
+            "repairAction": "repair-runtime",
+        },
+        {
+            "id": "model",
+            "title": "Aktivni model",
+            "ok": has_model,
+            "description": f"Model '{current_model_id}' je dostupan i potpun." if has_model else f"Model '{current_model_id}' nedostaje ili je nepotpun.",
+            "repairAction": "repair-model",
+        },
+        {
+            "id": "opencode-config",
+            "title": "OpenCode config",
+            "ok": has_opencode_config,
+            "description": "OpenCode config pokazuje na lokalni endpoint." if has_opencode_config else "OpenCode config nedostaje ili nije upisan.",
+            "repairAction": "repair-config",
+        },
+        {
+            "id": "install-report",
+            "title": "Install report",
+            "ok": has_install_report,
+            "description": "Install report postoji za diagnostics i repair tok." if has_install_report else "Install report nedostaje, pa je diagnostics slabiji.",
+            "repairAction": "repair-all",
+        },
+    ]
+
+    service = summarize_service_status(has_health=has_server, lifecycle_state=lifecycle_state)
+    warning_entries = [
+        {
+            "id": f"warning-{index + 1}",
+            "title": warning,
+            "severity": "warning",
+        }
+        for index, warning in enumerate(warnings)
+        if str(warning).strip()
+    ]
+
+    broken_count = sum(1 for item in checks if not item["ok"])
+    if broken_count == 0 and not warning_entries and service["effectiveState"] == "active":
+        overall = "healthy"
+        title = "Sistem je zdrav"
+        summary = "Runtime, model, OpenCode i health endpoint su svi spremni."
+    elif broken_count == 0 and service["effectiveState"] == "warming":
+        overall = "warming"
+        title = "Sistem se podize"
+        summary = "Osnovne komponente su prisutne, a server je u STARTING / WARMING stanju."
+    elif broken_count <= 1 and service["effectiveState"] != "failed":
+        overall = "attention"
+        title = "Treba mala popravka"
+        summary = "Jedna ili dve komponente traze intervenciju, ali instalacija je blizu zdravog stanja."
+    else:
+        overall = "broken"
+        title = "Sistem trazi repair"
+        summary = "Vise kljucnih komponenti nije spremno i preporucen je repair tok."
+
+    recommended_actions: list[dict] = []
+    if not has_runtime:
+        recommended_actions.append({
+            "id": "repair-runtime",
+            "title": "Repair runtime",
+            "reason": "llama.cpp runtime nedostaje ili nije spreman.",
+        })
+    if not has_model:
+        recommended_actions.append({
+            "id": "repair-model",
+            "title": "Repair model",
+            "reason": "Aktivni model nije potpun ili ne postoji na disku.",
+        })
+    if not has_opencode_config:
+        recommended_actions.append({
+            "id": "repair-config",
+            "title": "Repair config",
+            "reason": "OpenCode config nije upisan ili nije validan za lokalni endpoint.",
+        })
+    if broken_count > 1 or warning_entries:
+        recommended_actions.append({
+            "id": "repair-all",
+            "title": "Repair all",
+            "reason": "Jednim korakom obnavlja launchere, runtime, model i config gde je potrebno.",
+        })
+    if not recommended_actions and service["effectiveState"] != "active":
+        recommended_actions.append({
+            "id": "start-server",
+            "title": "Pokreni server",
+            "reason": "Komponente su spremne, ostaje samo da server potvrdi health.",
+        })
+
+    return {
+        "overallState": overall,
+        "title": title,
+        "summary": summary,
+        "profile": profile,
+        "modelId": current_model_id,
+        "service": service,
+        "checks": checks,
+        "warnings": warning_entries,
+        "recommendedActions": recommended_actions,
+    }
+
+
+def command_health_center(args: argparse.Namespace) -> int:
+    warnings = []
+    if args.warnings_json:
+        try:
+            warnings = json.loads(args.warnings_json)
+        except json.JSONDecodeError:
+            warnings = [args.warnings_json]
+    payload = build_health_center(
+        has_server=parse_bool(args.has_server),
+        has_model=parse_bool(args.has_model),
+        has_runtime=parse_bool(args.has_runtime),
+        has_opencode_config=parse_bool(args.has_opencode_config),
+        has_install_report=parse_bool(args.has_install_report),
+        lifecycle_state=args.lifecycle_state,
+        current_model_id=args.model_id,
+        profile=args.profile,
+        warnings=warnings,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def summarize_service_status(has_health: bool, lifecycle_state: str) -> dict:
     if has_health:
         return {
@@ -998,6 +1136,18 @@ def build_parser() -> argparse.ArgumentParser:
     next_action.add_argument("--has-model", required=True)
     next_action.add_argument("--has-opencode-config", required=True)
     next_action.set_defaults(func=command_next_action)
+
+    health_center = subparsers.add_parser("health-center")
+    health_center.add_argument("--has-server", required=True)
+    health_center.add_argument("--has-model", required=True)
+    health_center.add_argument("--has-runtime", required=True)
+    health_center.add_argument("--has-opencode-config", required=True)
+    health_center.add_argument("--has-install-report", required=True)
+    health_center.add_argument("--lifecycle-state", required=True)
+    health_center.add_argument("--model-id", required=True)
+    health_center.add_argument("--profile", required=True)
+    health_center.add_argument("--warnings-json", default="[]")
+    health_center.set_defaults(func=command_health_center)
 
     service_status = subparsers.add_parser("service-status")
     service_status.add_argument("--has-health", required=True)

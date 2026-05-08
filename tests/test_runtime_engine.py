@@ -319,6 +319,60 @@ class RuntimeEngineTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["effectiveState"], "failed")
 
+    def test_health_center_marks_missing_runtime_as_attention_and_recommends_runtime_repair(self):
+        code, stdout, stderr = run_runtime_command(
+            "health-center",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "false",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--lifecycle-state",
+            "inactive",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+            "--warnings-json",
+            "[]",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["overallState"], "attention")
+        self.assertIn("repair-runtime", [item["id"] for item in payload["recommendedActions"]])
+
+    def test_health_center_marks_fully_healthy_stack(self):
+        code, stdout, stderr = run_runtime_command(
+            "health-center",
+            "--has-server",
+            "true",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--lifecycle-state",
+            "starting",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+            "--warnings-json",
+            "[]",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["overallState"], "healthy")
+        self.assertEqual(payload["service"]["effectiveState"], "active")
+
     def test_service_status_reports_inactive_without_health_or_lifecycle(self):
         code, stdout, stderr = run_runtime_command(
             "service-status",

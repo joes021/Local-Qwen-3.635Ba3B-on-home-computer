@@ -323,11 +323,35 @@ print(f"Why: {recommendation['reason']}")
 PY
 }
 
+show_health_center() {
+  python3 - <<'PY' "$(get_health_center_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+print("Health Center")
+print(f"- State: {payload.get('overallState')}")
+print(f"- Title: {payload.get('title')}")
+print(f"- Summary: {payload.get('summary')}")
+print(f"- Service: {payload.get('service', {}).get('title')}")
+print("Checks")
+for item in payload.get("checks", []):
+    marker = "[OK]" if item.get("ok") else "[!]"
+    print(f"{marker} {item.get('title')}: {item.get('description')}")
+if payload.get("warnings"):
+    print("Warnings")
+    for warning in payload.get("warnings", []):
+        print(f"- {warning.get('title')}")
+print("Recommended actions")
+for item in payload.get("recommendedActions", []):
+    print(f"- {item.get('title')}: {item.get('reason')}")
+PY
+}
+
 while true; do
   echo
   echo "Local Qwen Control Center"
   show_quick_panel
   show_status
+  show_health_center
   show_settings
   show_hardware
   show_agent_audit
@@ -352,7 +376,10 @@ while true; do
   echo "15) Agent audit"
   echo "16) Run next action"
   echo "17) Refresh diagnostics only"
-  echo "18) Exit"
+  echo "18) Repair model"
+  echo "19) Repair runtime"
+  echo "20) Repair config"
+  echo "21) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -382,7 +409,10 @@ while true; do
       esac
       ;;
     17) show_diagnostics ;;
-    18) exit 0 ;;
+    18) "$SCRIPT_DIR/repair-model.sh" ;;
+    19) "$SCRIPT_DIR/repair-runtime.sh" ;;
+    20) "$SCRIPT_DIR/repair-config.sh" ;;
+    21) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

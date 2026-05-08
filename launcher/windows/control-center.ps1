@@ -18,6 +18,10 @@ $launchAgentScript = Join-Path $PSScriptRoot "launch-agent.ps1"
 $manageModelsScript = Join-Path $PSScriptRoot "manage-models.ps1"
 $checkUpdatesScript = Join-Path $PSScriptRoot "check-updates.ps1"
 $exportDiagnosticsScript = Join-Path $PSScriptRoot "export-diagnostics.ps1"
+$repairInstallScript = Join-Path $PSScriptRoot "repair-install.ps1"
+$repairModelScript = Join-Path $PSScriptRoot "repair-model.ps1"
+$repairRuntimeScript = Join-Path $PSScriptRoot "repair-runtime.ps1"
+$repairConfigScript = Join-Path $PSScriptRoot "repair-config.ps1"
 $iconPath = Join-Path $root "assets\icons\control-center.ico"
 
 function Add-TrackFieldRow {
@@ -427,6 +431,11 @@ $onboardingTab.Text = "Onboarding"
 $onboardingTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $tabs.TabPages.Add($onboardingTab)
 
+$healthTab = New-Object System.Windows.Forms.TabPage
+$healthTab.Text = "Health"
+$healthTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$tabs.TabPages.Add($healthTab)
+
 $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
@@ -606,6 +615,72 @@ $diagnosticsContent.ReadOnly = $true
 $diagnosticsContent.BackColor = [System.Drawing.Color]::White
 $diagnosticsTab.Controls.Add($diagnosticsContent)
 
+$healthLabel = New-Object System.Windows.Forms.Label
+$healthLabel.Text = "Repair & Health Center"
+$healthLabel.Location = New-Object System.Drawing.Point(18, 16)
+$healthLabel.Size = New-Object System.Drawing.Size(280, 22)
+$healthTab.Controls.Add($healthLabel)
+
+$refreshHealthButton = New-Object System.Windows.Forms.Button
+$refreshHealthButton.Text = "Osvezi health"
+$refreshHealthButton.Location = New-Object System.Drawing.Point(538, 12)
+$refreshHealthButton.Size = New-Object System.Drawing.Size(128, 30)
+$healthTab.Controls.Add($refreshHealthButton)
+
+$healthSummaryLabel = New-Object System.Windows.Forms.Label
+$healthSummaryLabel.Text = "Stanje: --"
+$healthSummaryLabel.Location = New-Object System.Drawing.Point(18, 48)
+$healthSummaryLabel.Size = New-Object System.Drawing.Size(648, 24)
+$healthSummaryLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
+$healthTab.Controls.Add($healthSummaryLabel)
+
+$healthActionPanel = New-Object System.Windows.Forms.Panel
+$healthActionPanel.Location = New-Object System.Drawing.Point(18, 78)
+$healthActionPanel.Size = New-Object System.Drawing.Size(648, 42)
+$healthTab.Controls.Add($healthActionPanel)
+
+$repairRuntimeHealthButton = New-Object System.Windows.Forms.Button
+$repairRuntimeHealthButton.Text = "Repair runtime"
+$repairRuntimeHealthButton.Location = New-Object System.Drawing.Point(0, 6)
+$repairRuntimeHealthButton.Size = New-Object System.Drawing.Size(120, 30)
+$healthActionPanel.Controls.Add($repairRuntimeHealthButton)
+
+$repairModelHealthButton = New-Object System.Windows.Forms.Button
+$repairModelHealthButton.Text = "Repair model"
+$repairModelHealthButton.Location = New-Object System.Drawing.Point(132, 6)
+$repairModelHealthButton.Size = New-Object System.Drawing.Size(120, 30)
+$healthActionPanel.Controls.Add($repairModelHealthButton)
+
+$repairConfigHealthButton = New-Object System.Windows.Forms.Button
+$repairConfigHealthButton.Text = "Repair config"
+$repairConfigHealthButton.Location = New-Object System.Drawing.Point(264, 6)
+$repairConfigHealthButton.Size = New-Object System.Drawing.Size(120, 30)
+$healthActionPanel.Controls.Add($repairConfigHealthButton)
+
+$repairAllHealthButton = New-Object System.Windows.Forms.Button
+$repairAllHealthButton.Text = "Repair all"
+$repairAllHealthButton.Location = New-Object System.Drawing.Point(396, 6)
+$repairAllHealthButton.Size = New-Object System.Drawing.Size(120, 30)
+$healthActionPanel.Controls.Add($repairAllHealthButton)
+
+$healthMeta = New-Object System.Windows.Forms.TextBox
+$healthMeta.Location = New-Object System.Drawing.Point(18, 130)
+$healthMeta.Size = New-Object System.Drawing.Size(648, 104)
+$healthMeta.Multiline = $true
+$healthMeta.ScrollBars = "Vertical"
+$healthMeta.ReadOnly = $true
+$healthMeta.BackColor = [System.Drawing.Color]::White
+$healthTab.Controls.Add($healthMeta)
+
+$healthContent = New-Object System.Windows.Forms.TextBox
+$healthContent.Location = New-Object System.Drawing.Point(18, 246)
+$healthContent.Size = New-Object System.Drawing.Size(648, 274)
+$healthContent.Multiline = $true
+$healthContent.ScrollBars = "Vertical"
+$healthContent.ReadOnly = $true
+$healthContent.BackColor = [System.Drawing.Color]::White
+$healthTab.Controls.Add($healthContent)
+
 $onboardingTitle = New-Object System.Windows.Forms.Label
 $onboardingTitle.Text = "Prvi start i provera"
 $onboardingTitle.Location = New-Object System.Drawing.Point(18, 16)
@@ -761,6 +836,62 @@ function Refresh-OnboardingView {
     $lines.Add("Preporuka: ako nesto nije gotovo, idi redom od vrha na dole.") | Out-Null
     $onboardingBox.Text = ($lines -join [Environment]::NewLine)
     $nextActionBox.Text = "$($nextAction.title)$([Environment]::NewLine)$($nextAction.reason)"
+}
+
+function Refresh-HealthCenterView {
+    $payload = Get-HealthCenterData
+
+    $healthSummaryLabel.Text = "Stanje: $($payload.title) | Profil: $($payload.profile) | Model: $($payload.modelId)"
+    $healthSummaryLabel.ForeColor = switch ([string]$payload.overallState) {
+        "healthy" { [System.Drawing.Color]::FromArgb(20, 120, 50) }
+        "warming" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
+        "attention" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
+        default { [System.Drawing.Color]::FromArgb(180, 45, 45) }
+    }
+
+    $metaLines = @(
+        "Summary: $($payload.summary)",
+        "Service: $($payload.service.title)",
+        "Service reason: $($payload.service.reason)",
+        "Recommended actions: $(if ($payload.recommendedActions) { (@($payload.recommendedActions) | ForEach-Object { $_.title }) -join ', ' } else { 'nema' })"
+    )
+    $healthMeta.Text = $metaLines -join [Environment]::NewLine
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("Checks") | Out-Null
+    foreach ($item in @($payload.checks)) {
+        $prefix = if ($item.ok) { "[OK]" } else { "[!]" }
+        $lines.Add("$prefix $($item.title)") | Out-Null
+        $lines.Add("    $($item.description)") | Out-Null
+    }
+    if (@($payload.warnings).Count -gt 0) {
+        $lines.Add("") | Out-Null
+        $lines.Add("Warnings") | Out-Null
+        foreach ($warning in @($payload.warnings)) {
+            $lines.Add("- $($warning.title)") | Out-Null
+        }
+    }
+    $lines.Add("") | Out-Null
+    $lines.Add("Recommended actions") | Out-Null
+    foreach ($item in @($payload.recommendedActions)) {
+        $lines.Add("- $($item.title): $($item.reason)") | Out-Null
+    }
+    $healthContent.Text = $lines -join [Environment]::NewLine
+}
+
+function Invoke-HealthRepairAction {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$ScriptPath
+    )
+
+    Invoke-BackgroundShellScript -Name $Name -ScriptPath $ScriptPath -OnSuccess {
+        Refresh-HealthCenterView
+        Refresh-LaunchStatus
+        Refresh-LogsView
+        Refresh-DiagnosticsView
+        Refresh-OnboardingView
+    }
 }
 
 function Refresh-LaunchStatus {
@@ -2014,6 +2145,10 @@ $refreshOnboardingButton.Add_Click({
     Refresh-OnboardingView
     Write-LaunchMessage @("Onboarding pregled je osvezen.")
 })
+$refreshHealthButton.Add_Click({
+    Refresh-HealthCenterView
+    Write-LaunchMessage @("Health pregled je osvezen.")
+})
 $runNextActionButton.Add_Click({
     try {
         $nextAction = Get-NextActionRecommendation
@@ -2054,11 +2189,40 @@ $openFolderButton.Add_Click({
 })
 $repairInstallButton.Add_Click({
     try {
-        Invoke-BackgroundShellScript -Name "Repair install" -ScriptPath (Join-Path $PSScriptRoot "repair-install.ps1") -OnSuccess {
+        Invoke-BackgroundShellScript -Name "Repair install" -ScriptPath $repairInstallScript -OnSuccess {
             Refresh-LaunchStatus
             Refresh-LogsView
+            Refresh-HealthCenterView
             Refresh-DiagnosticsView
         }
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$repairRuntimeHealthButton.Add_Click({
+    try {
+        Invoke-HealthRepairAction -Name "Repair runtime" -ScriptPath $repairRuntimeScript
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$repairModelHealthButton.Add_Click({
+    try {
+        Invoke-HealthRepairAction -Name "Repair model" -ScriptPath $repairModelScript
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$repairConfigHealthButton.Add_Click({
+    try {
+        Invoke-HealthRepairAction -Name "Repair config" -ScriptPath $repairConfigScript
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$repairAllHealthButton.Add_Click({
+    try {
+        Invoke-HealthRepairAction -Name "Repair all" -ScriptPath $repairInstallScript
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -2131,6 +2295,8 @@ $hardwareBox.Text = "Hardverski plan ce se ucitati na zahtev ili posle prvog pun
 $logsContent.Text = "Logovi ce se ucitati kada otvoris tab ili kliknes osvezavanje."
 $onboardingBox.Text = "Onboarding pregled ce se ucitati kada otvoris tab ili kliknes osvezavanje."
 $nextActionBox.Text = "Sledeci korak ce se ucitati kada otvoris Onboarding tab."
+$healthMeta.Text = "Health pregled nije jos ucitan."
+$healthContent.Text = "Otvori Health tab ili klikni osvezavanje da se ucita objedinjeni repair i health pregled."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
 $throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
@@ -2145,6 +2311,7 @@ $tabs.Add_SelectedIndexChanged({
             Refresh-ModelSelectionInfo
         }
         "Onboarding" { Refresh-OnboardingView }
+        "Health" { Refresh-HealthCenterView }
         "Logovi" { Refresh-LogsView }
         "Agent" { Refresh-AgentAudit }
         "Diagnostics" {

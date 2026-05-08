@@ -261,6 +261,56 @@ PY
   run_runtime_engine_json service-status --has-health "$has_health" --lifecycle-state "$lifecycle_state"
 }
 
+get_health_center_json() {
+  local state_path report_path lifecycle_state has_server has_model has_runtime has_config warnings_json profile model_id
+  state_path="$(get_install_state_path)"
+  report_path="$(get_local_qwen_root)/state/install-report.json"
+  lifecycle_state="$(python3 - <<'PY' "$(get_service_lifecycle_json)"
+import json, sys
+print(json.loads(sys.argv[1]).get("state", "inactive"))
+PY
+)"
+  profile="$(get_saved_profile)"
+  model_id="$(python3 - <<'PY' "$state_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    print(json.load(f).get("modelId", ""))
+PY
+)"
+  if test_llama_health; then has_server="true"; else has_server="false"; fi
+  if model_file_looks_complete "$(python3 - <<'PY' "$state_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    print(json.load(f).get("modelFile", ""))
+PY
+)"; then has_model="true"; else has_model="false"; fi
+  if [ -x "$(get_local_qwen_root)/apps/llama.cpp/build/bin/llama-server" ] || [ -x "$(get_local_qwen_root)/apps/llama.cpp-turboquant/build-cuda/bin/llama-server" ]; then has_runtime="true"; else has_runtime="false"; fi
+  if [ -f "$HOME/.config/opencode/opencode.json" ]; then has_config="true"; else has_config="false"; fi
+  warnings_json="$(python3 - <<'PY' "$report_path"
+import json, os, sys
+path = sys.argv[1]
+warnings = []
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            warnings = json.load(f).get("warnings", []) or []
+    except Exception:
+        warnings = []
+print(json.dumps(warnings))
+PY
+)"
+  run_runtime_engine_json health-center \
+    --has-server "$has_server" \
+    --has-model "$has_model" \
+    --has-runtime "$has_runtime" \
+    --has-opencode-config "$has_config" \
+    --has-install-report "$( [ -f "$report_path" ] && echo true || echo false )" \
+    --lifecycle-state "$lifecycle_state" \
+    --model-id "$model_id" \
+    --profile "$profile" \
+    --warnings-json "$warnings_json"
+}
+
 get_token_metrics_summary_json() {
   local live_json
   live_json="$(update_token_metrics_from_latest_logs)"

@@ -817,6 +817,50 @@ function Get-OnboardingChecklist {
     )
 }
 
+function Get-HealthCenterData {
+    $state = Get-InstallState
+    $health = Test-LlamaHealth
+    $hasModel = $false
+    try {
+        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+    } catch {
+        $hasModel = $false
+    }
+
+    $runtimeOk = $false
+    try {
+        $runtimeOk = Test-Path (Get-LlamaServerExe)
+    } catch {
+        $runtimeOk = $false
+    }
+
+    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $warnings = @()
+    if (Test-Path $reportPath) {
+        try {
+            $report = Get-Content -Raw $reportPath | ConvertFrom-Json
+            if ($report.PSObject.Properties["warnings"] -and $report.warnings) {
+                $warnings = @($report.warnings)
+            }
+        } catch {
+            $warnings = @()
+        }
+    }
+
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "health-center",
+        "--has-server", ([string]$health).ToLower(),
+        "--has-model", ([string]$hasModel).ToLower(),
+        "--has-runtime", ([string]$runtimeOk).ToLower(),
+        "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
+        "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
+        "--lifecycle-state", ([string](Get-ServiceLifecycleState).state),
+        "--model-id", ([string]$state.modelId),
+        "--profile", ([string](Get-Settings).profile),
+        "--warnings-json", (($warnings | ConvertTo-Json -Depth 10 -Compress))
+    )
+}
+
 function Get-NextActionRecommendation {
     $state = Get-InstallState
     $hasServer = Test-LlamaHealth
@@ -989,6 +1033,34 @@ if last_error is not None:
     }
     Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
     return ($downloadOutput | Select-Object -Last 1)
+}
+
+function Restore-BundledSupportFiles {
+    $root = Get-LocalQwenRoot
+    $copied = New-Object System.Collections.Generic.List[string]
+    $baseDir = Join-Path ${env:ProgramFiles} "LocalQwenSetupBootstrap"
+    $map = @(
+        @{ Source = (Join-Path $baseDir "scripts"); Destination = (Join-Path $root "scripts"); Label = "scripts" },
+        @{ Source = (Join-Path $baseDir "config"); Destination = (Join-Path $root "config"); Label = "config" },
+        @{ Source = (Join-Path $baseDir "assets"); Destination = (Join-Path $root "assets"); Label = "assets" },
+        @{ Source = (Join-Path $baseDir "release-notes.txt"); Destination = (Join-Path $root "docs\release-notes.txt"); Label = "release-notes" },
+        @{ Source = (Join-Path $baseDir "version.json"); Destination = (Join-Path $root "version.json"); Label = "version" }
+    )
+
+    foreach ($entry in $map) {
+        if (-not (Test-Path $entry.Source)) {
+            continue
+        }
+        Ensure-Directory (Split-Path -Parent $entry.Destination)
+        if ((Get-Item $entry.Source).PSIsContainer) {
+            Copy-Item -Path (Join-Path $entry.Source "*") -Destination $entry.Destination -Recurse -Force
+        } else {
+            Copy-Item -LiteralPath $entry.Source -Destination $entry.Destination -Force
+        }
+        $copied.Add([string]$entry.Label) | Out-Null
+    }
+
+    return @($copied)
 }
 
 function Invoke-TestPrompt {

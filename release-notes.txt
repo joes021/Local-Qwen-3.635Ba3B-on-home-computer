@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.4.2
+- Dodat objedinjeni Repair & Health Center sa jasnim pregledom stanja: runtime, aktivni model, OpenCode config, install report i service lifecycle
+- Windows Control Center sada ima poseban Health tab sa dugmadima Repair runtime, Repair model, Repair config i Repair all
+- Linux Control Center sada prikazuje isti health pregled i dobio je nove ciljane repair skripte za model, runtime i config
+
 v2.4.1
 - Model browser sada prikazuje jasne use-case oznake kao sto su best-for-coding, best-for-speed, best-quality i balanced-agentic
 - Windows model browser prikazuje badge oznaku i u listi i u detaljnom panelu, pa se na prvi pogled vidi za sta je model najbolji
