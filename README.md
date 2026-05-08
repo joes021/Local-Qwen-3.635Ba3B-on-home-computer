@@ -335,6 +335,12 @@ powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-setup.ps1
 bash ./packaging/linux/build-run-installer.sh
 ```
 
+### One-command cross-platform release
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\packaging\release-all.ps1
+```
+
 ## Repo Layout
 
 - `install/` installer entry points

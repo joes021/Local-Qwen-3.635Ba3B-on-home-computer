@@ -60,3 +60,4 @@ What this version is meant to improve:
 - stricter cross-platform release consistency
 - automatic release integrity checks
 - more predictable Windows and Linux publishing
+- one-command local cross-platform release flow

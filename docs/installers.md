@@ -81,6 +81,7 @@ Release packaging now exists in two forms:
 
 - local build through `packaging/windows/build-setup.ps1`
 - GitHub Actions workflow `.github/workflows/windows-setup.yml`
+- one-command local cross-platform release through `packaging/release-all.ps1`
 
 If a tag like `vX.Y.Z` is pushed, the workflow publishes `Local-Qwen-Setup-X.Y.Z.exe` to the GitHub release.
 It should also publish the stable alias `Local-Qwen-Setup-latest.exe` so README and setup links can always target the newest Windows installer without hardcoded version edits.

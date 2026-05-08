@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.5.0
+- Dodat centralni packaging/release-all.ps1 za build oba instalera i objavu release-a
+- Dokumentovan one-command cross-platform release tok
+- Zatvoren v1.5.0 milestone za release automatizaciju
+
 v1.4.0
 - Dodat centralni pregled logova na Windows strani kroz novi Logovi tab
 - Dodat Linux show-logs launcher i hardverski pregled u TUI control centeru
