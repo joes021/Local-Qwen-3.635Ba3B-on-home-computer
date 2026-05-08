@@ -1,5 +1,13 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.5
+- Potpuno cist release iz komitovanog stanja repoa, da se verzija, tag i installer sadrzaj poklapaju bez izuzetka
+- Ovo je verzija koju treba koristiti umesto prelaznog 2.1.4 taga
+
+v2.1.4
+- Cist novi release broj za Windows/Linux installere posle 2.1.3 packaging fixa, da vise ne postoji isti broj verzije za razlicit sadrzaj
+- Latest download linkovi sada nedvosmisleno vode na novi build koji nosi kompletan Windows setup sadrzaj
+
 v2.1.3
 - Popravljen Windows setup paket: sada zaista nosi shared scripts folder i release-notes.txt, pa bootstrap install vise ne ostaje zaglavljen na starom 1.2.x stanju
 - Windows install sada uklanja stare zalutale version/release-notes fajlove iz launchers foldera pri osvezavanju
