@@ -248,6 +248,56 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["current"]["completionTokensPerSecond"], 100.0)
             self.assertEqual(payload["historyCount"], 1)
 
+    def test_log_token_metrics_parses_llama_timing_block_and_dedupes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            log_path = temp_path / "llama.err.log"
+            history_path = temp_path / "history.json"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "slot print_timing: id  1 | task 5421 | ",
+                        "prompt eval time =    2904.68 ms /    14 tokens (  207.48 ms per token,     4.82 tokens per second)",
+                        "       eval time =    7204.15 ms /    16 tokens (  450.26 ms per token,     2.22 tokens per second)",
+                        "      total time =   10108.83 ms /    30 tokens",
+                        "slot      release: id  1 | task 5421 | stop processing: n_tokens = 29, truncated = 0",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = run_runtime_command(
+                "log-token-metrics",
+                "--log-file",
+                str(log_path),
+                "--history-file",
+                str(history_path),
+                "--label",
+                "live-log",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["current"]["promptTokens"], 14)
+            self.assertEqual(payload["current"]["completionTokens"], 16)
+            self.assertEqual(payload["current"]["totalTokens"], 30)
+            self.assertEqual(payload["current"]["promptTokensPerSecond"], 4.82)
+            self.assertEqual(payload["current"]["completionTokensPerSecond"], 2.22)
+            self.assertEqual(payload["current"]["totalTokensPerSecond"], 2.97)
+            self.assertEqual(payload["historyCount"], 1)
+
+            code, stdout, stderr = run_runtime_command(
+                "log-token-metrics",
+                "--log-file",
+                str(log_path),
+                "--history-file",
+                str(history_path),
+                "--label",
+                "live-log",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["historyCount"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

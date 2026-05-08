@@ -35,6 +35,20 @@ get_token_metrics_history_path() {
   echo "$(get_local_qwen_root)/state/token-metrics-history.json"
 }
 
+update_token_metrics_from_latest_logs() {
+  local lifecycle_json stderr_path
+  lifecycle_json="$(get_service_lifecycle_json)"
+  stderr_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stderr", "") or "")
+PY
+)"
+  if [ -z "$stderr_path" ] || [ ! -f "$stderr_path" ]; then
+    return 0
+  fi
+  run_runtime_engine_json log-token-metrics --log-file "$stderr_path" --history-file "$(get_token_metrics_history_path)" --label "live-log" 2>/dev/null || true
+}
+
 set_service_lifecycle_state() {
   local lifecycle_state="$1"
   local profile="${2:-}"
@@ -198,6 +212,13 @@ PY
 }
 
 get_token_metrics_summary_json() {
+  local live_json
+  live_json="$(update_token_metrics_from_latest_logs)"
+  if [ -n "${live_json:-}" ]; then
+    printf '%s\n' "$live_json"
+    return 0
+  fi
+
   local history_path
   history_path="$(get_token_metrics_history_path)"
   python3 - <<'PY' "$history_path"
@@ -214,10 +235,12 @@ current = history[-1] if history else None
 averages = {
     "promptTokensPerSecond": 0.0,
     "completionTokensPerSecond": 0.0,
+    "totalTokensPerSecond": 0.0,
 }
 if history:
     averages["promptTokensPerSecond"] = round(sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history), 2)
     averages["completionTokensPerSecond"] = round(sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history), 2)
+    averages["totalTokensPerSecond"] = round(sum(item.get("totalTokensPerSecond", 0.0) for item in history) / len(history), 2)
 print(json.dumps({
     "current": current,
     "history": history[-5:],

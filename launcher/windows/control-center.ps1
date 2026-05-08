@@ -459,7 +459,7 @@ $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
 $throughputBox.ReadOnly = $true
 $throughputBox.BackColor = [System.Drawing.Color]::White
-$throughputBox.Text = "Ovde ce biti prikazan benchmark poslednjeg zahteva i kratka istorija."
+$throughputBox.Text = "Ovde ce biti prikazan throughput poslednjeg zahteva i kratka istorija, ukljucujuci live zahteve koje server obradi."
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
@@ -841,7 +841,7 @@ function Refresh-ThroughputView {
         $liveOutputLabel.Text = "Output: -- tok/s"
         $liveTotalLabel.Text = "Total: -- tok/s"
         $liveSignalLabel.Text = "Signal: nema podataka"
-        $throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
+        $throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
 
@@ -1609,7 +1609,7 @@ $onboardingBox.Text = "Onboarding pregled ce se ucitati kada otvoris tab ili kli
 $nextActionBox.Text = "Sledeci korak ce se ucitati kada otvoris Onboarding tab."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
-$throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
+$throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
 $agentWarning.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 

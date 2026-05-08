@@ -275,7 +275,30 @@ function Get-TokenMetricsHistoryPath {
     return Join-Path $root "state\token-metrics-history.json"
 }
 
+function Update-TokenMetricsFromLatestLogs {
+    $latestLogs = Get-LatestLlamaLogs
+    if (-not $latestLogs.StdErr -or -not (Test-Path $latestLogs.StdErr)) {
+        return $null
+    }
+
+    try {
+        return Invoke-RuntimeEngineJson -Arguments @(
+            "log-token-metrics",
+            "--log-file", $latestLogs.StdErr,
+            "--history-file", (Get-TokenMetricsHistoryPath),
+            "--label", "live-log"
+        )
+    } catch {
+        return $null
+    }
+}
+
 function Get-TokenMetricsSummary {
+    $liveSummary = Update-TokenMetricsFromLatestLogs
+    if ($liveSummary) {
+        return $liveSummary
+    }
+
     $path = Get-TokenMetricsHistoryPath
     $history = @()
     if (Test-Path $path) {

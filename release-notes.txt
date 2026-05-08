@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.2.2
+- Shared runtime engine sada ume da parsira llama.cpp timing blokove iz stderr loga i iz njih izvuce prompt, output i total tokene po sekundi
+- Windows i Linux throughput panel sada mogu da se pune i iz realnih lokalnih zahteva koji prolaze kroz server, ne samo kroz Test prompt
+- Throughput poruke u Windows Control Center-u su azurirane da jasno kazu da rade i sa live zahtevima
+
 v2.2.1
 - Windows Control Center sada ima statusnu traku sa jasnim stanjem Idle, Working i Error za duze akcije
 - Teze servisne akcije kao model download, repair, test prompt, diagnostics export i update check vise ne blokiraju glavni UI thread, vec rade u pozadini

@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -394,6 +395,113 @@ def summarize_token_metrics(payload: dict) -> dict:
     }
 
 
+def parse_llama_timing_metrics(text: str, label: str = "live-log") -> list[dict]:
+    prompt_pattern = re.compile(
+        r"prompt eval time\s*=\s*(?P<prompt_ms>[\d.]+)\s*ms\s*/\s*(?P<prompt_tokens>\d+)\s*tokens.*?(?P<prompt_tps>[\d.]+)\s*tokens per second"
+    )
+    eval_pattern = re.compile(
+        r"eval time\s*=\s*(?P<completion_ms>[\d.]+)\s*ms\s*/\s*(?P<completion_tokens>\d+)\s*tokens.*?(?P<completion_tps>[\d.]+)\s*tokens per second"
+    )
+    total_pattern = re.compile(
+        r"total time\s*=\s*(?P<total_ms>[\d.]+)\s*ms\s*/\s*(?P<total_tokens>\d+)\s*tokens"
+    )
+    start_pattern = re.compile(r"slot print_timing:\s*id\s+\d+\s*\|\s*task\s+(?P<task_id>-?\d+)\s*\|")
+
+    lines = text.splitlines()
+    parsed: list[dict] = []
+
+    for index, line in enumerate(lines):
+        start_match = start_pattern.search(line)
+        if not start_match:
+            continue
+        if index + 3 >= len(lines):
+            continue
+
+        prompt_match = prompt_pattern.search(lines[index + 1])
+        eval_match = eval_pattern.search(lines[index + 2])
+        total_match = total_pattern.search(lines[index + 3])
+        if not (prompt_match and eval_match and total_match):
+            continue
+
+        task_id = start_match.group("task_id")
+        prompt_tokens = int(prompt_match.group("prompt_tokens"))
+        completion_tokens = int(eval_match.group("completion_tokens"))
+        total_tokens = int(total_match.group("total_tokens"))
+        prompt_ms = float(prompt_match.group("prompt_ms"))
+        completion_ms = float(eval_match.group("completion_ms"))
+        total_ms = float(total_match.group("total_ms"))
+        prompt_tps = float(prompt_match.group("prompt_tps"))
+        completion_tps = float(eval_match.group("completion_tps"))
+        total_tps = 0.0
+        if total_tokens > 0 and total_ms > 0:
+            total_tps = total_tokens / (total_ms / 1000.0)
+
+        parsed.append(
+            {
+                "measuredAt": datetime.now(timezone.utc).isoformat(),
+                "label": label,
+                "promptTokens": prompt_tokens,
+                "completionTokens": completion_tokens,
+                "totalTokens": total_tokens,
+                "promptMs": round(prompt_ms, 2),
+                "completionMs": round(completion_ms, 2),
+                "totalMs": round(total_ms, 2),
+                "promptTokensPerSecond": round(prompt_tps, 2),
+                "completionTokensPerSecond": round(completion_tps, 2),
+                "totalTokensPerSecond": round(total_tps, 2) if total_tps > 0 else 0.0,
+                "signature": f"{task_id}:{prompt_tokens}:{completion_tokens}:{round(total_ms, 2)}",
+                "taskId": task_id,
+            }
+        )
+
+    return parsed
+
+
+def merge_token_metric_history(history: list[dict], items: list[dict], max_history: int) -> list[dict]:
+    merged: list[dict] = []
+    seen: set[str] = set()
+
+    for item in history:
+        signature = item.get("signature") or f"{item.get('label', 'request')}:{item.get('promptTokens', 0)}:{item.get('completionTokens', 0)}:{item.get('totalMs', 0)}"
+        if signature in seen:
+            continue
+        enriched = dict(item)
+        enriched["signature"] = signature
+        merged.append(enriched)
+        seen.add(signature)
+
+    for item in items:
+        signature = item.get("signature") or f"{item.get('label', 'request')}:{item.get('promptTokens', 0)}:{item.get('completionTokens', 0)}:{item.get('totalMs', 0)}"
+        if signature in seen:
+            continue
+        merged.append(item)
+        seen.add(signature)
+
+    return merged[-max(1, max_history):]
+
+
+def summarize_history_payload(history: list[dict]) -> dict:
+    current = history[-1] if history else None
+    avg_prompt_tps = 0.0
+    avg_completion_tps = 0.0
+    avg_total_tps = 0.0
+    if history:
+        avg_prompt_tps = sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history)
+        avg_completion_tps = sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history)
+        avg_total_tps = sum(item.get("totalTokensPerSecond", 0.0) for item in history) / len(history)
+
+    return {
+        "current": current,
+        "history": history,
+        "historyCount": len(history),
+        "averages": {
+            "promptTokensPerSecond": round(avg_prompt_tps, 2),
+            "completionTokensPerSecond": round(avg_completion_tps, 2),
+            "totalTokensPerSecond": round(avg_total_tps, 2),
+        },
+    }
+
+
 def command_token_metrics(args: argparse.Namespace) -> int:
     response_path = Path(args.response_file)
     history_path = Path(args.history_file)
@@ -411,32 +519,46 @@ def command_token_metrics(args: argparse.Namespace) -> int:
         except Exception:
             history = []
 
-    history.append(current)
-    history = history[-max(1, args.max_history):]
+    history = merge_token_metric_history(history, [current], args.max_history)
     history_path.parent.mkdir(parents=True, exist_ok=True)
     with history_path.open("w", encoding="utf-8") as handle:
         json.dump(history, handle, ensure_ascii=False, indent=2)
 
-    avg_prompt_tps = 0.0
-    avg_completion_tps = 0.0
-    if history:
-        avg_prompt_tps = sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history)
-        avg_completion_tps = sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history)
+    print(json.dumps(summarize_history_payload(history), indent=2))
+    return 0
 
-    print(
-        json.dumps(
-            {
-                "current": current,
-                "history": history,
-                "historyCount": len(history),
-                "averages": {
-                    "promptTokensPerSecond": round(avg_prompt_tps, 2),
-                    "completionTokensPerSecond": round(avg_completion_tps, 2),
-                },
-            },
-            indent=2,
-        )
-    )
+
+def command_log_token_metrics(args: argparse.Namespace) -> int:
+    log_path = Path(args.log_file)
+    history_path = Path(args.history_file)
+    if not log_path.exists():
+        print(json.dumps(summarize_history_payload([]), indent=2))
+        return 0
+
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        text = ""
+
+    if args.tail_lines and args.tail_lines > 0:
+        text = "\n".join(text.splitlines()[-args.tail_lines :])
+
+    parsed = parse_llama_timing_metrics(text, args.label)
+
+    history: list[dict] = []
+    if history_path.exists():
+        try:
+            with history_path.open("r", encoding="utf-8") as handle:
+                history = json.load(handle)
+        except Exception:
+            history = []
+
+    history = merge_token_metric_history(history, parsed, args.max_history)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with history_path.open("w", encoding="utf-8") as handle:
+        json.dump(history, handle, ensure_ascii=False, indent=2)
+
+    print(json.dumps(summarize_history_payload(history), indent=2))
     return 0
 
 
@@ -491,6 +613,14 @@ def build_parser() -> argparse.ArgumentParser:
     token_metrics.add_argument("--label", default="request")
     token_metrics.add_argument("--max-history", type=int, default=5)
     token_metrics.set_defaults(func=command_token_metrics)
+
+    log_token_metrics = subparsers.add_parser("log-token-metrics")
+    log_token_metrics.add_argument("--log-file", required=True)
+    log_token_metrics.add_argument("--history-file", required=True)
+    log_token_metrics.add_argument("--label", default="live-log")
+    log_token_metrics.add_argument("--max-history", type=int, default=5)
+    log_token_metrics.add_argument("--tail-lines", type=int, default=400)
+    log_token_metrics.set_defaults(func=command_log_token_metrics)
 
     return parser
 
