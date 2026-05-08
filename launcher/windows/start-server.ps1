@@ -1,7 +1,8 @@
 param(
     [ValidateSet("speed", "balanced", "video")]
     [string]$Profile,
-    [switch]$Foreground
+    [switch]$Foreground,
+    [int]$WaitSeconds = 90
 )
 
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
@@ -39,16 +40,6 @@ $outputCustomized = if ($settings.llama.PSObject.Properties["maxOutputTokensCust
     ([int]$maxOutput -ne 8192)
 }
 
-$args = @(
-    "-m", $modelPath,
-    "--port", $state.port,
-    "-ncmoe", [string]$profileData.ncmoe,
-    "-c", [string]$ctx,
-    "-fa", "on",
-    "-n", [string]$maxOutput,
-    "-t", [string]$state.threads
-)
-
 $usesTurboQuant = $false
 if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
     try {
@@ -58,12 +49,7 @@ if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
     }
 }
 
-if ($usesTurboQuant) {
-    $args += @(
-        "-ctk", [string]$profileData.cacheTypeK,
-        "-ctv", [string]$profileData.cacheTypeV
-    )
-} else {
+if (-not $usesTurboQuant) {
     $detectedGpuMiB = Get-DetectedGpuMemoryMiB
 
     if ($settings.llama.PSObject.Properties["gpuLayers"] -and $settings.llama.gpuLayers) {
@@ -127,13 +113,20 @@ if ($Foreground) {
 }
 
 Start-Process -FilePath $serverExe -ArgumentList $args -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden
-Start-Sleep -Seconds 8
+
+$deadline = (Get-Date).AddSeconds([Math]::Max(10, $WaitSeconds))
+do {
+    Start-Sleep -Seconds 3
+    if (Test-LlamaHealth) {
+        break
+    }
+} until ((Get-Date) -ge $deadline)
 
 if (Test-LlamaHealth) {
     Write-Host "llama.cpp je pokrenut na http://127.0.0.1:$($state.port)"
     Write-Host "Profil: $Profile"
     Write-Host "Model: $modelPath"
 } else {
-    Write-Host "Pokretanje nije potvrđeno. Pogledaj log:"
+    Write-Host "Pokretanje nije potvrđeno u roku od $WaitSeconds sekundi. Pogledaj log:"
     Write-Host $stderrLog
 }
