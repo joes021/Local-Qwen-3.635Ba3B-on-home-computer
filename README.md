@@ -197,6 +197,7 @@ The Windows `Local Qwen Control Center` now includes:
 - `Pokretanje`: `Start balanced`, `Start video`, `Start speed`, `Stop server`, `Otvori OpenCode`, `Otvori llama.cpp web`, `Osvezi status`, `Otvori folder`
 - `Pokretanje`: `Repair install`, `Test prompt`, `Model manager`, `Diagnostics`, `Check updates`
 - `Pokretanje`: status sada razlikuje `AKTIVAN`, `STARTING / WARMING`, `FAILED` i `NIJE AKTIVAN`
+- `Pokretanje`: benchmark prikaz poslednjeg prompt/output throughput merenja i kratke istorije
 - `Podesavanja`: `model variant`, `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
 - `Agent`: zivi risk audit koji pokazuje koliko je izabrani rezim opasan za sistem
@@ -204,6 +205,7 @@ The Windows `Local Qwen Control Center` now includes:
 - `Onboarding`: guided next step koji moze odmah da pokrene preporucenu akciju
 - `Logovi`: latest `stdout`, `stderr`, `install summary`, `install report`
 - `Diagnostics`: live pregled lifecycle statusa, razlog poslednjeg stanja, onboarding spremnosti, latest release stanja i log putanja
+- `Diagnostics`: prikaz poslednjeg benchmark merenja i proseka istorije za input/output tokene po sekundi
 
 ### Ubuntu 24.04
 
@@ -222,6 +224,7 @@ After install, the main commands are:
 ```
 
 Linux `control-center.sh` sada prikazuje i `STARTING / WARMING` stanje dok se `llama.cpp` server i model jos podizu, tako da vise nema zabune izmedju sporog starta i trajno neaktivnog servera.
+Posle `test-prompt.sh`, Linux control center prikazuje i poslednje throughput merenje i malu istoriju benchmark rezultata.
 
 ```bash
 /home/$USER/local-qwen-home/launchers/settings-tui.sh

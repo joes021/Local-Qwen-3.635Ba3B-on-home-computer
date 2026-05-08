@@ -23,10 +23,10 @@ if ! test_llama_health; then
   exit 1
 fi
 
-python3 - <<'PY' "$STATE_PATH" "$PROMPT"
-import json, sys, urllib.request
+python3 - <<'PY' "$STATE_PATH" "$PROMPT" "$(get_runtime_engine_path)" "$(get_token_metrics_history_path)"
+import json, sys, urllib.request, time, tempfile, subprocess, os
 
-state_path, prompt = sys.argv[1:3]
+state_path, prompt, runtime_script, history_path = sys.argv[1:5]
 with open(state_path, "r", encoding="utf-8") as f:
     state = json.load(f)
 
@@ -44,9 +44,31 @@ req = urllib.request.Request(
     method="POST",
 )
 
+started = time.perf_counter()
 with urllib.request.urlopen(req, timeout=60) as response:
     payload = json.loads(response.read().decode("utf-8"))
+elapsed_ms = (time.perf_counter() - started) * 1000.0
+
+payload["_elapsed_ms"] = elapsed_ms
+payload["_measured_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".json") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2)
+    temp_response = handle.name
+
+metrics_result = subprocess.run(
+    [sys.executable, runtime_script, "token-metrics", "--response-file", temp_response, "--history-file", history_path, "--label", "test-prompt"],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+os.unlink(temp_response)
+metrics = json.loads(metrics_result.stdout)
 
 print("Smoke test odgovor:")
 print(payload["choices"][0]["message"]["content"])
+print("Benchmark:")
+print(f"Prompt tok/s: {metrics['current']['promptTokensPerSecond']}")
+print(f"Output tok/s: {metrics['current']['completionTokensPerSecond']}")
+print(f"Ukupno ms: {metrics['current']['totalMs']}")
 PY

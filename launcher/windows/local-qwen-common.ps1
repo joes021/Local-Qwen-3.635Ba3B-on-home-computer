@@ -239,6 +239,44 @@ function Get-DiagnosticsDirectory {
     return $path
 }
 
+function Get-TokenMetricsHistoryPath {
+    $root = Get-LocalQwenRoot
+    return Join-Path $root "state\token-metrics-history.json"
+}
+
+function Get-TokenMetricsSummary {
+    $path = Get-TokenMetricsHistoryPath
+    $history = @()
+    if (Test-Path $path) {
+        try {
+            $loaded = Get-Content -Raw $path | ConvertFrom-Json
+            if ($loaded) {
+                $history = @($loaded)
+            }
+        } catch {
+            $history = @()
+        }
+    }
+
+    $current = if ($history.Count -gt 0) { $history[-1] } else { $null }
+    $avgPrompt = 0.0
+    $avgCompletion = 0.0
+    if ($history.Count -gt 0) {
+        $avgPrompt = (($history | Measure-Object -Property promptTokensPerSecond -Average).Average)
+        $avgCompletion = (($history | Measure-Object -Property completionTokensPerSecond -Average).Average)
+    }
+
+    return [pscustomobject]@{
+        current = $current
+        history = @($history | Select-Object -Last 5)
+        historyCount = $history.Count
+        averages = [pscustomobject]@{
+            promptTokensPerSecond = [math]::Round([double]$avgPrompt, 2)
+            completionTokensPerSecond = [math]::Round([double]$avgCompletion, 2)
+        }
+    }
+}
+
 function Ensure-Directory {
     param([string]$Path)
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
@@ -805,7 +843,8 @@ if last_error is not None:
 function Invoke-TestPrompt {
     param(
         [string]$Prompt = "Reply with exactly OK",
-        [int]$MaxTokens = 16
+        [int]$MaxTokens = 16,
+        [string]$Label = "test-prompt"
     )
 
     $state = Get-InstallState
@@ -822,7 +861,31 @@ function Invoke-TestPrompt {
     } | ConvertTo-Json -Depth 10
 
     $url = "http://127.0.0.1:$($state.port)/v1/chat/completions"
-    return Invoke-RestMethod -Method Post -Uri $url -ContentType "application/json" -Body $body -TimeoutSec 60
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $response = Invoke-RestMethod -Method Post -Uri $url -ContentType "application/json" -Body $body -TimeoutSec 60
+    $stopwatch.Stop()
+
+    $tmpPath = Join-Path $env:TEMP ("local-qwen-metrics-" + [guid]::NewGuid().ToString() + ".json")
+    $payload = $response | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $payload | Add-Member -Force -NotePropertyName "_elapsed_ms" -NotePropertyValue ([double]$stopwatch.Elapsed.TotalMilliseconds)
+    $payload | Add-Member -Force -NotePropertyName "_measured_at" -NotePropertyValue ((Get-Date).ToUniversalTime().ToString("o"))
+    $payload | ConvertTo-Json -Depth 30 | Set-Content -Path $tmpPath -Encoding UTF8
+
+    try {
+        $metrics = Invoke-RuntimeEngineJson -Arguments @(
+            "token-metrics",
+            "--response-file", $tmpPath,
+            "--history-file", (Get-TokenMetricsHistoryPath),
+            "--label", $Label
+        )
+    } finally {
+        Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+    }
+
+    return [pscustomobject]@{
+        Response = $response
+        Metrics = $metrics
+    }
 }
 
 function Update-OpenCodeConfig {

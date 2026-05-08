@@ -187,6 +187,23 @@ if latest:
 PY
 }
 
+show_throughput() {
+  python3 - <<'PY' "$(get_token_metrics_summary_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+current = payload.get("current")
+print("Token throughput")
+if not current:
+    print("- Jos nema benchmark merenja. Pokreni test prompt.")
+else:
+    print(f"- Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalMs', 0)} ms")
+    print(f"- Prosek: prompt {payload.get('averages', {}).get('promptTokensPerSecond', 0)} tok/s | output {payload.get('averages', {}).get('completionTokensPerSecond', 0)} tok/s")
+    history = payload.get("history", [])
+    for item in history:
+        print(f"- {item.get('measuredAt')}: in {item.get('promptTokensPerSecond', 0)} tok/s | out {item.get('completionTokensPerSecond', 0)} tok/s")
+PY
+}
+
 get_next_action_id() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
 import json, os, subprocess, sys, urllib.request
@@ -292,6 +309,7 @@ while true; do
   show_onboarding
   show_next_action
   show_diagnostics
+  show_throughput
   echo "1) Start server (saved profile)"
   echo "2) Start server (choose profile)"
   echo "3) Stop server"

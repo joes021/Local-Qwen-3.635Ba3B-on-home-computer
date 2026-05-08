@@ -317,7 +317,7 @@ $launchTab.Controls.Add($profileNote)
 
 $hardwareBox = New-Object System.Windows.Forms.TextBox
 $hardwareBox.Location = New-Object System.Drawing.Point(18, 182)
-$hardwareBox.Size = New-Object System.Drawing.Size(648, 170)
+$hardwareBox.Size = New-Object System.Drawing.Size(648, 136)
 $hardwareBox.Multiline = $true
 $hardwareBox.ScrollBars = "Vertical"
 $hardwareBox.ReadOnly = $true
@@ -325,9 +325,19 @@ $hardwareBox.BackColor = [System.Drawing.Color]::White
 $hardwareBox.Text = "Ovde ce biti prikazan hardver i efektivne runtime opcije."
 $launchTab.Controls.Add($hardwareBox)
 
+$throughputBox = New-Object System.Windows.Forms.TextBox
+$throughputBox.Location = New-Object System.Drawing.Point(18, 326)
+$throughputBox.Size = New-Object System.Drawing.Size(648, 58)
+$throughputBox.Multiline = $true
+$throughputBox.ScrollBars = "Vertical"
+$throughputBox.ReadOnly = $true
+$throughputBox.BackColor = [System.Drawing.Color]::White
+$throughputBox.Text = "Ovde ce biti prikazan benchmark poslednjeg zahteva i kratka istorija."
+$launchTab.Controls.Add($throughputBox)
+
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 386)
-$launchOutput.Size = New-Object System.Drawing.Size(648, 134)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 392)
+$launchOutput.Size = New-Object System.Drawing.Size(648, 128)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
 $launchOutput.ReadOnly = $true
@@ -604,6 +614,7 @@ function Refresh-DiagnosticsView {
     $latestRelease = Get-LatestReleaseInfo
     $onboarding = Get-OnboardingChecklist
     $nextAction = Get-NextActionRecommendation
+    $tokenMetrics = Get-TokenMetricsSummary
     $state = Get-InstallState
     $settings = Get-Settings
     $selectedModel = Get-ModelMetadata
@@ -632,6 +643,20 @@ function Refresh-DiagnosticsView {
     $lines.Add("Stdout: $($statusBundle.Lifecycle.stdout)") | Out-Null
     $lines.Add("Stderr: $($statusBundle.Lifecycle.stderr)") | Out-Null
     $lines.Add("") | Out-Null
+    $lines.Add("Token throughput") | Out-Null
+    if ($tokenMetrics.current) {
+        $lines.Add("Last prompt tok/s: $($tokenMetrics.current.promptTokensPerSecond)") | Out-Null
+        $lines.Add("Last output tok/s: $($tokenMetrics.current.completionTokensPerSecond)") | Out-Null
+        $lines.Add("Last total ms: $($tokenMetrics.current.totalMs)") | Out-Null
+        $lines.Add("Average prompt tok/s: $($tokenMetrics.averages.promptTokensPerSecond)") | Out-Null
+        $lines.Add("Average output tok/s: $($tokenMetrics.averages.completionTokensPerSecond)") | Out-Null
+        foreach ($item in @($tokenMetrics.history)) {
+            $lines.Add("- $($item.measuredAt): in $($item.promptTokensPerSecond) tok/s | out $($item.completionTokensPerSecond) tok/s") | Out-Null
+        }
+    } else {
+        $lines.Add("Jos nema benchmark merenja. Pokreni 'Test prompt'.") | Out-Null
+    }
+    $lines.Add("") | Out-Null
     $lines.Add("Onboarding") | Out-Null
     $lines.Add("Ready: $(if ($onboarding.ready) { 'da' } else { 'ne' })") | Out-Null
     foreach ($step in $onboarding.steps) {
@@ -647,6 +672,25 @@ function Refresh-DiagnosticsView {
     $lines.Add("STDERR: $(if ($latestLogs.StdErr) { $latestLogs.StdErr } else { 'nema' })") | Out-Null
     $lines.Add("Install report: $(if ($latestLogs.InstallReport) { $latestLogs.InstallReport } else { 'nema' })") | Out-Null
     $diagnosticsContent.Text = $lines -join [Environment]::NewLine
+}
+
+function Refresh-ThroughputView {
+    $tokenMetrics = Get-TokenMetricsSummary
+    if (-not $tokenMetrics.current) {
+        $throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
+        return
+    }
+
+    $historyLines = @()
+    foreach ($item in @($tokenMetrics.history)) {
+        $historyLines += "$($item.promptTokensPerSecond) / $($item.completionTokensPerSecond) tok/s"
+    }
+
+    $throughputBox.Text = @(
+        "Poslednje merenje: prompt $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
+        "Prosek istorije: prompt $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output $($tokenMetrics.averages.completionTokensPerSecond) tok/s",
+        "Istorija: $($historyLines -join '   ;   ')"
+    ) -join [Environment]::NewLine
 }
 
 function Show-AboutDialog {
@@ -721,6 +765,7 @@ function Start-LlamaBackground {
     }
     Refresh-LaunchStatus
     Refresh-DiagnosticsView
+    Refresh-ThroughputView
 }
 
 $startBalanced = New-Object System.Windows.Forms.Button
@@ -1270,6 +1315,8 @@ $runNextActionButton.Add_Click({
         Refresh-LaunchStatus
         Refresh-LogsView
         Refresh-OnboardingView
+        Refresh-DiagnosticsView
+        Refresh-ThroughputView
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1284,6 +1331,7 @@ $repairInstallButton.Add_Click({
         Write-LaunchMessage @($result)
         Refresh-LaunchStatus
         Refresh-LogsView
+        Refresh-DiagnosticsView
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1294,6 +1342,8 @@ $testPromptButton.Add_Click({
         $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-prompt.ps1") -Profile $profile 2>&1
         Write-LaunchMessage @($result)
         Refresh-LogsView
+        Refresh-DiagnosticsView
+        Refresh-ThroughputView
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1317,6 +1367,7 @@ $diagnosticsButton.Add_Click({
 })
 $refreshDiagnosticsButton.Add_Click({
     Refresh-DiagnosticsView
+    Refresh-ThroughputView
     Write-LaunchMessage @("Diagnostics pregled je osvezen.")
 })
 $exportDiagnosticsButton.Add_Click({
@@ -1346,6 +1397,7 @@ $refreshTimer.Interval = 3000
 $refreshTimer.Add_Tick({
     Refresh-LaunchStatus
     Refresh-DiagnosticsView
+    Refresh-ThroughputView
 })
 $refreshTimer.Start()
 
@@ -1354,6 +1406,7 @@ Refresh-LogsView
 Refresh-AgentAudit
 Refresh-OnboardingView
 Refresh-DiagnosticsView
+Refresh-ThroughputView
 
 $form.Add_Shown({
     $effectiveStatus = Get-EffectiveServiceStatus

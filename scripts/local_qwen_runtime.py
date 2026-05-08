@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -347,6 +348,98 @@ def command_service_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def summarize_token_metrics(payload: dict) -> dict:
+    usage = payload.get("usage", {}) or {}
+    timings = payload.get("timings", {}) or {}
+    prompt_tokens = int(usage.get("prompt_tokens") or usage.get("promptTokens") or timings.get("prompt_n") or 0)
+    completion_tokens = int(
+        usage.get("completion_tokens")
+        or usage.get("completionTokens")
+        or timings.get("predicted_n")
+        or timings.get("completion_n")
+        or 0
+    )
+    total_tokens = prompt_tokens + completion_tokens
+
+    prompt_ms = float(timings.get("prompt_ms") or timings.get("prompt_eval_ms") or 0)
+    completion_ms = float(timings.get("predicted_ms") or timings.get("completion_ms") or timings.get("eval_ms") or 0)
+    total_ms = float(timings.get("total_ms") or payload.get("_elapsed_ms") or 0)
+    if total_ms <= 0 and prompt_ms > 0 and completion_ms > 0:
+        total_ms = prompt_ms + completion_ms
+
+    prompt_tps = float(timings.get("prompt_per_second") or 0)
+    if prompt_tps <= 0 and prompt_tokens > 0 and prompt_ms > 0:
+        prompt_tps = prompt_tokens / (prompt_ms / 1000.0)
+
+    completion_tps = float(timings.get("predicted_per_second") or timings.get("completion_per_second") or 0)
+    if completion_tps <= 0 and completion_tokens > 0 and completion_ms > 0:
+        completion_tps = completion_tokens / (completion_ms / 1000.0)
+
+    total_tps = 0.0
+    if total_tokens > 0 and total_ms > 0:
+        total_tps = total_tokens / (total_ms / 1000.0)
+
+    return {
+        "measuredAt": payload.get("_measured_at") or datetime.now(timezone.utc).isoformat(),
+        "label": payload.get("_label") or "request",
+        "promptTokens": prompt_tokens,
+        "completionTokens": completion_tokens,
+        "totalTokens": total_tokens,
+        "promptMs": round(prompt_ms, 2),
+        "completionMs": round(completion_ms, 2),
+        "totalMs": round(total_ms, 2),
+        "promptTokensPerSecond": round(prompt_tps, 2) if prompt_tps > 0 else 0.0,
+        "completionTokensPerSecond": round(completion_tps, 2) if completion_tps > 0 else 0.0,
+        "totalTokensPerSecond": round(total_tps, 2) if total_tps > 0 else 0.0,
+    }
+
+
+def command_token_metrics(args: argparse.Namespace) -> int:
+    response_path = Path(args.response_file)
+    history_path = Path(args.history_file)
+    with response_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    payload["_label"] = args.label
+    current = summarize_token_metrics(payload)
+
+    history = []
+    if history_path.exists():
+        try:
+            with history_path.open("r", encoding="utf-8") as handle:
+                history = json.load(handle)
+        except Exception:
+            history = []
+
+    history.append(current)
+    history = history[-max(1, args.max_history):]
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with history_path.open("w", encoding="utf-8") as handle:
+        json.dump(history, handle, ensure_ascii=False, indent=2)
+
+    avg_prompt_tps = 0.0
+    avg_completion_tps = 0.0
+    if history:
+        avg_prompt_tps = sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history)
+        avg_completion_tps = sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history)
+
+    print(
+        json.dumps(
+            {
+                "current": current,
+                "history": history,
+                "historyCount": len(history),
+                "averages": {
+                    "promptTokensPerSecond": round(avg_prompt_tps, 2),
+                    "completionTokensPerSecond": round(avg_completion_tps, 2),
+                },
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Shared runtime helper for Local Qwen installers and launchers.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -391,6 +484,13 @@ def build_parser() -> argparse.ArgumentParser:
     service_status.add_argument("--has-health", required=True)
     service_status.add_argument("--lifecycle-state", required=True)
     service_status.set_defaults(func=command_service_status)
+
+    token_metrics = subparsers.add_parser("token-metrics")
+    token_metrics.add_argument("--response-file", required=True)
+    token_metrics.add_argument("--history-file", required=True)
+    token_metrics.add_argument("--label", default="request")
+    token_metrics.add_argument("--max-history", type=int, default=5)
+    token_metrics.set_defaults(func=command_token_metrics)
 
     return parser
 

@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.1
+- Dodat benchmark prikaz za prompt/output tokene po sekundi uz poslednje merenje i kratku istoriju
+- Windows Control Center sada prikazuje throughput u Pokretanje i Diagnostics tabu
+- Linux control center sada prikazuje isti throughput pregled i istoriju posle test prompt merenja
+
 v2.1.0
 - Dodat shared lifecycle status koji razlikuje inactive, warming i failed stanja na Windows i Linux strani
 - Windows Control Center sada ima Diagnostics tab sa zivim pregledom lifecycle-a, onboarding-a, release stanja i log putanja

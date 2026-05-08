@@ -2,6 +2,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -207,6 +208,45 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=stderr)
         payload = json.loads(stdout)
         self.assertEqual(payload["effectiveState"], "inactive")
+
+    def test_token_metrics_records_current_and_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            response_path = temp_path / "response.json"
+            history_path = temp_path / "history.json"
+            response_path.write_text(
+                json.dumps(
+                    {
+                        "_elapsed_ms": 2000,
+                        "usage": {
+                            "prompt_tokens": 100,
+                            "completion_tokens": 50,
+                        },
+                        "timings": {
+                            "prompt_ms": 1000,
+                            "predicted_ms": 500,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, stdout, stderr = run_runtime_command(
+                "token-metrics",
+                "--response-file",
+                str(response_path),
+                "--history-file",
+                str(history_path),
+                "--label",
+                "test-prompt",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["current"]["promptTokens"], 100)
+            self.assertEqual(payload["current"]["completionTokens"], 50)
+            self.assertEqual(payload["current"]["promptTokensPerSecond"], 100.0)
+            self.assertEqual(payload["current"]["completionTokensPerSecond"], 100.0)
+            self.assertEqual(payload["historyCount"], 1)
 
 
 if __name__ == "__main__":

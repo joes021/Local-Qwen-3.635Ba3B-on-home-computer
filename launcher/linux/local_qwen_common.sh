@@ -31,6 +31,10 @@ get_service_lifecycle_path() {
   echo "$(get_local_qwen_root)/state/server-lifecycle.json"
 }
 
+get_token_metrics_history_path() {
+  echo "$(get_local_qwen_root)/state/token-metrics-history.json"
+}
+
 set_service_lifecycle_state() {
   local lifecycle_state="$1"
   local profile="${2:-}"
@@ -191,6 +195,36 @@ print(json.loads(sys.argv[1]).get("state", "inactive"))
 PY
 )"
   run_runtime_engine_json service-status --has-health "$has_health" --lifecycle-state "$lifecycle_state"
+}
+
+get_token_metrics_summary_json() {
+  local history_path
+  history_path="$(get_token_metrics_history_path)"
+  python3 - <<'PY' "$history_path"
+import json, os, sys
+path = sys.argv[1]
+history = []
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            history = json.load(f)
+    except Exception:
+        history = []
+current = history[-1] if history else None
+averages = {
+    "promptTokensPerSecond": 0.0,
+    "completionTokensPerSecond": 0.0,
+}
+if history:
+    averages["promptTokensPerSecond"] = round(sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history), 2)
+    averages["completionTokensPerSecond"] = round(sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history), 2)
+print(json.dumps({
+    "current": current,
+    "history": history[-5:],
+    "historyCount": len(history),
+    "averages": averages,
+}))
+PY
 }
 
 model_file_looks_complete() {
