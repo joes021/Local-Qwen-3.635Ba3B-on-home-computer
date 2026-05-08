@@ -53,18 +53,21 @@ function Add-TrackFieldRow {
     $numeric.Font = New-Object System.Drawing.Font("Segoe UI", 10)
     $Parent.Controls.Add($numeric)
 
-    $track.Add_ValueChanged({
+    $trackHandler = {
         if ($numeric.Value -ne $track.Value) {
             $numeric.Value = $track.Value
         }
-    })
+    }.GetNewClosure()
 
-    $numeric.Add_ValueChanged({
+    $numericHandler = {
         $next = [int]$numeric.Value
         if ($track.Value -ne $next) {
             $track.Value = $next
         }
-    })
+    }.GetNewClosure()
+
+    $track.Add_ValueChanged($trackHandler)
+    $numeric.Add_ValueChanged($numericHandler)
 
     return @{
         Track = $track
@@ -129,14 +132,15 @@ function Add-ContextRow {
     $syncContext = {
         $combo.SelectedIndex = $track.Value
         $valueLabel.Text = "Izabrano: $($presets[$track.Value]) tokena"
-    }
+    }.GetNewClosure()
 
     $track.Add_ValueChanged($syncContext)
-    $combo.Add_SelectedIndexChanged({
+    $comboHandler = {
         if ($track.Value -ne $combo.SelectedIndex) {
             $track.Value = $combo.SelectedIndex
         }
-    })
+    }.GetNewClosure()
+    $combo.Add_SelectedIndexChanged($comboHandler)
 
     & $syncContext
 
