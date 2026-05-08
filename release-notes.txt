@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.7
+- Windows Control Center vise ne proverava GitHub latest release na svakom 3s refresh tick-u, vec koristi kesirani rezultat da UI ne deluje stalno zauzet
+- Auto-start llama.cpp je pomeren malo posle otvaranja prozora, da se Control Center prvo potpuno iscrta pre pozadinskog start toka
+
 v2.1.6
 - Windows installer sada zaista kopira scripts folder iz bootstrap paketa u LocalQwenHome, pa shared runtime helper vise ne ostaje odsutan posle instalacije
 - Repair install sada ume da obnovi shared runtime scripts iz bootstrap instalacije i za vec polomljene Windows instalacije

@@ -5,6 +5,8 @@ Add-Type -AssemblyName System.Drawing
 
 $root = Get-LocalQwenRoot
 $state = Get-InstallState
+$script:LatestReleaseCache = $null
+$script:LatestReleaseCacheAt = $null
 
 $configureSettingsScript = Join-Path $PSScriptRoot "configure-settings.ps1"
 $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
@@ -611,7 +613,7 @@ function Refresh-LaunchStatus {
 function Refresh-DiagnosticsView {
     $statusBundle = Get-EffectiveServiceStatus
     $latestLogs = Get-LatestLlamaLogs
-    $latestRelease = Get-LatestReleaseInfo
+    $latestRelease = Get-LatestReleaseInfoCached
     $onboarding = Get-OnboardingChecklist
     $nextAction = Get-NextActionRecommendation
     $tokenMetrics = Get-TokenMetricsSummary
@@ -672,6 +674,31 @@ function Refresh-DiagnosticsView {
     $lines.Add("STDERR: $(if ($latestLogs.StdErr) { $latestLogs.StdErr } else { 'nema' })") | Out-Null
     $lines.Add("Install report: $(if ($latestLogs.InstallReport) { $latestLogs.InstallReport } else { 'nema' })") | Out-Null
     $diagnosticsContent.Text = $lines -join [Environment]::NewLine
+}
+
+function Get-LatestReleaseInfoCached {
+    $ttlSeconds = 600
+    if ($script:LatestReleaseCache -and $script:LatestReleaseCacheAt) {
+        $age = ((Get-Date) - $script:LatestReleaseCacheAt).TotalSeconds
+        if ($age -lt $ttlSeconds) {
+            return $script:LatestReleaseCache
+        }
+    }
+
+    try {
+        $script:LatestReleaseCache = Get-LatestReleaseInfo
+        $script:LatestReleaseCacheAt = Get-Date
+        return $script:LatestReleaseCache
+    } catch {
+        if ($script:LatestReleaseCache) {
+            return $script:LatestReleaseCache
+        }
+
+        return [pscustomobject]@{
+            latestVersion = "unknown"
+            updateAvailable = $false
+        }
+    }
 }
 
 function Refresh-ThroughputView {
@@ -1396,7 +1423,6 @@ $refreshTimer = New-Object System.Windows.Forms.Timer
 $refreshTimer.Interval = 3000
 $refreshTimer.Add_Tick({
     Refresh-LaunchStatus
-    Refresh-DiagnosticsView
     Refresh-ThroughputView
 })
 $refreshTimer.Start()
@@ -1408,7 +1434,10 @@ Refresh-OnboardingView
 Refresh-DiagnosticsView
 Refresh-ThroughputView
 
-$form.Add_Shown({
+$startupTimer = New-Object System.Windows.Forms.Timer
+$startupTimer.Interval = 800
+$startupTimer.Add_Tick({
+    $startupTimer.Stop()
     $effectiveStatus = Get-EffectiveServiceStatus
     if ($effectiveStatus.Summary.state -eq "inactive" -or $effectiveStatus.Summary.state -eq "failed") {
         try {
@@ -1423,6 +1452,10 @@ $form.Add_Shown({
     } else {
         Write-LaunchMessage @("llama.cpp je vec aktivan.")
     }
+})
+
+$form.Add_Shown({
+    $startupTimer.Start()
 })
 
 [void]$form.ShowDialog()
