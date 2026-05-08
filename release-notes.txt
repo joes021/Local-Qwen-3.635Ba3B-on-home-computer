@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.3
+- Popravljen Windows setup paket: sada zaista nosi shared scripts folder i release-notes.txt, pa bootstrap install vise ne ostaje zaglavljen na starom 1.2.x stanju
+- Windows install sada uklanja stare zalutale version/release-notes fajlove iz launchers foldera pri osvezavanju
+- Ovo je glavni fix za slucaj kada Setup izgleda nov, ali LocalQwenHome ostane na starom Control Center-u
+
 v2.1.2
 - Windows Control Center desktop launcher vise ne otvara ruzeni cmd prozor pre GUI-ja, vec koristi skriveni VBS launcher
 - About sada prikazuje uredjene bullet stavke umesto slepljenog teksta

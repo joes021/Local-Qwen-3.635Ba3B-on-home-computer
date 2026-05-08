@@ -602,6 +602,15 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-P
 Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
 
+foreach ($stalePath in @(
+    (Join-Path $launchersDir "version.json"),
+    (Join-Path $launchersDir "release-notes.txt")
+)) {
+    if (Test-Path $stalePath) {
+        Remove-Item -LiteralPath $stalePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 Write-InstallState `
     -InstallRoot $InstallRoot `
     -DesktopTargetDir $desktopTargetDir `

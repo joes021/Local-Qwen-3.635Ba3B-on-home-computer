@@ -41,9 +41,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "..\..\install\windows\setup-bootstrap.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\version.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\release-notes.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\install\windows\install.ps1"; DestDir: "{app}\install\windows"; Flags: ignoreversion
 Source: "..\..\launcher\windows\*"; DestDir: "{app}\launcher\windows"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\assets\icons\*"; DestDir: "{app}\assets\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\config\profiles\*"; DestDir: "{app}\config\profiles"; Flags: ignoreversion recursesubdirs createallsubdirs
 
