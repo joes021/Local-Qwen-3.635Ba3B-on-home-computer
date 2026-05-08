@@ -292,9 +292,11 @@ function Get-TokenMetricsSummary {
     $current = if ($history.Count -gt 0) { $history[-1] } else { $null }
     $avgPrompt = 0.0
     $avgCompletion = 0.0
+    $avgTotal = 0.0
     if ($history.Count -gt 0) {
         $avgPrompt = (($history | Measure-Object -Property promptTokensPerSecond -Average).Average)
         $avgCompletion = (($history | Measure-Object -Property completionTokensPerSecond -Average).Average)
+        $avgTotal = (($history | Measure-Object -Property totalTokensPerSecond -Average).Average)
     }
 
     return [pscustomobject]@{
@@ -304,6 +306,7 @@ function Get-TokenMetricsSummary {
         averages = [pscustomobject]@{
             promptTokensPerSecond = [math]::Round([double]$avgPrompt, 2)
             completionTokensPerSecond = [math]::Round([double]$avgCompletion, 2)
+            totalTokensPerSecond = [math]::Round([double]$avgTotal, 2)
         }
     }
 }

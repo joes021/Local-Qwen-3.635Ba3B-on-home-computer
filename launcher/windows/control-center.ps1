@@ -329,8 +329,42 @@ $hardwareBox.BackColor = [System.Drawing.Color]::White
 $hardwareBox.Text = "Ovde ce biti prikazan hardver i efektivne runtime opcije."
 $launchTab.Controls.Add($hardwareBox)
 
+$liveThroughputPanel = New-Object System.Windows.Forms.GroupBox
+$liveThroughputPanel.Text = "Live throughput"
+$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 326)
+$liveThroughputPanel.Size = New-Object System.Drawing.Size(648, 74)
+$launchTab.Controls.Add($liveThroughputPanel)
+
+$livePromptLabel = New-Object System.Windows.Forms.Label
+$livePromptLabel.Location = New-Object System.Drawing.Point(18, 24)
+$livePromptLabel.Size = New-Object System.Drawing.Size(180, 22)
+$livePromptLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$livePromptLabel.Text = "Input: -- tok/s"
+$liveThroughputPanel.Controls.Add($livePromptLabel)
+
+$liveOutputLabel = New-Object System.Windows.Forms.Label
+$liveOutputLabel.Location = New-Object System.Drawing.Point(224, 24)
+$liveOutputLabel.Size = New-Object System.Drawing.Size(180, 22)
+$liveOutputLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$liveOutputLabel.Text = "Output: -- tok/s"
+$liveThroughputPanel.Controls.Add($liveOutputLabel)
+
+$liveTotalLabel = New-Object System.Windows.Forms.Label
+$liveTotalLabel.Location = New-Object System.Drawing.Point(430, 24)
+$liveTotalLabel.Size = New-Object System.Drawing.Size(180, 22)
+$liveTotalLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$liveTotalLabel.Text = "Total: -- tok/s"
+$liveThroughputPanel.Controls.Add($liveTotalLabel)
+
+$liveSignalLabel = New-Object System.Windows.Forms.Label
+$liveSignalLabel.Location = New-Object System.Drawing.Point(18, 48)
+$liveSignalLabel.Size = New-Object System.Drawing.Size(592, 18)
+$liveSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
+$liveSignalLabel.Text = "Signal: nema podataka"
+$liveThroughputPanel.Controls.Add($liveSignalLabel)
+
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 326)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 408)
 $throughputBox.Size = New-Object System.Drawing.Size(648, 58)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
@@ -340,8 +374,8 @@ $throughputBox.Text = "Ovde ce biti prikazan benchmark poslednjeg zahteva i krat
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 392)
-$launchOutput.Size = New-Object System.Drawing.Size(648, 128)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 474)
+$launchOutput.Size = New-Object System.Drawing.Size(648, 112)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
 $launchOutput.ReadOnly = $true
@@ -714,18 +748,40 @@ function Get-LatestReleaseInfoCached {
 function Refresh-ThroughputView {
     $tokenMetrics = Get-TokenMetricsSummary
     if (-not $tokenMetrics.current) {
+        $livePromptLabel.Text = "Input: -- tok/s"
+        $liveOutputLabel.Text = "Output: -- tok/s"
+        $liveTotalLabel.Text = "Total: -- tok/s"
+        $liveSignalLabel.Text = "Signal: nema podataka"
         $throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
         return
     }
 
+    $measuredAt = $null
+    try {
+        $measuredAt = [datetime]::Parse([string]$tokenMetrics.current.measuredAt)
+    } catch {
+        $measuredAt = $null
+    }
+    $ageText = if ($measuredAt) {
+        $seconds = [math]::Max(0, [int]((Get-Date) - $measuredAt).TotalSeconds)
+        "pre $seconds s"
+    } else {
+        "vreme nepoznato"
+    }
+
+    $livePromptLabel.Text = "Input: $($tokenMetrics.current.promptTokensPerSecond) tok/s"
+    $liveOutputLabel.Text = "Output: $($tokenMetrics.current.completionTokensPerSecond) tok/s"
+    $liveTotalLabel.Text = "Total: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
+    $liveSignalLabel.Text = "Signal: poslednji zahtev $ageText | merenja: $($tokenMetrics.historyCount)"
+
     $historyLines = @()
     foreach ($item in @($tokenMetrics.history)) {
-        $historyLines += "$($item.promptTokensPerSecond) / $($item.completionTokensPerSecond) tok/s"
+        $historyLines += "$($item.promptTokensPerSecond) / $($item.completionTokensPerSecond) / $($item.totalTokensPerSecond) tok/s"
     }
 
     $throughputBox.Text = @(
-        "Poslednje merenje: prompt $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
-        "Prosek istorije: prompt $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output $($tokenMetrics.averages.completionTokensPerSecond) tok/s",
+        "Poslednje merenje: prompt $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokensPerSecond) tok/s | total $($tokenMetrics.current.totalTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
+        "Prosek istorije: prompt $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output $($tokenMetrics.averages.completionTokensPerSecond) tok/s | total $($tokenMetrics.averages.totalTokensPerSecond) tok/s",
         "Istorija: $($historyLines -join '   ;   ')"
     ) -join [Environment]::NewLine
 }
@@ -888,31 +944,31 @@ $launchTab.Controls.Add($openFolderButton)
 
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
-$repairInstallButton.Location = New-Object System.Drawing.Point(18, 528)
+$repairInstallButton.Location = New-Object System.Drawing.Point(18, 594)
 $repairInstallButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($repairInstallButton)
 
 $testPromptButton = New-Object System.Windows.Forms.Button
 $testPromptButton.Text = "Test prompt"
-$testPromptButton.Location = New-Object System.Drawing.Point(152, 528)
+$testPromptButton.Location = New-Object System.Drawing.Point(152, 594)
 $testPromptButton.Size = New-Object System.Drawing.Size(110, 32)
 $launchTab.Controls.Add($testPromptButton)
 
 $modelManagerButton = New-Object System.Windows.Forms.Button
 $modelManagerButton.Text = "Model manager"
-$modelManagerButton.Location = New-Object System.Drawing.Point(272, 528)
+$modelManagerButton.Location = New-Object System.Drawing.Point(272, 594)
 $modelManagerButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($modelManagerButton)
 
 $diagnosticsButton = New-Object System.Windows.Forms.Button
 $diagnosticsButton.Text = "Diagnostics"
-$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 528)
+$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 594)
 $diagnosticsButton.Size = New-Object System.Drawing.Size(120, 32)
 $launchTab.Controls.Add($diagnosticsButton)
 
 $updatesButton = New-Object System.Windows.Forms.Button
 $updatesButton.Text = "Check updates"
-$updatesButton.Location = New-Object System.Drawing.Point(536, 528)
+$updatesButton.Location = New-Object System.Drawing.Point(536, 594)
 $updatesButton.Size = New-Object System.Drawing.Size(130, 32)
 $launchTab.Controls.Add($updatesButton)
 
@@ -1456,6 +1512,7 @@ $refreshTimer = New-Object System.Windows.Forms.Timer
 $refreshTimer.Interval = 3000
 $refreshTimer.Add_Tick({
     Refresh-LaunchStatus -Lightweight
+    Refresh-ThroughputView
 })
 $refreshTimer.Start()
 

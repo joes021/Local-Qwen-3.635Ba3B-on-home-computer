@@ -196,11 +196,11 @@ print("Token throughput")
 if not current:
     print("- Jos nema benchmark merenja. Pokreni test prompt.")
 else:
-    print(f"- Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalMs', 0)} ms")
-    print(f"- Prosek: prompt {payload.get('averages', {}).get('promptTokensPerSecond', 0)} tok/s | output {payload.get('averages', {}).get('completionTokensPerSecond', 0)} tok/s")
+    print(f"- Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalTokensPerSecond', 0)} tok/s | total {current.get('totalMs', 0)} ms")
+    print(f"- Prosek: prompt {payload.get('averages', {}).get('promptTokensPerSecond', 0)} tok/s | output {payload.get('averages', {}).get('completionTokensPerSecond', 0)} tok/s | total {payload.get('averages', {}).get('totalTokensPerSecond', 0)} tok/s")
     history = payload.get("history", [])
     for item in history:
-        print(f"- {item.get('measuredAt')}: in {item.get('promptTokensPerSecond', 0)} tok/s | out {item.get('completionTokensPerSecond', 0)} tok/s")
+        print(f"- {item.get('measuredAt')}: in {item.get('promptTokensPerSecond', 0)} tok/s | out {item.get('completionTokensPerSecond', 0)} tok/s | total {item.get('totalTokensPerSecond', 0)} tok/s")
 PY
 }
 

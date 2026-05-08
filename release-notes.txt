@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.2.0
+- Dodat stalni live throughput panel u Windows Control Center-u sa Input tok/s, Output tok/s i Total tok/s, plus signal kada je poslednje merenje stiglo
+- Prosiren shared throughput summary da racuna i prosecan Total tok/s
+- Linux throughput prikaz sada takodje prikazuje total tok/s u poslednjem merenju, proseku i istoriji
+
 v2.1.11
 - Windows Control Center vise ni configure-settings ne pokrece sinhrono na UI thread-u pri start/autostart akcijama, vec ceo profil start predaje pozadinskom launcheru
 - Ovo dodatno smanjuje sansu da prozor deluje zakucano ili neodgovarajuce odmah po otvaranju
