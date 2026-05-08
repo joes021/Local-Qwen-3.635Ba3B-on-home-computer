@@ -10,7 +10,6 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $versionPath = Join-Path $repoRoot "version.json"
 $windowsBuildScript = Join-Path $repoRoot "packaging\windows\build-setup.ps1"
-$linuxBuildScript = Join-Path $repoRoot "packaging\linux\build-run-installer.sh"
 $releaseNotesPath = Join-Path $repoRoot "release-notes.txt"
 $distWindows = Join-Path $repoRoot "dist\windows"
 $distLinux = Join-Path $repoRoot "dist\linux"
@@ -39,7 +38,12 @@ if (-not $SkipBuild) {
         throw "Windows build nije uspeo."
     }
 
-    & bash $linuxBuildScript $Version
+    Push-Location $repoRoot
+    try {
+        & bash "./packaging/linux/build-run-installer.sh" $Version
+    } finally {
+        Pop-Location
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "Linux build nije uspeo."
     }
