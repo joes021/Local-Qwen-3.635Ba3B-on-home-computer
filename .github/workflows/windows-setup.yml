@@ -50,8 +50,14 @@ jobs:
           name: Local-Qwen-Setup-${{ steps.version.outputs.value }}
           path: dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe
 
+      - name: Prepare stable latest asset
+        shell: pwsh
+        run: Copy-Item "dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe" "dist/windows/Local-Qwen-Setup-latest.exe" -Force
+
       - name: Publish GitHub release asset
         if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe
+          files: |
+            dist/windows/Local-Qwen-Setup-${{ steps.version.outputs.value }}.exe
+            dist/windows/Local-Qwen-Setup-latest.exe

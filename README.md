@@ -127,9 +127,9 @@ When you run the Linux `.run` installer, it goes roughly in this order:
 
 [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 
-2. Download the newest Windows asset:
+2. Download the stable latest Windows installer:
 
-`Local-Qwen-Setup-a.b.c.exe`
+[Local-Qwen-Setup-latest.exe](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.exe)
 
 3. Run the installer.
 
@@ -141,24 +141,23 @@ If a previous Windows install stopped halfway, rerunning the latest Windows `Set
 
 [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 
-2. Download the newest Ubuntu 24.04 asset:
+2. Download the stable latest Ubuntu 24.04 installer:
 
-`Local-Qwen-Setup-a.b.c.run`
+[Local-Qwen-Setup-latest.run](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.run)
 
 3. Run:
 
 ```bash
-chmod +x ./Local-Qwen-Setup-a.b.c.run
-./Local-Qwen-Setup-a.b.c.run
+chmod +x ./Local-Qwen-Setup-latest.run
+./Local-Qwen-Setup-latest.run
 ```
 
 Or directly from terminal:
 
 ```bash
-RUN_URL=$(curl -s https://api.github.com/repos/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest | grep browser_download_url | grep '\.run"' | cut -d '"' -f 4)
-wget -O Local-Qwen-Setup.run "$RUN_URL"
-chmod +x ./Local-Qwen-Setup.run
-./Local-Qwen-Setup.run
+wget -O Local-Qwen-Setup-latest.run https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.run
+chmod +x ./Local-Qwen-Setup-latest.run
+./Local-Qwen-Setup-latest.run
 ```
 
 ## How To Start After Install
@@ -243,6 +242,8 @@ Current public releases:
 
 - [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 - [Latest Release Page](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
+- [Stable latest Windows setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.exe)
+- [Stable latest Ubuntu setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.run)
 
 ## Windows Installer Notes
 

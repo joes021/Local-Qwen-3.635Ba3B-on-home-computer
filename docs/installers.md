@@ -63,6 +63,7 @@ Release packaging now exists in two forms:
 - GitHub Actions workflow `.github/workflows/windows-setup.yml`
 
 If a tag like `vX.Y.Z` is pushed, the workflow publishes `Local-Qwen-Setup-X.Y.Z.exe` to the GitHub release.
+It should also publish the stable alias `Local-Qwen-Setup-latest.exe` so README and setup links can always target the newest Windows installer without hardcoded version edits.
 
 ## Linux
 
@@ -85,6 +86,11 @@ It currently handles:
 - runtime build through `launcher/linux/build-runtime.sh`
 - Ubuntu 24.04-oriented package bootstrap
 - self-extract `.run` packaging through `packaging/linux/build-run-installer.sh`
+
+If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
+
+- `Local-Qwen-Setup-X.Y.Z.run`
+- `Local-Qwen-Setup-latest.run`
 
 Recommended mental model for Ubuntu 24.04 install order:
 

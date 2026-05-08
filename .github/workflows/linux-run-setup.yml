@@ -48,8 +48,14 @@ PY
           name: Local-Qwen-Setup-${{ steps.version.outputs.value }}-linux
           path: dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run
 
+      - name: Prepare stable latest asset
+        shell: bash
+        run: cp "dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run" "dist/linux/Local-Qwen-Setup-latest.run"
+
       - name: Publish GitHub release asset
         if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run
+          files: |
+            dist/linux/Local-Qwen-Setup-${{ steps.version.outputs.value }}.run
+            dist/linux/Local-Qwen-Setup-latest.run
