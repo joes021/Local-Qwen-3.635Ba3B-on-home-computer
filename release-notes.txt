@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v1.2.17
+- Dodat GitHub release verifier koji pada ako release nema oba instalera
+- Zakljucano pravilo da svaki tag mora imati i Windows i Linux latest asset
+
 v1.2.16
 - Dokumentovano da Windows i Linux uvek dele isti broj verzije
 - Potvrdjeno da poslednji Windows GUI slider fix nema Linux ekvivalentni bug

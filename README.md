@@ -30,6 +30,7 @@ Windows and Linux always share the same release number.
 - every public release publishes both a Windows and a Linux installer with that same version
 - a fix can be Windows-only or Linux-only in code
 - even then, the public release number stays aligned across both platforms
+- every tag now also runs a release verifier workflow that fails if one of the two platform installers is missing
 
 ## What It Does
 
@@ -263,6 +264,15 @@ Current public releases:
 - [Latest Release Page](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
 - [Stable latest Windows setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.exe)
 - [Stable latest Ubuntu setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.run)
+
+Release integrity rule:
+
+- a release is considered healthy only when all 4 public assets exist:
+  - `Local-Qwen-Setup-X.Y.Z.exe`
+  - `Local-Qwen-Setup-latest.exe`
+  - `Local-Qwen-Setup-X.Y.Z.run`
+  - `Local-Qwen-Setup-latest.run`
+- GitHub Actions now verifies that set automatically on every release tag
 
 ## Windows Installer Notes
 

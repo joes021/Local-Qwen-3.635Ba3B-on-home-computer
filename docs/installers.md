@@ -9,6 +9,14 @@ Windows and Linux releases intentionally use the same version number.
 - the actual code change can still be platform-specific
 - if only Windows changed, Linux still gets a refreshed `.run` asset with the same version number
 - if only Linux changed, Windows still gets a refreshed `.exe` asset with the same version number
+- every release tag now also runs a verifier workflow that waits for all public assets and fails if either platform is missing from the release
+
+Expected public asset set for every tag:
+
+- `Local-Qwen-Setup-X.Y.Z.exe`
+- `Local-Qwen-Setup-latest.exe`
+- `Local-Qwen-Setup-X.Y.Z.run`
+- `Local-Qwen-Setup-latest.run`
 
 ## Windows
 
