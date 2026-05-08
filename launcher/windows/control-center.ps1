@@ -22,6 +22,7 @@ $repairInstallScript = Join-Path $PSScriptRoot "repair-install.ps1"
 $repairModelScript = Join-Path $PSScriptRoot "repair-model.ps1"
 $repairRuntimeScript = Join-Path $PSScriptRoot "repair-runtime.ps1"
 $repairConfigScript = Join-Path $PSScriptRoot "repair-config.ps1"
+$repairAppControlScript = Join-Path $PSScriptRoot "repair-app-control.ps1"
 $iconPath = Join-Path $root "assets\icons\control-center.ico"
 
 function Add-TrackFieldRow {
@@ -663,6 +664,12 @@ $repairAllHealthButton.Location = New-Object System.Drawing.Point(396, 6)
 $repairAllHealthButton.Size = New-Object System.Drawing.Size(120, 30)
 $healthActionPanel.Controls.Add($repairAllHealthButton)
 
+$guidedRepairButton = New-Object System.Windows.Forms.Button
+$guidedRepairButton.Text = "Guided repair"
+$guidedRepairButton.Location = New-Object System.Drawing.Point(528, 6)
+$guidedRepairButton.Size = New-Object System.Drawing.Size(120, 30)
+$healthActionPanel.Controls.Add($guidedRepairButton)
+
 $healthMeta = New-Object System.Windows.Forms.TextBox
 $healthMeta.Location = New-Object System.Drawing.Point(18, 130)
 $healthMeta.Size = New-Object System.Drawing.Size(648, 104)
@@ -841,7 +848,7 @@ function Refresh-OnboardingView {
 function Refresh-HealthCenterView {
     $payload = Get-HealthCenterData
 
-    $healthSummaryLabel.Text = "Stanje: $($payload.title) | Profil: $($payload.profile) | Model: $($payload.modelId)"
+    $healthSummaryLabel.Text = "Stanje: $($payload.title) | Ozbiljnost: $($payload.severityLabel) ($($payload.severityScore)) | Profil: $($payload.profile) | Model: $($payload.modelId)"
     $healthSummaryLabel.ForeColor = switch ([string]$payload.overallState) {
         "healthy" { [System.Drawing.Color]::FromArgb(20, 120, 50) }
         "warming" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
@@ -853,6 +860,7 @@ function Refresh-HealthCenterView {
         "Summary: $($payload.summary)",
         "Service: $($payload.service.title)",
         "Service reason: $($payload.service.reason)",
+        "Primary action: $($payload.primaryAction.title)",
         "Recommended actions: $(if ($payload.recommendedActions) { (@($payload.recommendedActions) | ForEach-Object { $_.title }) -join ', ' } else { 'nema' })"
     )
     $healthMeta.Text = $metaLines -join [Environment]::NewLine
@@ -877,6 +885,7 @@ function Refresh-HealthCenterView {
         $lines.Add("- $($item.title): $($item.reason)") | Out-Null
     }
     $healthContent.Text = $lines -join [Environment]::NewLine
+    $guidedRepairButton.Text = if ($payload.primaryAction -and $payload.primaryAction.title) { "Guided: $($payload.primaryAction.title)" } else { "Guided repair" }
 }
 
 function Invoke-HealthRepairAction {
@@ -891,6 +900,25 @@ function Invoke-HealthRepairAction {
         Refresh-LogsView
         Refresh-DiagnosticsView
         Refresh-OnboardingView
+    }
+}
+
+function Invoke-HealthActionById {
+    param([Parameter(Mandatory = $true)][string]$ActionId)
+
+    switch ($ActionId) {
+        "repair-runtime" { Invoke-HealthRepairAction -Name "Repair runtime" -ScriptPath $repairRuntimeScript }
+        "repair-model" { Invoke-HealthRepairAction -Name "Repair model" -ScriptPath $repairModelScript }
+        "repair-config" { Invoke-HealthRepairAction -Name "Repair config" -ScriptPath $repairConfigScript }
+        "repair-app-control" { Invoke-HealthRepairAction -Name "Repair App Control" -ScriptPath $repairAppControlScript }
+        "repair-all" { Invoke-HealthRepairAction -Name "Repair all" -ScriptPath $repairInstallScript }
+        "start-server" {
+            $profile = [string](Get-Settings).profile
+            Start-LlamaBackground -Profile $profile
+        }
+        default {
+            Write-LaunchMessage @("Nema mapirane health akcije za: $ActionId")
+        }
     }
 }
 
@@ -2223,6 +2251,14 @@ $repairConfigHealthButton.Add_Click({
 $repairAllHealthButton.Add_Click({
     try {
         Invoke-HealthRepairAction -Name "Repair all" -ScriptPath $repairInstallScript
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$guidedRepairButton.Add_Click({
+    try {
+        $payload = Get-HealthCenterData
+        Invoke-HealthActionById -ActionId ([string]$payload.primaryAction.id)
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }

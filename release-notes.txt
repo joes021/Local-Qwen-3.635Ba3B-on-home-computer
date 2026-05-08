@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.4.3
+- Health Center sada prikazuje procenu ozbiljnosti kvara sa severity nivoom i score vrednoscu
+- Dodat guided repair koji sam bira primarnu akciju prema trenutnom kvaru, ukljucujuci i WDAC / App Control warning scenario
+- Linux Control Center sada ima isti guided repair tok kroz novu opciju u meniju
+
 v2.4.2
 - Dodat objedinjeni Repair & Health Center sa jasnim pregledom stanja: runtime, aktivni model, OpenCode config, install report i service lifecycle
 - Windows Control Center sada ima poseban Health tab sa dugmadima Repair runtime, Repair model, Repair config i Repair all

@@ -329,9 +329,11 @@ import json, sys
 payload = json.loads(sys.argv[1])
 print("Health Center")
 print(f"- State: {payload.get('overallState')}")
+print(f"- Severity: {payload.get('severityLabel')} ({payload.get('severityScore')})")
 print(f"- Title: {payload.get('title')}")
 print(f"- Summary: {payload.get('summary')}")
 print(f"- Service: {payload.get('service', {}).get('title')}")
+print(f"- Primary action: {payload.get('primaryAction', {}).get('title')}")
 print("Checks")
 for item in payload.get("checks", []):
     marker = "[OK]" if item.get("ok") else "[!]"
@@ -344,6 +346,26 @@ print("Recommended actions")
 for item in payload.get("recommendedActions", []):
     print(f"- {item.get('title')}: {item.get('reason')}")
 PY
+}
+
+run_guided_health_action() {
+  local action_id
+  action_id="$(python3 - <<'PY' "$(get_health_center_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("primaryAction", {}).get("id", ""))
+PY
+)"
+  case "$action_id" in
+    repair-runtime) "$SCRIPT_DIR/repair-runtime.sh" ;;
+    repair-model) "$SCRIPT_DIR/repair-model.sh" ;;
+    repair-config) "$SCRIPT_DIR/repair-config.sh" ;;
+    repair-all) "$SCRIPT_DIR/repair-install.sh" ;;
+    repair-app-control) echo "Repair App Control je Windows-specifična akcija." ;;
+    start-server) "$SCRIPT_DIR/start-server.sh" ;;
+    none|"") echo "Nema potrebe za guided repair akcijom." ;;
+    *) echo "Nepoznata guided repair akcija: $action_id" ;;
+  esac
 }
 
 while true; do
@@ -379,7 +401,8 @@ while true; do
   echo "18) Repair model"
   echo "19) Repair runtime"
   echo "20) Repair config"
-  echo "21) Exit"
+  echo "21) Guided repair"
+  echo "22) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -412,7 +435,8 @@ while true; do
     18) "$SCRIPT_DIR/repair-model.sh" ;;
     19) "$SCRIPT_DIR/repair-runtime.sh" ;;
     20) "$SCRIPT_DIR/repair-config.sh" ;;
-    21) exit 0 ;;
+    21) run_guided_health_action ;;
+    22) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

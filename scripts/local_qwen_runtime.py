@@ -715,6 +715,10 @@ def build_health_center(
         for index, warning in enumerate(warnings)
         if str(warning).strip()
     ]
+    wdac_warning = any(
+        ("wdac" in str(warning).lower()) or ("app control" in str(warning).lower())
+        for warning in warnings
+    )
 
     broken_count = sum(1 for item in checks if not item["ok"])
     if broken_count == 0 and not warning_entries and service["effectiveState"] == "active":
@@ -753,6 +757,12 @@ def build_health_center(
             "title": "Repair config",
             "reason": "OpenCode config nije upisan ili nije validan za lokalni endpoint.",
         })
+    if wdac_warning:
+        recommended_actions.append({
+            "id": "repair-app-control",
+            "title": "Repair App Control",
+            "reason": "Windows policy warning ukazuje da App Control / WDAC moze blokirati llama-server.exe.",
+        })
     if broken_count > 1 or warning_entries:
         recommended_actions.append({
             "id": "repair-all",
@@ -766,8 +776,40 @@ def build_health_center(
             "reason": "Komponente su spremne, ostaje samo da server potvrdi health.",
         })
 
+    severity_score = 0
+    severity_score += broken_count * 3
+    if service["effectiveState"] == "failed":
+        severity_score += 3
+    elif service["effectiveState"] == "warming":
+        severity_score += 1
+    severity_score += len(warning_entries)
+    if wdac_warning:
+        severity_score += 1
+
+    if severity_score >= 8:
+        severity_level = "critical"
+        severity_label = "kriticno"
+    elif severity_score >= 5:
+        severity_level = "high"
+        severity_label = "visoko"
+    elif severity_score >= 2:
+        severity_level = "medium"
+        severity_label = "srednje"
+    else:
+        severity_level = "low"
+        severity_label = "nisko"
+
+    primary_action = recommended_actions[0] if recommended_actions else {
+        "id": "none",
+        "title": "Nema potrebe za repair-om",
+        "reason": "Sve kljucne komponente izgledaju zdravo.",
+    }
+
     return {
         "overallState": overall,
+        "severityLevel": severity_level,
+        "severityLabel": severity_label,
+        "severityScore": severity_score,
         "title": title,
         "summary": summary,
         "profile": profile,
@@ -775,6 +817,7 @@ def build_health_center(
         "service": service,
         "checks": checks,
         "warnings": warning_entries,
+        "primaryAction": primary_action,
         "recommendedActions": recommended_actions,
     }
 
