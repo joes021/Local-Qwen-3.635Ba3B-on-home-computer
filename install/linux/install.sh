@@ -117,24 +117,46 @@ if [ -x "$APPS_DIR/llama.cpp/build/bin/llama-server" ]; then
   LLAMA_SERVER_EXE="$APPS_DIR/llama.cpp/build/bin/llama-server"
 fi
 
-MODEL_REPO="$(python3 - <<'PY' "$DEFAULTS_PATH"
-import json, sys
-with open(sys.argv[1], 'r', encoding='utf-8') as f:
-    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"]["source"])
+GPU_MIB="0"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  GPU_MIB="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+fi
+
+RAM_GIB="$(python3 - <<'PY'
+import math
+value = 0
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            value = round(int(line.split()[1]) / 1024 / 1024)
+            break
+print(value)
 PY
 )"
-MODEL_FILENAME="$(python3 - <<'PY' "$DEFAULTS_PATH"
+
+MODEL_META_JSON="$(python3 "$REPO_ROOT/scripts/local_qwen_runtime.py" recommend --defaults "$DEFAULTS_PATH" --gpu-mib "${GPU_MIB:-0}" --ram-gib "${RAM_GIB:-0}" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)")"
+
+MODEL_REPO="$(python3 - <<'PY' "$MODEL_META_JSON"
 import json, sys
-with open(sys.argv[1], 'r', encoding='utf-8') as f:
-    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"]["filename"])
+payload = json.loads(sys.argv[1])
+model = payload["recommendedModel"]
+print(model["source"])
+PY
+)"
+MODEL_FILENAME="$(python3 - <<'PY' "$MODEL_META_JSON"
+import json, sys
+payload = json.loads(sys.argv[1])
+model = payload["recommendedModel"]
+print(model["filename"])
 PY
 )"
 MODEL_PATH="$MODELS_DIR/$MODEL_FILENAME"
 MODEL_VENV_DIR="$STATE_DIR/model-download-venv"
-MODEL_MIN_EXPECTED_BYTES="$(python3 - <<'PY' "$DEFAULTS_PATH"
+MODEL_MIN_EXPECTED_BYTES="$(python3 - <<'PY' "$MODEL_META_JSON"
 import json, sys
-with open(sys.argv[1], 'r', encoding='utf-8') as f:
-    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"].get("minExpectedBytes", 0))
+payload = json.loads(sys.argv[1])
+model = payload["recommendedModel"]
+print(model.get("minExpectedBytes", 0))
 PY
 )"
 

@@ -37,19 +37,17 @@ PY
 }
 
 show_hardware() {
-  python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_defaults_path)"
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_defaults_path)" "$(get_runtime_engine_path)"
 import json, os, subprocess, sys
 
-state_path, settings_path, defaults_path = sys.argv[1:4]
+state_path, settings_path, defaults_path, runtime_script = sys.argv[1:5]
 with open(state_path, "r", encoding="utf-8") as f:
     state = json.load(f)
 with open(settings_path, "r", encoding="utf-8") as f:
     settings = json.load(f)
-with open(defaults_path, "r", encoding="utf-8") as f:
-    defaults = json.load(f)
 
 gpu_name = "n/a"
-gpu_mem = None
+gpu_mem = 0
 try:
     result = subprocess.run(
         ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
@@ -74,41 +72,33 @@ try:
 except Exception:
     pass
 
-ram_gib = "n/a"
+ram_gib = 0
 try:
     with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             if line.startswith("MemTotal:"):
-                kib = int(line.split()[1])
-                ram_gib = round(kib / 1024 / 1024)
+                ram_gib = round(int(line.split()[1]) / 1024 / 1024)
                 break
 except Exception:
     pass
 
-profile = settings.get("profile", "balanced")
-recommended = "balanced"
-reason = "GPU VRAM nije ocitan, pa sistem ostaje na srednjem fallback-u."
-detected_class = "unknown"
-if gpu_mem is not None and gpu_mem <= 8192:
-    detected_class = "8GB-or-lower"
-    recommended = "speed"
-    reason = "GPU do 8 GB najvise dobija od manjeg context/output opterecenja."
-elif gpu_mem is not None and gpu_mem <= 12288:
-    detected_class = "12GB-class"
-    recommended = "balanced"
-    reason = "GPU do 12 GB je ciljana preporucena klasa za ovaj setup."
-elif gpu_mem is not None:
-    detected_class = "above-12GB"
-    recommended = "video"
-    reason = "Jaci GPU moze da gura agresivniji profil i visi context."
+payload = subprocess.run(
+    [sys.executable, runtime_script, "recommend", "--defaults", defaults_path, "--gpu-mib", str(gpu_mem), "--ram-gib", str(ram_gib), "--cpu-threads", str(os.cpu_count() or 0)],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+recommendation = json.loads(payload.stdout)
 
-print(f"GPU: {gpu_name} ({gpu_mem if gpu_mem is not None else 'n/a'} MiB)")
+print(f"GPU: {gpu_name} ({gpu_mem if gpu_mem else 'n/a'} MiB)")
 print(f"CPU: {cpu_name}")
-print(f"RAM: {ram_gib} GiB")
-print(f"Detected class: {detected_class}")
-print(f"Recommended profile: {recommended}")
-print(f"Active profile: {profile}")
-print(f"Why: {reason}")
+print(f"RAM: {ram_gib if ram_gib else 'n/a'} GiB")
+print(f"Detected class: {recommendation['detectedClass']}")
+print(f"Recommended profile: {recommendation['recommendedProfile']}")
+print(f"Recommended model: {recommendation['recommendedModel']['id']}")
+print(f"Active profile: {settings.get('profile', 'balanced')}")
+print(f"Active model: {state.get('modelId', 'n/a')}")
+print(f"Why: {recommendation['reason']}")
 PY
 }
 
@@ -129,7 +119,10 @@ while true; do
   echo "9) View logs"
   echo "10) Repair install"
   echo "11) Test prompt"
-  echo "12) Exit"
+  echo "12) Model manager"
+  echo "13) Export diagnostics"
+  echo "14) Check updates"
+  echo "15) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -144,7 +137,10 @@ while true; do
     9) "$SCRIPT_DIR/show-logs.sh" ;;
     10) "$SCRIPT_DIR/repair-install.sh" ;;
     11) "$SCRIPT_DIR/test-prompt.sh" ;;
-    12) exit 0 ;;
+    12) "$SCRIPT_DIR/manage-models.sh" ;;
+    13) "$SCRIPT_DIR/export-diagnostics.sh" ;;
+    14) "$SCRIPT_DIR/check-updates.sh" ;;
+    15) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

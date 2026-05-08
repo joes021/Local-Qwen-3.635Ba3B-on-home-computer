@@ -65,6 +65,9 @@ After install, this setup:
 - desktop launchers
 - local control center
 - configurable context, output, and agent-step tuning
+- shared hardware recommendation engine for Windows and Linux
+- multi-model catalog with compact and quality quant choices
+- diagnostics export and update-check helpers
 
 ## Install Order
 
@@ -192,8 +195,8 @@ Main things you can start:
 The Windows `Local Qwen Control Center` now includes:
 
 - `Pokretanje`: `Start balanced`, `Start video`, `Start speed`, `Stop server`, `Otvori OpenCode`, `Otvori llama.cpp web`, `Osvezi status`, `Otvori folder`
-- `Pokretanje`: `Repair install`, `Test prompt`
-- `Podesavanja`: `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
+- `Pokretanje`: `Repair install`, `Test prompt`, `Model manager`, `Diagnostics`, `Check updates`
+- `Podesavanja`: `model variant`, `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
 - `Logovi`: latest `stdout`, `stderr`, `install summary`, `install report`
 
@@ -217,15 +220,30 @@ After install, the main commands are:
 /home/$USER/local-qwen-home/launchers/settings-tui.sh
 ```
 
+```bash
+/home/$USER/local-qwen-home/launchers/manage-models.sh
+```
+
+```bash
+/home/$USER/local-qwen-home/launchers/export-diagnostics.sh
+```
+
+```bash
+/home/$USER/local-qwen-home/launchers/check-updates.sh
+```
+
 What they do:
 
 - `control-center.sh` opens the main Linux TUI menu
 - `start-opencode.sh` starts the local server if needed and then opens `OpenCode`
 - `start-server.sh` starts only the `llama.cpp` server
 - `settings-tui.sh` changes saved settings without reinstalling
+- `manage-models.sh` prikazuje katalog modela i moze da aktivira preporuceni ili zadati model
 - `show-logs.sh` prints the newest runtime and install logs in one place
 - `repair-install.sh` refreshes key install pieces and rewrites reports/config
 - `test-prompt.sh` sends a tiny smoke-test prompt to the local model
+- `export-diagnostics.sh` pravi jedan arhivirani bundle za debug
+- `check-updates.sh` proverava da li na GitHub-u postoji noviji release
 
 ## Windows App Control / Smart App Control edge case
 

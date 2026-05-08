@@ -37,6 +37,10 @@ The current Windows installer now handles:
 - post-install verification script
 - versioned `Inno Setup` packaging for `Local-Qwen-Setup-a.b.c.exe`
 - repair/retry flow for partially completed `LocalQwenHome` installs
+- shared runtime recommendation engine
+- multi-model catalog with compact and quality quant choices
+- diagnostics bundle export
+- release update checker
 
 Recommended mental model for Windows install order:
 
@@ -107,6 +111,10 @@ It currently handles:
 - runtime build through `launcher/linux/build-runtime.sh`
 - Ubuntu 24.04-oriented package bootstrap
 - self-extract `.run` packaging through `packaging/linux/build-run-installer.sh`
+- shared runtime recommendation engine
+- multi-model catalog helper via `launcher/linux/manage-models.sh`
+- diagnostics bundle export
+- release update checker
 
 If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
 

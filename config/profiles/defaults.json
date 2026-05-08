@@ -49,11 +49,37 @@
     "smallModelFallback": "local-ollama/qwen3:8b"
   },
   "modelChoices": {
-    "recommendedWindows3060_12gb": {
+    "iq2_m_compact": {
       "id": "qwen36-35b-a3b-IQ2_M.gguf",
+      "label": "Qwen 3.6 35B A3B IQ2_M",
       "source": "KikoCis/Qwen3.6-35B-A3B-IQ2_M-GGUF",
       "filename": "qwen36-35b-a3b-IQ2_M.gguf",
-      "minExpectedBytes": 1000000000
+      "minExpectedBytes": 10000000000,
+      "approxSizeGiB": 11.1,
+      "recommendedGpuMiB": 6144,
+      "minimumRamGiB": 16,
+      "preferredProfiles": ["speed", "balanced"],
+      "qualityTier": "compact",
+      "description": "Najbezbedniji izbor za 6-12 GB GPU klasu i duzi context na kucnim masinama.",
+      "sources": [
+        {
+          "repo": "ggml-org/Qwen3.6-35B-A3B-GGUF",
+          "filename": "Qwen3.6-35B-A3B-IQ2_M.gguf"
+        }
+      ]
+    },
+    "q4_k_m_quality": {
+      "id": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+      "label": "Qwen 3.6 35B A3B Q4_K_M",
+      "source": "sharpcaterpillar/Qwen3.6-35B-A3B-GGUF",
+      "filename": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+      "minExpectedBytes": 18000000000,
+      "approxSizeGiB": 20.5,
+      "recommendedGpuMiB": 16384,
+      "minimumRamGiB": 32,
+      "preferredProfiles": ["balanced", "video"],
+      "qualityTier": "quality",
+      "description": "Kvalitetniji kvant za jace desktop konfiguracije sa vise VRAM-a i RAM-a."
     }
   },
   "turboquant": {

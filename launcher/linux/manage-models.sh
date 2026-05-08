@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/local_qwen_common.sh"
+
+ACTION="${1:-list}"
+MODEL_ID="${2:-}"
+
+STATE_PATH="$(get_install_state_path)"
+SETTINGS_PATH="$(get_settings_path)"
+DEFAULTS_PATH="$(get_defaults_path)"
+ROOT="$(get_local_qwen_root)"
+MODELS_DIR="$ROOT/models"
+
+get_recommended_model_id() {
+  local gpu_mib="0" ram_gib="0" cpu_threads="0"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+  fi
+  ram_gib="$(python3 - <<'PY'
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            print(round(int(line.split()[1]) / 1024 / 1024))
+            break
+    else:
+        print(0)
+PY
+)"
+  cpu_threads="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
+  get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads" | python3 - <<'PY'
+import json, sys
+print(json.load(sys.stdin)["recommendedModel"]["id"])
+PY
+}
+
+select_model() {
+  local selected_id="$1"
+  python3 - <<'PY' "$STATE_PATH" "$DEFAULTS_PATH" "$selected_id" "$MODELS_DIR" "$SETTINGS_PATH"
+import json, os, sys
+state_path, defaults_path, selected_id, models_dir, settings_path = sys.argv[1:6]
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+models = defaults.get("modelChoices", {})
+meta = None
+for item in models.values():
+    if item.get("id") == selected_id or item.get("filename") == selected_id:
+        meta = item
+        break
+if meta is None:
+    raise SystemExit(f"Model nije pronadjen: {selected_id}")
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+state["modelId"] = meta["id"]
+state["modelFile"] = os.path.join(models_dir, meta["filename"])
+with open(state_path, "w", encoding="utf-8") as f:
+    json.dump(state, f, indent=2)
+if os.path.exists(settings_path):
+    with open(settings_path, "r", encoding="utf-8") as f:
+        settings = json.load(f)
+else:
+    settings = {}
+settings.setdefault("model", {})
+settings["model"]["selectedId"] = meta["id"]
+with open(settings_path, "w", encoding="utf-8") as f:
+    json.dump(settings, f, indent=2)
+print(state["modelFile"])
+PY
+}
+
+case "$ACTION" in
+  list)
+    current_id="$(python3 - <<'PY' "$STATE_PATH"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    print(json.load(f).get("modelId", ""))
+PY
+)"
+    recommended_id="$(get_recommended_model_id)"
+    echo "Aktivni model: $current_id"
+    echo "Preporuceni model: $recommended_id"
+    get_model_catalog_json
+    ;;
+  use)
+    [ -n "$MODEL_ID" ] || { echo "Prosledi model id."; exit 1; }
+    path="$(select_model "$MODEL_ID")"
+    echo "Model postavljen na: $MODEL_ID"
+    echo "Model path: $path"
+    "$SCRIPT_DIR/configure-settings.sh" >/dev/null
+    ;;
+  recommend)
+    recommended_id="$(get_recommended_model_id)"
+    path="$(select_model "$recommended_id")"
+    echo "Preporuceni model je aktiviran: $recommended_id"
+    echo "Model path: $path"
+    "$SCRIPT_DIR/configure-settings.sh" >/dev/null
+    ;;
+  download)
+    if [ -n "$MODEL_ID" ]; then
+      path="$(select_model "$MODEL_ID")"
+      echo "Model postavljen na: $MODEL_ID"
+      echo "Model path: $path"
+    fi
+    INSTALL_ROOT="$ROOT" SKIP_RUNTIME_BUILD=1 bash "$ROOT/install/linux/install.sh"
+    ;;
+  *)
+    echo "Koriscenje: $0 [list|use <model-id>|recommend|download <model-id>]"
+    exit 1
+    ;;
+esac

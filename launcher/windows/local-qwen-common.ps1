@@ -35,6 +35,14 @@ function Get-InstallState {
     return Get-Content -Raw $statePath | ConvertFrom-Json
 }
 
+function Save-InstallState {
+    param([Parameter(Mandatory = $true)]$State)
+
+    $root = Get-LocalQwenRoot
+    $statePath = Join-Path $root "state\install-state.json"
+    $State | ConvertTo-Json -Depth 20 | Set-Content -Path $statePath -Encoding UTF8
+}
+
 function Get-Defaults {
     $root = Get-LocalQwenRoot
     $defaultsPath = Join-Path $root "config\profiles\defaults.json"
@@ -43,6 +51,15 @@ function Get-Defaults {
     }
 
     return Get-Content -Raw $defaultsPath | ConvertFrom-Json
+}
+
+function Get-RuntimeEngineScriptPath {
+    $root = Get-LocalQwenRoot
+    $path = Join-Path $root "scripts\local_qwen_runtime.py"
+    if (Test-Path $path) {
+        return $path
+    }
+    throw "Shared runtime helper nije pronadjen: $path"
 }
 
 function Get-Settings {
@@ -126,6 +143,10 @@ function Get-ReleaseNotesText {
     }
 }
 
+function Get-GitHubRepositorySlug {
+    return "joes021/Local-Qwen-3.635Ba3B-on-home-computer"
+}
+
 function Get-OpenCodeConfigPath {
     return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
 }
@@ -159,6 +180,13 @@ function Get-LatestLlamaLogs {
         InstallSummary = if (Test-Path $installSummary) { $installSummary } else { $null }
         InstallReport = if (Test-Path $installReport) { $installReport } else { $null }
     }
+}
+
+function Get-DiagnosticsDirectory {
+    $root = Get-LocalQwenRoot
+    $path = Join-Path $root "state\diagnostics"
+    Ensure-Directory $path
+    return $path
 }
 
 function Ensure-Directory {
@@ -204,6 +232,25 @@ function Get-PythonLauncher {
     }
 
     return $null
+}
+
+function Invoke-RuntimeEngineJson {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $python = Get-PythonLauncher
+    if (-not $python) {
+        throw "Python nije pronadjen u PATH-u."
+    }
+
+    $scriptPath = Get-RuntimeEngineScriptPath
+    $output = & $python.Command @($python.Arguments + @($scriptPath) + $Arguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Shared runtime helper nije uspeo za: $($Arguments -join ' ')"
+    }
+
+    return ($output | Out-String | ConvertFrom-Json)
 }
 
 function Get-LlamaHealthUrl {
@@ -446,46 +493,82 @@ function Get-HardwareProfileSummary {
     )
 
     $plan = Get-EffectiveServerPlan -Profile $Profile
-    $gpuMiB = if ($plan.GpuMemoryMiB) { [int]$plan.GpuMemoryMiB } else { 0 }
-
-    if ($gpuMiB -le 0) {
-        $class = "unknown"
-        $recommendedProfile = "balanced"
-        $reason = "GPU VRAM nije ocitan, pa sistem koristi konzervativniji fallback."
-    } elseif ($gpuMiB -le 8192) {
-        $class = "8GB-or-lower"
-        $recommendedProfile = "speed"
-        $reason = "GPU klasa do 8 GB ima najmanje VRAM prostora i najvise koristi od manjih context/output limita."
-    } elseif ($gpuMiB -le 12288) {
-        $class = "12GB-class"
-        $recommendedProfile = "balanced"
-        $reason = "GPU klasa do 12 GB je ciljana preporucena klasa za dnevni rad sa ovim setupom."
-    } else {
-        $class = "above-12GB"
-        $recommendedProfile = "video"
-        $reason = "Jaci GPU moze da nosi agresivniji profil i visi context bez istog pritiska kao 8/12 GB klasa."
-    }
+    $recommendation = Get-RecommendationBundle
+    $class = [string]$recommendation.detectedClass
+    $recommendedProfile = [string]$recommendation.recommendedProfile
+    $reason = [string]$recommendation.reason
 
     return [pscustomobject]@{
         DetectedClass = $class
         RecommendedProfile = $recommendedProfile
         Reason = $reason
         EffectivePlan = $plan
+        RecommendedModel = $recommendation.recommendedModel
+        CandidateScores = $recommendation.candidateScores
     }
 }
 
-function Get-ModelMetadata {
-    $state = Get-InstallState
-    $defaults = Get-Defaults
+function Get-ModelCatalog {
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $payload = Invoke-RuntimeEngineJson -Arguments @(
+        "catalog",
+        "--defaults", $defaultsPath
+    )
+    return @($payload.models)
+}
 
-    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
-        $candidate = $property.Value
-        if ($candidate.id -eq $state.modelId -or $candidate.filename -eq $state.modelId) {
+function Get-RecommendationBundle {
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "recommend",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads)
+    )
+}
+
+function Get-LatestReleaseInfo {
+    $currentVersion = Get-AppVersion
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "latest-release",
+        "--repo", (Get-GitHubRepositorySlug),
+        "--current-version", $currentVersion
+    )
+}
+
+function Get-ModelMetadata {
+    param([string]$ModelId = $null)
+
+    if (-not $ModelId) {
+        $ModelId = [string](Get-InstallState).modelId
+    }
+
+    foreach ($candidate in @(Get-ModelCatalog)) {
+        if ($candidate.id -eq $ModelId -or $candidate.filename -eq $ModelId) {
             return $candidate
         }
     }
 
     return $null
+}
+
+function Set-SelectedModel {
+    param([Parameter(Mandatory = $true)][string]$ModelId)
+
+    $state = Get-InstallState
+    $meta = Get-ModelMetadata -ModelId $ModelId
+    if (-not $meta) {
+        throw "Model nije pronadjen u katalogu: $ModelId"
+    }
+
+    $state.modelId = [string]$meta.id
+    $state.modelFile = Join-Path (Split-Path -Parent $state.modelFile) ([string]$meta.filename)
+    Save-InstallState -State $state
+    return $state
 }
 
 function Test-ModelFileLooksComplete {
@@ -527,10 +610,22 @@ function Get-LlamaModelPath {
 }
 
 function Download-RecommendedModel {
+    param([string]$ModelId = $null)
+
     $state = Get-InstallState
-    $meta = Get-ModelMetadata
+    if (-not $ModelId) {
+        $recommendation = Get-RecommendationBundle
+        if ($recommendation.recommendedModel -and $recommendation.recommendedModel.id) {
+            $ModelId = [string]$recommendation.recommendedModel.id
+        } else {
+            $ModelId = [string]$state.modelId
+        }
+    }
+
+    $state = Set-SelectedModel -ModelId $ModelId
+    $meta = Get-ModelMetadata -ModelId $ModelId
     if (-not $meta) {
-        throw "Model metadata nije pronadjena za $($state.modelId)"
+        throw "Model metadata nije pronadjena za $ModelId"
     }
 
     $python = Get-PythonLauncher
@@ -546,21 +641,43 @@ function Download-RecommendedModel {
     $targetDir = Split-Path -Parent $state.modelFile
     Ensure-Directory $targetDir
     $tmpPy = Join-Path $env:TEMP "local_qwen_repair_model.py"
+    $sources = @($meta.sources)
+    if ($sources.Count -eq 0 -and $meta.source) {
+        $sources = @([pscustomobject]@{ repo = $meta.source; filename = $meta.filename })
+    }
+
+    $sourceJson = ($sources | ConvertTo-Json -Depth 10 -Compress)
     $code = @"
+import json
+import sys
 from huggingface_hub import hf_hub_download
-hf_hub_download(
-    repo_id=r"$($meta.source)",
-    filename=r"$($meta.filename)",
-    local_dir=r"$targetDir",
-    local_dir_use_symlinks=False,
-)
+
+sources = json.loads(r'''$sourceJson''')
+local_dir = r"$targetDir"
+last_error = None
+for item in sources:
+    try:
+        hf_hub_download(
+            repo_id=item["repo"],
+            filename=item["filename"],
+            local_dir=local_dir,
+            local_dir_use_symlinks=False,
+        )
+        print(item["repo"])
+        raise SystemExit(0)
+    except Exception as exc:
+        last_error = exc
+
+if last_error is not None:
+    raise last_error
 "@
     Set-Content -Path $tmpPy -Value $code -Encoding UTF8
-    & $python.Command @($python.Arguments + @($tmpPy))
+    $downloadOutput = & $python.Command @($python.Arguments + @($tmpPy))
     if ($LASTEXITCODE -ne 0) {
         throw "Model download nije uspeo."
     }
     Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
+    return ($downloadOutput | Select-Object -Last 1)
 }
 
 function Invoke-TestPrompt {
@@ -664,6 +781,7 @@ function Write-InstallReport {
         platform = "windows"
         profile = [string](Get-Settings).profile
         installRoot = $root
+        recommendation = Get-RecommendationBundle
         components = [ordered]@{
             installState = [ordered]@{
                 path = (Join-Path $root "state\install-state.json")
@@ -685,6 +803,8 @@ function Write-InstallReport {
                 path = $state.modelFile
                 ok = (Test-Path $state.modelFile)
                 sizeBytes = if (Test-Path $state.modelFile) { (Get-Item $state.modelFile).Length } else { 0 }
+                selectedId = $state.modelId
+                metadata = Get-ModelMetadata
             }
             opencodeConfig = [ordered]@{
                 path = $configPath
@@ -699,6 +819,57 @@ function Write-InstallReport {
 
     $report | ConvertTo-Json -Depth 10 | Set-Content -Path $reportPath -Encoding UTF8
     return $reportPath
+}
+
+function Export-DiagnosticsBundle {
+    $root = Get-LocalQwenRoot
+    $diagDir = Get-DiagnosticsDirectory
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $bundleDir = Join-Path $diagDir "bundle-$stamp"
+    Ensure-Directory $bundleDir
+
+    $pathsToCopy = @(
+        (Join-Path $root "state\install-state.json"),
+        (Join-Path $root "state\settings.json"),
+        (Join-Path $root "state\install-report.json"),
+        (Join-Path $root "state\install-summary.txt"),
+        (Join-Path $root "version.json"),
+        (Get-OpenCodeConfigPath)
+    )
+
+    foreach ($path in $pathsToCopy) {
+        if ($path -and (Test-Path $path)) {
+            Copy-Item -LiteralPath $path -Destination (Join-Path $bundleDir ([IO.Path]::GetFileName($path))) -Force
+        }
+    }
+
+    $latestLogs = Get-LatestLlamaLogs
+    foreach ($logPath in @($latestLogs.StdOut, $latestLogs.StdErr, $latestLogs.InstallSummary, $latestLogs.InstallReport)) {
+        if ($logPath -and (Test-Path $logPath)) {
+            Copy-Item -LiteralPath $logPath -Destination (Join-Path $bundleDir ([IO.Path]::GetFileName($logPath))) -Force
+        }
+    }
+
+    $meta = [ordered]@{
+        generatedAt = (Get-Date).ToString("s")
+        appVersion = Get-AppVersion
+        installRoot = $root
+        latestRelease = Get-LatestReleaseInfo
+        recommendation = Get-RecommendationBundle
+        hardware = [ordered]@{
+            gpu = Get-PrimaryGpuInfo
+            cpu = Get-CpuName
+            ramGiB = Get-SystemMemoryGiB
+        }
+    }
+    $meta | ConvertTo-Json -Depth 20 | Set-Content -Path (Join-Path $bundleDir "diagnostics-meta.json") -Encoding UTF8
+
+    $zipPath = Join-Path $diagDir "local-qwen-diagnostics-$stamp.zip"
+    if (Test-Path $zipPath) {
+        Remove-Item -LiteralPath $zipPath -Force
+    }
+    Compress-Archive -Path (Join-Path $bundleDir "*") -DestinationPath $zipPath -Force
+    return $zipPath
 }
 
 function New-CmdLauncher {

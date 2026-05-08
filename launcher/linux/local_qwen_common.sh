@@ -19,8 +19,18 @@ get_defaults_path() {
   echo "$(get_local_qwen_root)/config/profiles/defaults.json"
 }
 
+get_runtime_engine_path() {
+  echo "$(get_local_qwen_root)/scripts/local_qwen_runtime.py"
+}
+
 get_settings_path() {
   echo "$(get_local_qwen_root)/state/settings.json"
+}
+
+run_runtime_engine_json() {
+  local script_path
+  script_path="$(get_runtime_engine_path)"
+  python3 "$script_path" "$@"
 }
 
 get_saved_working_directory() {
@@ -94,6 +104,17 @@ for item in defaults.get("modelChoices", {}).values():
 else:
     print(0)
 PY
+}
+
+get_model_catalog_json() {
+  run_runtime_engine_json catalog --defaults "$(get_defaults_path)"
+}
+
+get_recommendation_json() {
+  local gpu_mib="${1:-0}"
+  local ram_gib="${2:-0}"
+  local cpu_threads="${3:-0}"
+  run_runtime_engine_json recommend --defaults "$(get_defaults_path)" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$cpu_threads"
 }
 
 model_file_looks_complete() {

@@ -11,6 +11,9 @@ $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
 $stopServerScript = Join-Path $PSScriptRoot "stop-server.ps1"
 $startOpenCodeScript = Join-Path $PSScriptRoot "start-opencode.ps1"
 $launchAgentScript = Join-Path $PSScriptRoot "launch-agent.ps1"
+$manageModelsScript = Join-Path $PSScriptRoot "manage-models.ps1"
+$checkUpdatesScript = Join-Path $PSScriptRoot "check-updates.ps1"
+$exportDiagnosticsScript = Join-Path $PSScriptRoot "export-diagnostics.ps1"
 $iconPath = Join-Path $root "assets\icons\control-center.ico"
 
 function Add-TrackFieldRow {
@@ -188,6 +191,9 @@ function Load-AgentMeta {
 
 $settings = Get-Settings
 $agentMeta = Load-AgentMeta
+$modelCatalog = @(Get-ModelCatalog)
+$currentModelMeta = Get-ModelMetadata
+$recommendationBundle = Get-RecommendationBundle
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local Qwen Home Computer"
@@ -342,6 +348,7 @@ function Format-ServerPlan {
     param($Plan)
 
     $hardware = Get-HardwareProfileSummary -Profile $Plan.Profile
+    $selectedModel = Get-ModelMetadata
 
     $runtime = if ($Plan.UsesTurboQuant) { "TurboQuant" } else { "Upstream fallback" }
     $gpu = if ($Plan.GpuName) { "$($Plan.GpuName) ($($Plan.GpuMemoryMiB) MiB)" } else { "GPU nije ocitan" }
@@ -360,6 +367,8 @@ function Format-ServerPlan {
         "Efektivni runtime plan",
         "Detektovana klasa: $($hardware.DetectedClass)",
         "Preporuceni profil: $($hardware.RecommendedProfile)",
+        "Aktivni model: $($selectedModel.id)",
+        "Preporuceni model: $($hardware.RecommendedModel.id)",
         "Profil: $($Plan.Profile)",
         "Runtime: $runtime",
         "Server: $($Plan.ServerExe)",
@@ -419,6 +428,8 @@ function Refresh-LogsView {
 function Refresh-LaunchStatus {
     $latest = Get-Settings
     $plan = Get-EffectiveServerPlan -Profile ([string]$latest.profile)
+    $selectedModel = Get-ModelMetadata
+    $recommendation = Get-RecommendationBundle
     if (Test-LlamaHealth) {
         $serverStatus.Text = "Server status: AKTIVAN na $(Get-LlamaHealthUrl)"
         $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
@@ -427,8 +438,18 @@ function Refresh-LaunchStatus {
         $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
     }
 
-    $profileNote.Text = "Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps)"
+    $profileNote.Text = "Model: $($selectedModel.id) | Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps)"
     $hardwareBox.Text = Format-ServerPlan -Plan $plan
+    if ($modelCombo) {
+        $selectedIndex = 0
+        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+            if ($modelCatalog[$i].id -eq $selectedModel.id) {
+                $selectedIndex = $i
+                break
+            }
+        }
+        $modelCombo.SelectedIndex = $selectedIndex
+    }
 }
 
 function Show-AboutDialog {
@@ -560,32 +581,80 @@ $launchTab.Controls.Add($openFolderButton)
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
 $repairInstallButton.Location = New-Object System.Drawing.Point(18, 528)
-$repairInstallButton.Size = New-Object System.Drawing.Size(140, 32)
+$repairInstallButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($repairInstallButton)
 
 $testPromptButton = New-Object System.Windows.Forms.Button
 $testPromptButton.Text = "Test prompt"
-$testPromptButton.Location = New-Object System.Drawing.Point(168, 528)
-$testPromptButton.Size = New-Object System.Drawing.Size(120, 32)
+$testPromptButton.Location = New-Object System.Drawing.Point(152, 528)
+$testPromptButton.Size = New-Object System.Drawing.Size(110, 32)
 $launchTab.Controls.Add($testPromptButton)
 
-$contextRow = Add-ContextRow -Parent $settingsPanel -Y 22 -SelectedValue ([int]$settings.llama.contextSize)
-$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 110 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
-$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 198 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
-$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 286 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
-$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 374 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
-$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 462 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
+$modelManagerButton = New-Object System.Windows.Forms.Button
+$modelManagerButton.Text = "Model manager"
+$modelManagerButton.Location = New-Object System.Drawing.Point(272, 528)
+$modelManagerButton.Size = New-Object System.Drawing.Size(124, 32)
+$launchTab.Controls.Add($modelManagerButton)
+
+$diagnosticsButton = New-Object System.Windows.Forms.Button
+$diagnosticsButton.Text = "Diagnostics"
+$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 528)
+$diagnosticsButton.Size = New-Object System.Drawing.Size(120, 32)
+$launchTab.Controls.Add($diagnosticsButton)
+
+$updatesButton = New-Object System.Windows.Forms.Button
+$updatesButton.Text = "Check updates"
+$updatesButton.Location = New-Object System.Drawing.Point(536, 528)
+$updatesButton.Size = New-Object System.Drawing.Size(130, 32)
+$launchTab.Controls.Add($updatesButton)
+
+$modelLabel = New-Object System.Windows.Forms.Label
+$modelLabel.Text = "Model varijanta"
+$modelLabel.Location = New-Object System.Drawing.Point(18, 18)
+$modelLabel.Size = New-Object System.Drawing.Size(220, 22)
+$settingsPanel.Controls.Add($modelLabel)
+
+$modelCombo = New-Object System.Windows.Forms.ComboBox
+$modelCombo.Location = New-Object System.Drawing.Point(18, 44)
+$modelCombo.Size = New-Object System.Drawing.Size(567, 30)
+$modelCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$modelCombo.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+foreach ($item in $modelCatalog) {
+    [void]$modelCombo.Items.Add("$($item.label) | $($item.approxSizeGiB) GiB")
+}
+$initialModelIndex = 0
+for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+    if ($modelCatalog[$i].id -eq $currentModelMeta.id) {
+        $initialModelIndex = $i
+        break
+    }
+}
+$modelCombo.SelectedIndex = $initialModelIndex
+$settingsPanel.Controls.Add($modelCombo)
+
+$downloadModelButton = New-Object System.Windows.Forms.Button
+$downloadModelButton.Text = "Preuzmi izabrani model"
+$downloadModelButton.Location = New-Object System.Drawing.Point(400, 78)
+$downloadModelButton.Size = New-Object System.Drawing.Size(185, 32)
+$settingsPanel.Controls.Add($downloadModelButton)
+
+$contextRow = Add-ContextRow -Parent $settingsPanel -Y 122 -SelectedValue ([int]$settings.llama.contextSize)
+$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 210 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
+$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 298 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
+$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 386 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
+$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 474 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
+$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 562 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
 
 $settingsStatus = New-Object System.Windows.Forms.Label
 $settingsStatus.Text = "Promene vaze za buduca pokretanja."
-$settingsStatus.Location = New-Object System.Drawing.Point(18, 552)
+$settingsStatus.Location = New-Object System.Drawing.Point(18, 652)
 $settingsStatus.Size = New-Object System.Drawing.Size(300, 24)
 $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $settingsPanel.Controls.Add($settingsStatus)
 
 $saveSettingsButton = New-Object System.Windows.Forms.Button
 $saveSettingsButton.Text = "Sacuvaj podesavanja"
-$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 546)
+$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 646)
 $saveSettingsButton.Size = New-Object System.Drawing.Size(155, 34)
 $saveSettingsButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $saveSettingsButton.ForeColor = [System.Drawing.Color]::White
@@ -594,7 +663,7 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 546)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 646)
 $resetSettingsButton.Size = New-Object System.Drawing.Size(132, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
 
@@ -757,12 +826,22 @@ $resetSettingsButton.Add_Click({
     $planRow.Numeric.Value = 80
     $generalRow.Numeric.Value = 100
     $exploreRow.Numeric.Value = 60
+    for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+        if ($modelCatalog[$i].id -eq $recommendationBundle.recommendedModel.id) {
+            $modelCombo.SelectedIndex = $i
+            break
+        }
+    }
     Write-LaunchMessage @("Vracene preporucene vrednosti u formi. Klikni 'Sacuvaj podesavanja' da postanu aktivne.")
 })
 
 $saveSettingsButton.Add_Click({
     try {
         $contextValue = $contextRow.Presets[$contextRow.Track.Value]
+        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        if ($selectedModel) {
+            & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
+        }
         $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript `
             -ContextSize $contextValue `
             -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
@@ -784,6 +863,25 @@ $saveSettingsButton.Add_Click({
         $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
         Write-LaunchMessage @($_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+    }
+})
+
+$downloadModelButton.Add_Click({
+    try {
+        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) -Download 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ($result -join [Environment]::NewLine)
+        }
+        Write-LaunchMessage @($result)
+        $settingsStatus.Text = "Model je osvezen: $($selectedModel.id)"
+        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        Refresh-LaunchStatus
+        Refresh-LogsView
+    } catch {
+        $settingsStatus.Text = "Model download nije uspeo."
+        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        Write-LaunchMessage @($_.Exception.Message)
     }
 })
 
@@ -929,6 +1027,30 @@ $testPromptButton.Add_Click({
         $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-prompt.ps1") -Profile $profile 2>&1
         Write-LaunchMessage @($result)
         Refresh-LogsView
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$modelManagerButton.Add_Click({
+    try {
+        $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript 2>&1
+        Write-LaunchMessage @($result)
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$diagnosticsButton.Add_Click({
+    try {
+        $result = & powershell.exe -ExecutionPolicy Bypass -File $exportDiagnosticsScript 2>&1
+        Write-LaunchMessage @($result)
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$updatesButton.Add_Click({
+    try {
+        $result = & powershell.exe -ExecutionPolicy Bypass -File $checkUpdatesScript 2>&1
+        Write-LaunchMessage @($result)
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }

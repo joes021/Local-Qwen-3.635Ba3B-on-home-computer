@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.7.0
+- Dodat shared scripts/local_qwen_runtime.py da Windows i Linux dele isti model katalog i isti hardware recommendation engine
+- Uveden vise-modelski katalog sa IQ2_M i Q4_K_M varijantama, plus mirror-aware source lista
+- Windows i Linux Control Center/TUI sada prikazuju preporuceni model, aktivni model i nove servisne opcije za diagnostics i update check
+
 v1.6.0
 - Dodati Repair install i Test prompt launcher-i za Windows i Linux
 - Windows Control Center dobio dugmad Repair install i Test prompt

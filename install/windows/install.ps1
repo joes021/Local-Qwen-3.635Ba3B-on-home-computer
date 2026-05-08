@@ -164,6 +164,58 @@ function Ensure-PythonRuntime {
     return $python
 }
 
+function Invoke-RuntimeHelperJson {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $python = Ensure-PythonRuntime
+    $scriptPath = Join-Path $repoRoot "scripts\local_qwen_runtime.py"
+    $output = & $python.Command @($python.Arguments + @($scriptPath) + $Arguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Shared runtime helper nije uspeo: $($Arguments -join ' ')"
+    }
+    return ($output | Out-String | ConvertFrom-Json)
+}
+
+function Get-DetectedGpuMemoryMiB {
+    try {
+        $controllers = Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.AdapterRAM -gt 0 }
+        if (-not $controllers) {
+            return 0
+        }
+        return [int]([math]::Round((($controllers | Measure-Object -Property AdapterRAM -Maximum).Maximum) / 1MB))
+    } catch {
+        return 0
+    }
+}
+
+function Get-SystemMemoryGiB {
+    try {
+        $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+        return [int]([math]::Round($computer.TotalPhysicalMemory / 1GB))
+    } catch {
+        return 0
+    }
+}
+
+function Get-RecommendedModelChoice {
+    $payload = Invoke-RuntimeHelperJson -Arguments @(
+        "recommend",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string](Get-DetectedGpuMemoryMiB)),
+        "--ram-gib", ([string](Get-SystemMemoryGiB)),
+        "--cpu-threads", ([string][Environment]::ProcessorCount)
+    )
+    $recommendedId = [string]$payload.recommendedModel.id
+    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
+        if ($property.Value.id -eq $recommendedId) {
+            return $property.Value
+        }
+    }
+    return $defaults.modelChoices.iq2_m_compact
+}
+
 function Ensure-VsBuildTools {
     $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
     if (Test-Path $vcvars) {
@@ -515,7 +567,7 @@ Ensure-Dir $desktopTargetDir
 $upstreamDir = Join-Path $appsDir "llama.cpp"
 $turboDir = Join-Path $appsDir "llama.cpp-turboquant"
 $llamaBinDir = Join-Path $binDir "llama.cpp"
-$modelChoice = $defaults.modelChoices.recommendedWindows3060_12gb
+$modelChoice = Get-RecommendedModelChoice
 $modelFile = Join-Path $modelsDir $modelChoice.filename
 $warnings = New-Object System.Collections.Generic.List[string]
 
