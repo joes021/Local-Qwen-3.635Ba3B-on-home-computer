@@ -119,6 +119,42 @@ function Get-DetectedGpuMemoryMiB {
     }
 }
 
+function Get-PrimaryGpuInfo {
+    try {
+        $controllers = Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.AdapterRAM -gt 0 }
+        if (-not $controllers) {
+            return $null
+        }
+
+        $primary = $controllers | Sort-Object AdapterRAM -Descending | Select-Object -First 1
+        return [pscustomobject]@{
+            Name = [string]$primary.Name
+            MemoryMiB = [int]([math]::Round($primary.AdapterRAM / 1MB))
+            DriverVersion = [string]$primary.DriverVersion
+        }
+    } catch {
+        return $null
+    }
+}
+
+function Get-CpuName {
+    try {
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Name
+        return [string]$cpu
+    } catch {
+        return $null
+    }
+}
+
+function Get-SystemMemoryGiB {
+    try {
+        $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+        return [int]([math]::Round($computer.TotalPhysicalMemory / 1GB))
+    } catch {
+        return $null
+    }
+}
+
 function Get-LlamaServerExe {
     $state = Get-InstallState
     $candidates = @()
@@ -138,6 +174,130 @@ function Get-LlamaServerExe {
     }
 
     throw "llama-server.exe nije pronadjen ni u TurboQuant ni u upstream bin folderu."
+}
+
+function Get-EffectiveServerPlan {
+    param(
+        [ValidateSet("speed", "balanced", "video")]
+        [string]$Profile
+    )
+
+    $state = Get-InstallState
+    $defaults = Get-Defaults
+    $settings = Get-Settings
+
+    if (-not $Profile) {
+        $Profile = if ($settings.profile) { [string]$settings.profile } else { [string]$state.defaultProfile }
+    }
+
+    $profileData = $defaults.profiles.$Profile
+    if (-not $profileData) {
+        throw "Nepoznat profil: $Profile"
+    }
+
+    $serverExe = Get-LlamaServerExe
+    $gpuInfo = Get-PrimaryGpuInfo
+    $cpuName = Get-CpuName
+    $memoryGiB = Get-SystemMemoryGiB
+    $ctx = if ($settings.llama.contextSize) { [int]$settings.llama.contextSize } else { [int]$profileData.contextSize }
+    $maxOutput = if ($settings.llama.maxOutputTokens) { [int]$settings.llama.maxOutputTokens } else { 8192 }
+    $gpuLayers = 999
+    $contextCustomized = if ($settings.llama.PSObject.Properties["contextSizeCustomized"]) {
+        [bool]$settings.llama.contextSizeCustomized
+    } else {
+        ([int]$ctx -ne [int]$profileData.contextSize)
+    }
+    $outputCustomized = if ($settings.llama.PSObject.Properties["maxOutputTokensCustomized"]) {
+        [bool]$settings.llama.maxOutputTokensCustomized
+    } else {
+        ([int]$maxOutput -ne 8192)
+    }
+
+    $usesTurboQuant = $false
+    if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
+        try {
+            $usesTurboQuant = ((Resolve-Path $serverExe).Path -eq (Resolve-Path $state.turboServerExe).Path)
+        } catch {
+            $usesTurboQuant = $false
+        }
+    }
+
+    $adjustmentNotes = New-Object System.Collections.Generic.List[string]
+
+    if (-not $usesTurboQuant) {
+        $detectedGpuMiB = if ($gpuInfo) { [int]$gpuInfo.MemoryMiB } else { $null }
+
+        if ($settings.llama.PSObject.Properties["gpuLayers"] -and $settings.llama.gpuLayers) {
+            $gpuLayers = [int]$settings.llama.gpuLayers
+            $adjustmentNotes.Add("gpuLayers je rucno zadat kroz settings.") | Out-Null
+        } elseif ($detectedGpuMiB) {
+            if ($detectedGpuMiB -le 8192) {
+                $gpuLayers = 10
+                if (-not $contextCustomized) {
+                    $ctx = [math]::Min($ctx, 4096)
+                    $adjustmentNotes.Add("Fallback za GPU do 8 GB: context ogranicen na 4096.") | Out-Null
+                }
+                if (-not $outputCustomized) {
+                    $maxOutput = [math]::Min($maxOutput, 1024)
+                    $adjustmentNotes.Add("Fallback za GPU do 8 GB: output ogranicen na 1024.") | Out-Null
+                }
+            } elseif ($detectedGpuMiB -le 12288) {
+                $gpuLayers = 20
+                if (-not $contextCustomized) {
+                    $ctx = [math]::Min($ctx, 8192)
+                    $adjustmentNotes.Add("Fallback za GPU do 12 GB: context ogranicen na 8192.") | Out-Null
+                }
+                if (-not $outputCustomized) {
+                    $maxOutput = [math]::Min($maxOutput, 2048)
+                    $adjustmentNotes.Add("Fallback za GPU do 12 GB: output ogranicen na 2048.") | Out-Null
+                }
+            } else {
+                $gpuLayers = 28
+                if (-not $contextCustomized) {
+                    $ctx = [math]::Min($ctx, 16384)
+                    $adjustmentNotes.Add("Fallback za jaci GPU: context ogranicen na 16384.") | Out-Null
+                }
+                if (-not $outputCustomized) {
+                    $maxOutput = [math]::Min($maxOutput, 4096)
+                    $adjustmentNotes.Add("Fallback za jaci GPU: output ogranicen na 4096.") | Out-Null
+                }
+            }
+        } else {
+            $gpuLayers = 20
+            if (-not $contextCustomized) {
+                $ctx = [math]::Min($ctx, 8192)
+                $adjustmentNotes.Add("GPU VRAM nije ocitan: context ogranicen na 8192.") | Out-Null
+            }
+            if (-not $outputCustomized) {
+                $maxOutput = [math]::Min($maxOutput, 2048)
+                $adjustmentNotes.Add("GPU VRAM nije ocitan: output ogranicen na 2048.") | Out-Null
+            }
+        }
+    } else {
+        $adjustmentNotes.Add("TurboQuant runtime aktivan: koriste se video-style cache tipovi.") | Out-Null
+    }
+
+    return [pscustomobject]@{
+        Profile = $Profile
+        UsesTurboQuant = $usesTurboQuant
+        ServerExe = $serverExe
+        GpuName = if ($gpuInfo) { $gpuInfo.Name } else { $null }
+        GpuMemoryMiB = if ($gpuInfo) { $gpuInfo.MemoryMiB } else { $null }
+        GpuDriverVersion = if ($gpuInfo) { $gpuInfo.DriverVersion } else { $null }
+        CpuName = $cpuName
+        SystemMemoryGiB = $memoryGiB
+        ContextSize = $ctx
+        MaxOutputTokens = $maxOutput
+        GpuLayers = $gpuLayers
+        Ncmoe = [int]$profileData.ncmoe
+        CacheTypeK = [string]$profileData.cacheTypeK
+        CacheTypeV = [string]$profileData.cacheTypeV
+        Threads = [int]$state.threads
+        Port = [int]$state.port
+        ContextCustomized = $contextCustomized
+        OutputCustomized = $outputCustomized
+        AdjustmentNotes = @($adjustmentNotes)
+    }
 }
 
 function Get-ModelMetadata {

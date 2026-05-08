@@ -256,9 +256,19 @@ $profileNote.Size = New-Object System.Drawing.Size(640, 22)
 $profileNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $launchTab.Controls.Add($profileNote)
 
+$hardwareBox = New-Object System.Windows.Forms.TextBox
+$hardwareBox.Location = New-Object System.Drawing.Point(18, 182)
+$hardwareBox.Size = New-Object System.Drawing.Size(648, 170)
+$hardwareBox.Multiline = $true
+$hardwareBox.ScrollBars = "Vertical"
+$hardwareBox.ReadOnly = $true
+$hardwareBox.BackColor = [System.Drawing.Color]::White
+$hardwareBox.Text = "Ovde ce biti prikazan hardver i efektivne runtime opcije."
+$launchTab.Controls.Add($hardwareBox)
+
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 210)
-$launchOutput.Size = New-Object System.Drawing.Size(648, 310)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 386)
+$launchOutput.Size = New-Object System.Drawing.Size(648, 134)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
 $launchOutput.ReadOnly = $true
@@ -266,8 +276,60 @@ $launchOutput.BackColor = [System.Drawing.Color]::White
 $launchOutput.Text = "Ovde ce se pojavljivati status i rezultati akcija."
 $launchTab.Controls.Add($launchOutput)
 
+function Write-LaunchMessage {
+    param([string[]]$Lines)
+
+    $stamp = Get-Date -Format "HH:mm:ss"
+    $prefix = "[$stamp]"
+    $text = (($Lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join [Environment]::NewLine)
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($launchOutput.Text) -or $launchOutput.Text -eq "Ovde ce se pojavljivati status i rezultati akcija.") {
+        $launchOutput.Text = "$prefix $text"
+    } else {
+        $launchOutput.Text = "$prefix $text$([Environment]::NewLine)$([Environment]::NewLine)$($launchOutput.Text)"
+    }
+}
+
+function Format-ServerPlan {
+    param($Plan)
+
+    $runtime = if ($Plan.UsesTurboQuant) { "TurboQuant" } else { "Upstream fallback" }
+    $gpu = if ($Plan.GpuName) { "$($Plan.GpuName) ($($Plan.GpuMemoryMiB) MiB)" } else { "GPU nije ocitan" }
+    $cpu = if ($Plan.CpuName) { $Plan.CpuName } else { "CPU nije ocitan" }
+    $ram = if ($Plan.SystemMemoryGiB) { "$($Plan.SystemMemoryGiB) GiB RAM" } else { "RAM nije ocitan" }
+    $contextMode = if ($Plan.ContextCustomized) { "rucno zadat" } else { "auto / profil" }
+    $outputMode = if ($Plan.OutputCustomized) { "rucno zadat" } else { "auto / profil" }
+    $notes = if ($Plan.AdjustmentNotes.Count -gt 0) { $Plan.AdjustmentNotes -join [Environment]::NewLine } else { "Nema dodatnih ogranicenja." }
+
+    return @(
+        "Hardver",
+        "GPU: $gpu",
+        "CPU: $cpu",
+        "Memorija: $ram",
+        "",
+        "Efektivni runtime plan",
+        "Profil: $($Plan.Profile)",
+        "Runtime: $runtime",
+        "Server: $($Plan.ServerExe)",
+        "Port: $($Plan.Port)",
+        "Threads: $($Plan.Threads)",
+        "GPU layers (-ngl): $($Plan.GpuLayers)",
+        "Experts na CPU (-ncmoe): $($Plan.Ncmoe)",
+        "Context (-c): $($Plan.ContextSize) [$contextMode]",
+        "Output (-n): $($Plan.MaxOutputTokens) [$outputMode]",
+        "Cache K/V: $($Plan.CacheTypeK) / $($Plan.CacheTypeV)",
+        "",
+        "Napomene",
+        $notes
+    ) -join [Environment]::NewLine
+}
+
 function Refresh-LaunchStatus {
     $latest = Get-Settings
+    $plan = Get-EffectiveServerPlan -Profile ([string]$latest.profile)
     if (Test-LlamaHealth) {
         $serverStatus.Text = "Server status: AKTIVAN na $(Get-LlamaHealthUrl)"
         $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
@@ -277,14 +339,16 @@ function Refresh-LaunchStatus {
     }
 
     $profileNote.Text = "Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps)"
+    $hardwareBox.Text = Format-ServerPlan -Plan $plan
 }
 
 function Invoke-StartProfile {
     param([string]$Profile)
 
+    Write-LaunchMessage @("Pokrecem profil '$Profile'...")
     $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript -Profile $Profile 2>&1
     $result += & powershell.exe -ExecutionPolicy Bypass -File $startServerScript -Profile $Profile 2>&1
-    Set-TextboxLines -TextBox $launchOutput -Result $result
+    Write-LaunchMessage @($result)
     Refresh-LaunchStatus
 }
 
@@ -524,6 +588,7 @@ $resetSettingsButton.Add_Click({
     $planRow.Numeric.Value = 80
     $generalRow.Numeric.Value = 100
     $exploreRow.Numeric.Value = 60
+    Write-LaunchMessage @("Vracene preporucene vrednosti u formi. Klikni 'Sacuvaj podesavanja' da postanu aktivne.")
 })
 
 $saveSettingsButton.Add_Click({
@@ -543,10 +608,12 @@ $saveSettingsButton.Add_Click({
 
         $settingsStatus.Text = "Sacuvano za buduca pokretanja."
         $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        Write-LaunchMessage @($result)
         Refresh-LaunchStatus
     } catch {
         $settingsStatus.Text = "Greska pri cuvanju."
         $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        Write-LaunchMessage @($_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
     }
 })
@@ -583,9 +650,11 @@ $saveAgentButton.Add_Click({
 
         $agentStatus.Text = "Agent konfiguracija sacuvana."
         $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        Write-LaunchMessage @($result)
     } catch {
         $agentStatus.Text = "Greska pri cuvanju."
         $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        Write-LaunchMessage @($_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
     }
 })
@@ -604,9 +673,11 @@ $launchAgentButton.Add_Click({
 
         $agentStatus.Text = "Agent launcher pokrenut."
         $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        Write-LaunchMessage @("Pokrenut agent launcher za folder: $($values.WorkingFolder)")
     } catch {
         $agentStatus.Text = "Greska pri pokretanju."
         $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        Write-LaunchMessage @($_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
     }
 })
@@ -617,7 +688,7 @@ $startSpeed.Add_Click({ Invoke-StartProfile -Profile "speed" })
 
 $stopServer.Add_Click({
     $result = & powershell.exe -ExecutionPolicy Bypass -File $stopServerScript 2>&1
-    Set-TextboxLines -TextBox $launchOutput -Result $result
+    Write-LaunchMessage @($result)
     Refresh-LaunchStatus
 })
 
@@ -627,15 +698,22 @@ $openOpenCode.Add_Click({
         "-File", $startOpenCodeScript,
         "-Profile", ([string](Get-Settings).profile)
     )
-    $launchOutput.Text = "OpenCode launcher je pokrenut."
+    Write-LaunchMessage @("OpenCode launcher je pokrenut.")
 })
 
 $openWebUi.Add_Click({
     Start-Process (Get-LlamaHealthUrl).Replace("/health", "/")
+    Write-LaunchMessage @("Otvoren llama.cpp web UI.")
 })
 
-$refreshStatus.Add_Click({ Refresh-LaunchStatus })
-$openFolderButton.Add_Click({ Start-Process explorer.exe $root })
+$refreshStatus.Add_Click({
+    Refresh-LaunchStatus
+    Write-LaunchMessage @("Status i hardverski plan su osvezeni.")
+})
+$openFolderButton.Add_Click({
+    Start-Process explorer.exe $root
+    Write-LaunchMessage @("Otvoren install folder: $root")
+})
 
 Refresh-LaunchStatus
 
