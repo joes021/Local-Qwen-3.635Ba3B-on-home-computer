@@ -1470,7 +1470,8 @@ $nextActionBox.Text = "Sledeci korak ce se ucitati kada otvoris Onboarding tab."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
 $throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
-$agentAuditLabel.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
+$agentWarning.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
+$agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 
 $tabs.Add_SelectedIndexChanged({
     switch ($tabs.SelectedTab.Text) {

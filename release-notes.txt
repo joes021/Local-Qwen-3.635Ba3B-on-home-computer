@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.10
+- Ispravljen Windows Control Center placeholder za Agent tab koji je u 2.1.9 gadjao pogresnu kontrolu i mogao da srusi prozor pri startu
+- Zadrzan lazy-load pristup iz 2.1.9, ali sada bez te regresije
+
 v2.1.9
 - Windows Control Center sada startuje sa laganim statusom i placeholder prikazima, a teze tabove ucitava tek kada ih korisnik stvarno otvori
 - Prozor je ponovo normalno sizeable/maximizable, pa moze da se lakse snap-uje i rasporedi u shared/split screen layout
