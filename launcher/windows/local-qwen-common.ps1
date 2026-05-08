@@ -130,6 +130,14 @@ function Get-OpenCodeConfigPath {
     return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
 }
 
+function Get-DesktopTargetDir {
+    $state = Get-InstallState
+    if ($state.PSObject.Properties["desktopTargetDir"] -and $state.desktopTargetDir) {
+        return [string]$state.desktopTargetDir
+    }
+    return (Join-Path $env:USERPROFILE "Desktop\Local Qwen Home Computer")
+}
+
 function Get-LogDirectory {
     $state = Get-InstallState
     $logDir = Join-Path $state.installRoot "logs"
@@ -158,9 +166,69 @@ function Ensure-Directory {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
 }
 
+function Invoke-NativeChecked {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]]$ArgumentList
+    )
+
+    & $FilePath @ArgumentList
+    if ($LASTEXITCODE -ne 0) {
+        throw "Komanda nije uspela: $FilePath $($ArgumentList -join ' ')"
+    }
+}
+
+function Get-PythonLauncher {
+    $commandCandidates = @(
+        @{ Command = "py"; Arguments = @("-3") },
+        @{ Command = "python"; Arguments = @() },
+        @{ Command = "python3"; Arguments = @() }
+    )
+
+    foreach ($candidate in $commandCandidates) {
+        if (Get-Command $candidate.Command -ErrorAction SilentlyContinue) {
+            try {
+                $output = & $candidate.Command @($candidate.Arguments + @("-c", "import sys; print(sys.executable)")) 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    $resolved = [string]($output | Select-Object -Last 1)
+                    if (-not [string]::IsNullOrWhiteSpace($resolved) -and (Test-Path $resolved.Trim())) {
+                        return [pscustomobject]@{
+                            Command = $resolved.Trim()
+                            Arguments = @()
+                        }
+                    }
+                }
+            } catch {
+            }
+        }
+    }
+
+    return $null
+}
+
 function Get-LlamaHealthUrl {
     $state = Get-InstallState
     return "http://127.0.0.1:$($state.port)/health"
+}
+
+function Download-LlamaCppWindowsCuda {
+    param([string]$DestinationDir)
+
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
+    $asset = $release.assets | Where-Object { $_.name -match '^llama-.*-bin-win-cuda-12\.4-x64\.zip$' } | Select-Object -First 1
+    if (-not $asset) {
+        $asset = $release.assets | Where-Object { $_.name -match '^llama-.*-bin-win-cuda-13\.1-x64\.zip$' } | Select-Object -First 1
+    }
+    if (-not $asset) {
+        throw "Nisam nasao odgovarajuci Windows CUDA release asset za llama.cpp."
+    }
+
+    $zipPath = Join-Path $env:TEMP $asset.name
+    Invoke-WebRequest -UseBasicParsing -Uri $asset.browser_download_url -OutFile $zipPath
+    Ensure-Directory $DestinationDir
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $DestinationDir -Force
+    Remove-Item -LiteralPath $zipPath -Force
+    Get-ChildItem -LiteralPath $DestinationDir -Recurse -File | Unblock-File -ErrorAction SilentlyContinue
 }
 
 function Test-LlamaHealth {
@@ -458,6 +526,66 @@ function Get-LlamaModelPath {
     return $state.modelFile
 }
 
+function Download-RecommendedModel {
+    $state = Get-InstallState
+    $meta = Get-ModelMetadata
+    if (-not $meta) {
+        throw "Model metadata nije pronadjena za $($state.modelId)"
+    }
+
+    $python = Get-PythonLauncher
+    if (-not $python) {
+        throw "Python nije pronadjen u PATH-u."
+    }
+
+    & $python.Command @($python.Arguments + @("-m", "pip", "install", "--user", "-U", "huggingface_hub"))
+    if ($LASTEXITCODE -ne 0) {
+        throw "huggingface_hub instalacija nije uspela."
+    }
+
+    $targetDir = Split-Path -Parent $state.modelFile
+    Ensure-Directory $targetDir
+    $tmpPy = Join-Path $env:TEMP "local_qwen_repair_model.py"
+    $code = @"
+from huggingface_hub import hf_hub_download
+hf_hub_download(
+    repo_id=r"$($meta.source)",
+    filename=r"$($meta.filename)",
+    local_dir=r"$targetDir",
+    local_dir_use_symlinks=False,
+)
+"@
+    Set-Content -Path $tmpPy -Value $code -Encoding UTF8
+    & $python.Command @($python.Arguments + @($tmpPy))
+    if ($LASTEXITCODE -ne 0) {
+        throw "Model download nije uspeo."
+    }
+    Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
+}
+
+function Invoke-TestPrompt {
+    param(
+        [string]$Prompt = "Reply with exactly OK",
+        [int]$MaxTokens = 16
+    )
+
+    $state = Get-InstallState
+    $body = @{
+        model = $state.modelId
+        messages = @(
+            @{
+                role = "user"
+                content = $Prompt
+            }
+        )
+        max_tokens = $MaxTokens
+        temperature = 0
+    } | ConvertTo-Json -Depth 10
+
+    $url = "http://127.0.0.1:$($state.port)/v1/chat/completions"
+    return Invoke-RestMethod -Method Post -Uri $url -ContentType "application/json" -Body $body -TimeoutSec 60
+}
+
 function Update-OpenCodeConfig {
     $state = Get-InstallState
     $settings = Get-Settings
@@ -516,4 +644,137 @@ function Update-OpenCodeConfig {
 
     $existing | ConvertTo-Json -Depth 20 | Set-Content -Path $configPath -Encoding UTF8
     return $configPath
+}
+
+function Write-InstallReport {
+    $root = Get-LocalQwenRoot
+    $state = Get-InstallState
+    $reportPath = Join-Path $root "state\install-report.json"
+    $logMeta = Get-LatestLlamaLogs
+    $configPath = Get-OpenCodeConfigPath
+    $serverExe = $null
+    try {
+        $serverExe = Get-LlamaServerExe
+    } catch {
+        $serverExe = $null
+    }
+
+    $report = [ordered]@{
+        generatedAt = (Get-Date).ToString("s")
+        platform = "windows"
+        profile = [string](Get-Settings).profile
+        installRoot = $root
+        components = [ordered]@{
+            installState = [ordered]@{
+                path = (Join-Path $root "state\install-state.json")
+                ok = (Test-Path (Join-Path $root "state\install-state.json"))
+            }
+            launchers = [ordered]@{
+                path = (Join-Path $root "launchers")
+                ok = (Test-Path (Join-Path $root "launchers\control-center.ps1"))
+            }
+            desktopShortcuts = [ordered]@{
+                path = (Get-DesktopTargetDir)
+                ok = (Test-Path (Join-Path (Get-DesktopTargetDir) "Local Qwen Control Center.lnk"))
+            }
+            llamaCppRuntime = [ordered]@{
+                path = $serverExe
+                ok = [bool]($serverExe -and (Test-Path $serverExe))
+            }
+            model = [ordered]@{
+                path = $state.modelFile
+                ok = (Test-Path $state.modelFile)
+                sizeBytes = if (Test-Path $state.modelFile) { (Get-Item $state.modelFile).Length } else { 0 }
+            }
+            opencodeConfig = [ordered]@{
+                path = $configPath
+                ok = (Test-Path $configPath)
+            }
+            latestLogs = [ordered]@{
+                stdout = $logMeta.StdOut
+                stderr = $logMeta.StdErr
+            }
+        }
+    }
+
+    $report | ConvertTo-Json -Depth 10 | Set-Content -Path $reportPath -Encoding UTF8
+    return $reportPath
+}
+
+function New-CmdLauncher {
+    param(
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$CmdName,
+        [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [string]$ExtraArguments = ""
+    )
+
+    $cmdPath = Join-Path $LaunchersDir $CmdName
+    $content = @"
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "PS_SCRIPT=%SCRIPT_DIR%$PsScriptName"
+
+if not exist "%PS_SCRIPT%" (
+  echo Launcher script not found: %PS_SCRIPT%
+  pause
+  exit /b 1
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
+set "EXITCODE=%ERRORLEVEL%"
+if not "%EXITCODE%"=="0" (
+  echo.
+  echo Launcher failed with exit code %EXITCODE%.
+  echo.
+  pause
+)
+exit /b %EXITCODE%
+"@
+
+    Set-Content -Path $cmdPath -Value $content -Encoding ASCII
+    return $cmdPath
+}
+
+function New-DesktopShortcutFile {
+    param(
+        [string]$ShortcutPath,
+        [string]$TargetPath,
+        [string]$Arguments,
+        [string]$WorkingDirectory,
+        [string]$IconLocation,
+        [string]$Description
+    )
+
+    $wsh = New-Object -ComObject WScript.Shell
+    $shortcut = $wsh.CreateShortcut($ShortcutPath)
+    $shortcut.TargetPath = $TargetPath
+    $shortcut.Arguments = $Arguments
+    $shortcut.WorkingDirectory = $WorkingDirectory
+    if ($IconLocation) { $shortcut.IconLocation = $IconLocation }
+    if ($Description) { $shortcut.Description = $Description }
+    $shortcut.Save()
+}
+
+function Repair-DesktopShortcuts {
+    $root = Get-LocalQwenRoot
+    $launchersDir = Join-Path $root "launchers"
+    $assetsDir = Join-Path $root "assets"
+    $desktopTargetDir = Get-DesktopTargetDir
+    Ensure-Directory $desktopTargetDir
+
+    $controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"
+    $opencodeIcon = Join-Path $assetsDir "icons\opencode-local-qwen.ico"
+    $controlCenterCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "open-control-center.cmd" -PsScriptName "control-center.ps1"
+    $openCodeCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
+    $verifyCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
+    $repairCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "repair-install.cmd" -PsScriptName "repair-install.ps1"
+    $testPromptCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "test-prompt.cmd" -PsScriptName "test-prompt.ps1"
+
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$controlCenterCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Control center for local Qwen + OpenCode"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "OpenCode - Local Qwen.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$openCodeCmd`"" -WorkingDirectory $launchersDir -IconLocation "$opencodeIcon,0" -Description "Launch OpenCode wired to local Qwen"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Verify Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$verifyCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Verify local Qwen installation"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Repair Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$repairCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Repair local Qwen install"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Test Local Qwen Prompt.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$testPromptCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Send a smoke-test prompt to local Qwen"
 }

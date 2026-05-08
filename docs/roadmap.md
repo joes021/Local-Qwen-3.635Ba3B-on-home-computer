@@ -32,6 +32,7 @@ What this version is meant to improve:
 - clearer detection of missing runtime, model, and config pieces
 - explicit repair-oriented reporting instead of silent partial success
 - stronger verification output on both Windows and Linux
+- built-in smoke test from the installed UI/TUI
 
 ## v1.4.0
 

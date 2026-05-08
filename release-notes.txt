@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.6.0
+- Dodati Repair install i Test prompt launcher-i za Windows i Linux
+- Windows Control Center dobio dugmad Repair install i Test prompt
+- Linux TUI dobio repair i smoke-test opcije
+
 v1.5.0
 - Dodat centralni packaging/release-all.ps1 za build oba instalera i objavu release-a
 - Dokumentovan one-command cross-platform release tok

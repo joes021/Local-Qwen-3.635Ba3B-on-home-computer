@@ -192,6 +192,7 @@ Main things you can start:
 The Windows `Local Qwen Control Center` now includes:
 
 - `Pokretanje`: `Start balanced`, `Start video`, `Start speed`, `Stop server`, `Otvori OpenCode`, `Otvori llama.cpp web`, `Osvezi status`, `Otvori folder`
+- `Pokretanje`: `Repair install`, `Test prompt`
 - `Podesavanja`: `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
 - `Logovi`: latest `stdout`, `stderr`, `install summary`, `install report`
@@ -223,6 +224,8 @@ What they do:
 - `start-server.sh` starts only the `llama.cpp` server
 - `settings-tui.sh` changes saved settings without reinstalling
 - `show-logs.sh` prints the newest runtime and install logs in one place
+- `repair-install.sh` refreshes key install pieces and rewrites reports/config
+- `test-prompt.sh` sends a tiny smoke-test prompt to the local model
 
 ## Windows App Control / Smart App Control edge case
 

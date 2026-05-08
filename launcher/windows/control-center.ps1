@@ -557,6 +557,18 @@ $openFolderButton.Location = New-Object System.Drawing.Point(538, 132)
 $openFolderButton.Size = New-Object System.Drawing.Size(128, 36)
 $launchTab.Controls.Add($openFolderButton)
 
+$repairInstallButton = New-Object System.Windows.Forms.Button
+$repairInstallButton.Text = "Repair install"
+$repairInstallButton.Location = New-Object System.Drawing.Point(18, 528)
+$repairInstallButton.Size = New-Object System.Drawing.Size(140, 32)
+$launchTab.Controls.Add($repairInstallButton)
+
+$testPromptButton = New-Object System.Windows.Forms.Button
+$testPromptButton.Text = "Test prompt"
+$testPromptButton.Location = New-Object System.Drawing.Point(168, 528)
+$testPromptButton.Size = New-Object System.Drawing.Size(120, 32)
+$launchTab.Controls.Add($testPromptButton)
+
 $contextRow = Add-ContextRow -Parent $settingsPanel -Y 22 -SelectedValue ([int]$settings.llama.contextSize)
 $outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 110 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
 $buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 198 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
@@ -900,6 +912,26 @@ $refreshLogsButton.Add_Click({
 $openFolderButton.Add_Click({
     Start-Process explorer.exe $root
     Write-LaunchMessage @("Otvoren install folder: $root")
+})
+$repairInstallButton.Add_Click({
+    try {
+        $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
+        Write-LaunchMessage @($result)
+        Refresh-LaunchStatus
+        Refresh-LogsView
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$testPromptButton.Add_Click({
+    try {
+        $profile = [string](Get-Settings).profile
+        $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-prompt.ps1") -Profile $profile 2>&1
+        Write-LaunchMessage @($result)
+        Refresh-LogsView
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
 })
 $aboutButton.Add_Click({
     Show-AboutDialog

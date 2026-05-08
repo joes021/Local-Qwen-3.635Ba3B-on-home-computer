@@ -127,7 +127,9 @@ while true; do
   echo "7) Start OpenCode"
   echo "8) Verify install"
   echo "9) View logs"
-  echo "10) Exit"
+  echo "10) Repair install"
+  echo "11) Test prompt"
+  echo "12) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -140,7 +142,9 @@ while true; do
     7) "$SCRIPT_DIR/start-opencode.sh" ;;
     8) "$SCRIPT_DIR/verify-install.sh" ;;
     9) "$SCRIPT_DIR/show-logs.sh" ;;
-    10) exit 0 ;;
+    10) "$SCRIPT_DIR/repair-install.sh" ;;
+    11) "$SCRIPT_DIR/test-prompt.sh" ;;
+    12) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done
