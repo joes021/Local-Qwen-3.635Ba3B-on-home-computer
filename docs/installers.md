@@ -36,12 +36,26 @@ Repair note:
 
 - if a Windows install stops after creating `LocalQwenHome`, rerunning the newest `Setup.exe` is now the intended recovery path
 - the installer writes launcher/config/state scaffolding early so retry can continue without manual file copies
+- the desktop folder now also includes `Repair Windows App Control` for the common Smart App Control block case
 
 Still being finalized:
 
 - more robust CUDA/toolchain auto-recovery when build prerequisites are missing
 - hardware-aware fallback logic for more GPUs
 - fuller verification pipeline after install
+
+Windows App Control / Smart App Control note:
+
+- if `CiTool.exe -lp -json` shows `VerifiedAndReputableDesktop` with `IsEnforced = true`, Windows Smart App Control can block `llama-server.exe` even if the installer downloaded the correct runtime
+- the project now ships `launcher/windows/repair-app-control.ps1` for diagnosis and a best-effort disable flow
+- the Windows installer now also creates a `Repair Windows App Control` desktop launcher that opens the same script through a visible wrapper
+- expected usage:
+  - inspect state:
+    - `powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\LocalQwenHome\launchers\repair-app-control.ps1"`
+  - attempt disable from elevated PowerShell:
+    - `powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\LocalQwenHome\launchers\repair-app-control.ps1" -DisableSmartAppControl`
+- if the endpoint is enterprise-managed, the policy may be redeployed after you disable it locally
+- if local security policy blocks unknown unsigned binaries by design, this is not a `llama.cpp` bug; it is an endpoint policy constraint
 
 Release packaging now exists in two forms:
 

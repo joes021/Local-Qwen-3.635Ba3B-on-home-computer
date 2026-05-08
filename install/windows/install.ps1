@@ -375,6 +375,7 @@ function Write-DesktopShortcuts {
     $controlCenterCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-control-center.cmd" -PsScriptName "control-center.ps1"
     $openCodeCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
+    $repairCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "repair-app-control.cmd" -PsScriptName "repair-app-control.ps1"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk") `
@@ -399,6 +400,14 @@ function Write-DesktopShortcuts {
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$controlCenterIcon,0" `
         -Description "Verify local Qwen installation"
+
+    New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "Repair Windows App Control.lnk") `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$repairCmd`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$controlCenterIcon,0" `
+        -Description "Inspect or repair Smart App Control / App Control issues"
 }
 
 if (-not $SkipDependencies) {

@@ -2,8 +2,8 @@
 
 > One-click local AI setup for a strong home PC.
 
-[![Windows Setup](https://img.shields.io/badge/Windows-Setup.exe-0078D6?logo=windows&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
-[![Ubuntu 24.04 Setup](https://img.shields.io/badge/Ubuntu%2024.04-Setup.run-E95420?logo=ubuntu&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/tag/v1.2.1)
+[![Windows Setup](https://img.shields.io/badge/Windows-Releases-0078D6?logo=windows&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
+[![Ubuntu 24.04 Setup](https://img.shields.io/badge/Ubuntu%2024.04-Releases-E95420?logo=ubuntu&logoColor=white)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
 [![Release](https://img.shields.io/github/v/release/joes021/Local-Qwen-3.635Ba3B-on-home-computer)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 [![Repo](https://img.shields.io/badge/GitHub-public%20repo-181717?logo=github)](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer)
 
@@ -127,9 +127,9 @@ When you run the Linux `.run` installer, it goes roughly in this order:
 
 [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 
-2. Download:
+2. Download the newest Windows asset:
 
-`Local-Qwen-Setup-1.2.1.exe`
+`Local-Qwen-Setup-a.b.c.exe`
 
 3. Run the installer.
 
@@ -141,23 +141,24 @@ If a previous Windows install stopped halfway, rerunning the latest Windows `Set
 
 [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
 
-2. Download:
+2. Download the newest Ubuntu 24.04 asset:
 
-`Local-Qwen-Setup-1.2.1.run`
+`Local-Qwen-Setup-a.b.c.run`
 
 3. Run:
 
 ```bash
-chmod +x ./Local-Qwen-Setup-1.2.1.run
-./Local-Qwen-Setup-1.2.1.run
+chmod +x ./Local-Qwen-Setup-a.b.c.run
+./Local-Qwen-Setup-a.b.c.run
 ```
 
 Or directly from terminal:
 
 ```bash
-wget https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/download/v1.2.1/Local-Qwen-Setup-1.2.1.run
-chmod +x ./Local-Qwen-Setup-1.2.1.run
-./Local-Qwen-Setup-1.2.1.run
+RUN_URL=$(curl -s https://api.github.com/repos/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest | grep browser_download_url | grep '\.run"' | cut -d '"' -f 4)
+wget -O Local-Qwen-Setup.run "$RUN_URL"
+chmod +x ./Local-Qwen-Setup.run
+./Local-Qwen-Setup.run
 ```
 
 ## How To Start After Install
@@ -173,6 +174,7 @@ Main things you can start:
 - `Local Qwen Control Center`
 - `OpenCode - Local Qwen`
 - `Verify Local Qwen Install`
+- `Repair Windows App Control`
 
 ### Ubuntu 24.04
 
@@ -201,13 +203,46 @@ What they do:
 - `start-server.sh` starts only the `llama.cpp` server
 - `settings-tui.sh` changes saved settings without reinstalling
 
+## Windows App Control / Smart App Control edge case
+
+Some Windows 11 machines can block `llama-server.exe` even when the install completed correctly. The most common reason is `Smart App Control`, which appears in `CiTool.exe -lp` as:
+
+- `VerifiedAndReputableDesktop`
+
+Symptoms:
+
+- desktop launchers appear normally
+- `verify-install` finds files, but launching `llama.cpp` fails
+- the error mentions `Application Control policy has blocked this file`
+
+The Windows installer now also places a desktop shortcut for this exact case:
+
+- `Repair Windows App Control`
+
+You can diagnose and attempt to fix that case with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\LocalQwenHome\launchers\repair-app-control.ps1"
+```
+
+To attempt turning Smart App Control off from an elevated PowerShell window:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\LocalQwenHome\launchers\repair-app-control.ps1" -DisableSmartAppControl
+```
+
+Important:
+
+- this requires administrator rights
+- if the machine is organization-managed, policy can return
+- Microsoft documents that turning Smart App Control off can be a one-way action on some systems
+
 ## Current Release
 
 Current public releases:
 
 - [Latest Releases](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases)
-- Windows hotfix release: `v1.2.2`
-- Latest Ubuntu 24.04 release remains available from the releases page
+- [Latest Release Page](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
 
 ## Windows Installer Notes
 
