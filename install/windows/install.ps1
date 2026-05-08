@@ -217,6 +217,62 @@ function Get-RecommendedModelChoice {
     return $defaults.modelChoices.iq2_m_compact
 }
 
+function Get-ExistingInstallState {
+    if (-not (Test-Path $statePath)) {
+        return $null
+    }
+
+    try {
+        return Get-Content -Raw $statePath | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Get-ModelChoiceById {
+    param([string]$ModelId)
+
+    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
+        if ($property.Value.id -eq $ModelId -or $property.Value.filename -eq $ModelId) {
+            return $property.Value
+        }
+    }
+    return $null
+}
+
+function Test-ModelFileLooksCompleteForChoice {
+    param(
+        [string]$Path,
+        $ModelChoice
+    )
+
+    if (-not $Path -or -not (Test-Path $Path) -or -not $ModelChoice) {
+        return $false
+    }
+
+    $minimum = [int64]$ModelChoice.minExpectedBytes
+    if ($minimum -le 0) {
+        return $true
+    }
+
+    $item = Get-Item $Path -ErrorAction SilentlyContinue
+    return ($item -and $item.Length -ge $minimum)
+}
+
+function Get-AvailableCompleteModelIds {
+    $completeIds = New-Object System.Collections.Generic.List[string]
+
+    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
+        $choice = $property.Value
+        $candidatePath = Join-Path $modelsDir ([string]$choice.filename)
+        if (Test-ModelFileLooksCompleteForChoice -Path $candidatePath -ModelChoice $choice) {
+            $completeIds.Add([string]$choice.id) | Out-Null
+        }
+    }
+
+    return @($completeIds)
+}
+
 function Ensure-VsBuildTools {
     $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
     if (Test-Path $vcvars) {
@@ -593,7 +649,33 @@ Ensure-Dir $desktopTargetDir
 $upstreamDir = Join-Path $appsDir "llama.cpp"
 $turboDir = Join-Path $appsDir "llama.cpp-turboquant"
 $llamaBinDir = Join-Path $binDir "llama.cpp"
-$modelChoice = Get-RecommendedModelChoice
+$recommendedModelChoice = Get-RecommendedModelChoice
+$existingInstallState = Get-ExistingInstallState
+$existingModelChoice = $null
+$existingModelComplete = $false
+if ($existingInstallState) {
+    $existingModelChoice = Get-ModelChoiceById -ModelId ([string]$existingInstallState.modelId)
+    $existingModelComplete = Test-ModelFileLooksCompleteForChoice -Path ([string]$existingInstallState.modelFile) -ModelChoice $existingModelChoice
+}
+$availableCompleteModelIds = @(Get-AvailableCompleteModelIds)
+$resolvedInstallModel = Invoke-RuntimeHelperJson -Arguments @(
+    "resolve-install-model",
+    "--defaults", $defaultsPath,
+    "--gpu-mib", ([string](Get-DetectedGpuMemoryMiB)),
+    "--ram-gib", ([string](Get-SystemMemoryGiB)),
+    "--cpu-threads", ([string][Environment]::ProcessorCount),
+    "--current-model-id", ([string]$(if ($existingModelChoice) { $existingModelChoice.id } else { "" })),
+    "--current-model-complete", ([string]$existingModelComplete).ToLower(),
+    "--skip-model-download", ([string]$SkipModelDownload.IsPresent).ToLower(),
+    "--available-complete-model-ids", ([string]($availableCompleteModelIds -join ","))
+)
+$modelChoice = $null
+if ($resolvedInstallModel -and $resolvedInstallModel.selectedModel -and $resolvedInstallModel.selectedModel.id) {
+    $modelChoice = Get-ModelChoiceById -ModelId ([string]$resolvedInstallModel.selectedModel.id)
+}
+if (-not $modelChoice) {
+    $modelChoice = $recommendedModelChoice
+}
 $modelFile = Join-Path $modelsDir $modelChoice.filename
 $warnings = New-Object System.Collections.Generic.List[string]
 

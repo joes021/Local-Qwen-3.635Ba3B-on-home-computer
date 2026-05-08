@@ -108,6 +108,54 @@ class RuntimeEngineTests(unittest.TestCase):
         visible_ids = [item["id"] for item in payload["models"]]
         self.assertEqual(visible_ids, ["qwen2.5-coder-7b-instruct-q5_k_m.gguf"])
 
+    def test_resolve_install_model_preserves_existing_complete_model_when_skip_download_is_used(self):
+        code, stdout, stderr = run_runtime_command(
+            "resolve-install-model",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "4095",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--current-model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--current-model-complete",
+            "true",
+            "--skip-model-download",
+            "true",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["selectedModel"]["id"], "qwen36-35b-a3b-IQ2_M.gguf")
+        self.assertEqual(payload["selectionMode"], "preserve-existing")
+
+    def test_resolve_install_model_recovers_to_available_complete_local_model_when_current_is_broken(self):
+        code, stdout, stderr = run_runtime_command(
+            "resolve-install-model",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "4095",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--current-model-id",
+            "gemma-3-4b-it-Q4_K_M.gguf",
+            "--current-model-complete",
+            "false",
+            "--skip-model-download",
+            "true",
+            "--available-complete-model-ids",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["selectedModel"]["id"], "qwen36-35b-a3b-IQ2_M.gguf")
+        self.assertEqual(payload["selectionMode"], "reuse-local-complete")
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

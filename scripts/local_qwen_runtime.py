@@ -235,6 +235,54 @@ def filter_models(
     }
 
 
+def resolve_install_model(
+    defaults: dict,
+    gpu_mib: int | None,
+    ram_gib: int | None,
+    cpu_threads: int | None,
+    current_model_id: str | None = None,
+    current_model_complete: bool = False,
+    skip_model_download: bool = False,
+    available_complete_model_ids: list[str] | None = None,
+) -> dict:
+    recommendation = build_recommendation(defaults, gpu_mib, ram_gib, cpu_threads)
+    catalog = normalize_models(defaults)
+    by_id = {str(item.get("id")): item for item in catalog}
+    recommended_model = recommendation["recommendedModel"]
+    available_complete_model_ids = [str(item) for item in (available_complete_model_ids or []) if str(item)]
+
+    if skip_model_download and current_model_complete and current_model_id and str(current_model_id) in by_id:
+        return {
+            "selectionMode": "preserve-existing",
+            "reason": "Refresh bez model downloada zadrzava vec kompletan lokalni model umesto prepisivanja na novu preporuku.",
+            "selectedModel": by_id[str(current_model_id)],
+            "recommendedModel": recommended_model,
+            "hardware": recommendation["hardware"],
+        }
+
+    if skip_model_download and available_complete_model_ids:
+        if recommended_model and str(recommended_model.get("id")) in available_complete_model_ids:
+            chosen_id = str(recommended_model.get("id"))
+        else:
+            chosen_id = available_complete_model_ids[0]
+        if chosen_id in by_id:
+            return {
+                "selectionMode": "reuse-local-complete",
+                "reason": "Aktivni model nije zdrav, ali postoji vec kompletan lokalni model pa refresh bez downloada prelazi na njega.",
+                "selectedModel": by_id[chosen_id],
+                "recommendedModel": recommended_model,
+                "hardware": recommendation["hardware"],
+            }
+
+    return {
+        "selectionMode": "recommended",
+        "reason": "Koristi se trenutna hardverska preporuka modela.",
+        "selectedModel": recommended_model,
+        "recommendedModel": recommended_model,
+        "hardware": recommendation["hardware"],
+    }
+
+
 def build_recommendation(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
     recommended_profile, detected_class, reason = choose_profile(gpu_mib)
     models = normalize_models(defaults)
@@ -295,6 +343,25 @@ def command_filter_models(args: argparse.Namespace) -> int:
         verified_only=args.verified_only,
         coder_only=args.coder_only,
         fit_only=args.fit_only,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_resolve_install_model(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    available_complete_model_ids = []
+    if args.available_complete_model_ids:
+        available_complete_model_ids = [item for item in str(args.available_complete_model_ids).split(",") if item]
+    payload = resolve_install_model(
+        defaults,
+        args.gpu_mib,
+        args.ram_gib,
+        args.cpu_threads,
+        current_model_id=args.current_model_id,
+        current_model_complete=parse_bool(args.current_model_complete),
+        skip_model_download=parse_bool(args.skip_model_download),
+        available_complete_model_ids=available_complete_model_ids,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -748,6 +815,17 @@ def build_parser() -> argparse.ArgumentParser:
     filter_models_parser.add_argument("--coder-only", action="store_true")
     filter_models_parser.add_argument("--fit-only", action="store_true")
     filter_models_parser.set_defaults(func=command_filter_models)
+
+    resolve_install_model_parser = subparsers.add_parser("resolve-install-model")
+    resolve_install_model_parser.add_argument("--defaults", required=True)
+    resolve_install_model_parser.add_argument("--gpu-mib", type=int, default=0)
+    resolve_install_model_parser.add_argument("--ram-gib", type=int, default=0)
+    resolve_install_model_parser.add_argument("--cpu-threads", type=int, default=0)
+    resolve_install_model_parser.add_argument("--current-model-id", default="")
+    resolve_install_model_parser.add_argument("--current-model-complete", default="false")
+    resolve_install_model_parser.add_argument("--skip-model-download", default="false")
+    resolve_install_model_parser.add_argument("--available-complete-model-ids", default="")
+    resolve_install_model_parser.set_defaults(func=command_resolve_install_model)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)

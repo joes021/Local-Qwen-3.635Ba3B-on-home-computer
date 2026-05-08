@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.3.2
+- Windows installer vise ne prepisuje aktivni model na novu preporuku kada se radi refresh sa SkipModelDownload ako vec postoji kompletan lokalni model
+- Ako je state vec polomljen, a u models folderu postoji neki kompletan GGUF, installer sada ume da vrati taj lokalni model kao aktivan umesto da ostane na praznoj putanji
+- Dodata je shared resolve-install-model logika i testovi za preserve-existing i reuse-local-complete scenarije
+
 v2.3.1
 - Windows Control Center sada ima eksplicitne filtere za katalog modela: Samo verified, Samo coder modeli i Samo za ovu masinu
 - Filteri koriste shared runtime helper, pa izbor modela, info box, cuvanje i download svi gledaju istu filtriranu listu
