@@ -579,6 +579,76 @@ def build_settings_presets(defaults: dict, gpu_mib: int | None, ram_gib: int | N
     }
 
 
+def build_settings_preset_preview(
+    defaults: dict,
+    gpu_mib: int | None,
+    ram_gib: int | None,
+    cpu_threads: int | None,
+    preset_id: str,
+    current_profile: str,
+    current_context: int,
+    current_output: int,
+    current_build: int,
+    current_plan: int,
+    current_general: int,
+    current_explore: int,
+) -> dict:
+    bundle = build_settings_presets(defaults, gpu_mib, ram_gib, cpu_threads)
+    selected = None
+    for preset in bundle["presets"]:
+        if str(preset.get("id")) == str(preset_id):
+            selected = preset
+            break
+    if selected is None:
+        raise ValueError(f"Preset not found: {preset_id}")
+
+    current = {
+        "profile": current_profile,
+        "contextSize": int(current_context),
+        "maxOutputTokens": int(current_output),
+        "buildSteps": int(current_build),
+        "planSteps": int(current_plan),
+        "generalSteps": int(current_general),
+        "exploreSteps": int(current_explore),
+    }
+    target = {
+        "profile": str(selected["profile"]),
+        "contextSize": int(selected["contextSize"]),
+        "maxOutputTokens": int(selected["maxOutputTokens"]),
+        "buildSteps": int(selected["buildSteps"]),
+        "planSteps": int(selected["planSteps"]),
+        "generalSteps": int(selected["generalSteps"]),
+        "exploreSteps": int(selected["exploreSteps"]),
+    }
+
+    changed_fields: list[str] = []
+    compare_lines: list[str] = []
+    labels = {
+        "profile": "Profil",
+        "contextSize": "Context",
+        "maxOutputTokens": "Output",
+        "buildSteps": "Build",
+        "planSteps": "Plan",
+        "generalSteps": "General",
+        "exploreSteps": "Explore",
+    }
+    for key, label in labels.items():
+        if current[key] != target[key]:
+            changed_fields.append(key)
+            compare_lines.append(f"{label}: {current[key]} -> {target[key]}")
+
+    if not compare_lines:
+        compare_lines.append("Preset se vec poklapa sa trenutnim vrednostima.")
+
+    return {
+        "preset": selected,
+        "current": current,
+        "target": target,
+        "changedFields": changed_fields,
+        "compareLines": compare_lines,
+    }
+
+
 def command_catalog(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     print(json.dumps({"models": normalize_models(defaults)}, indent=2))
@@ -668,6 +738,26 @@ def command_model_browser(args: argparse.Namespace) -> int:
 def command_settings_presets(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     payload = build_settings_presets(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_settings_preset_preview(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    payload = build_settings_preset_preview(
+        defaults,
+        args.gpu_mib,
+        args.ram_gib,
+        args.cpu_threads,
+        args.preset_id,
+        args.current_profile,
+        args.current_context,
+        args.current_output,
+        args.current_build,
+        args.current_plan,
+        args.current_general,
+        args.current_explore,
+    )
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -1337,6 +1427,21 @@ def build_parser() -> argparse.ArgumentParser:
     settings_presets_parser.add_argument("--ram-gib", type=int, default=0)
     settings_presets_parser.add_argument("--cpu-threads", type=int, default=0)
     settings_presets_parser.set_defaults(func=command_settings_presets)
+
+    settings_preset_preview_parser = subparsers.add_parser("settings-preset-preview")
+    settings_preset_preview_parser.add_argument("--defaults", required=True)
+    settings_preset_preview_parser.add_argument("--gpu-mib", type=int, default=0)
+    settings_preset_preview_parser.add_argument("--ram-gib", type=int, default=0)
+    settings_preset_preview_parser.add_argument("--cpu-threads", type=int, default=0)
+    settings_preset_preview_parser.add_argument("--preset-id", required=True)
+    settings_preset_preview_parser.add_argument("--current-profile", required=True)
+    settings_preset_preview_parser.add_argument("--current-context", type=int, required=True)
+    settings_preset_preview_parser.add_argument("--current-output", type=int, required=True)
+    settings_preset_preview_parser.add_argument("--current-build", type=int, required=True)
+    settings_preset_preview_parser.add_argument("--current-plan", type=int, required=True)
+    settings_preset_preview_parser.add_argument("--current-general", type=int, required=True)
+    settings_preset_preview_parser.add_argument("--current-explore", type=int, required=True)
+    settings_preset_preview_parser.set_defaults(func=command_settings_preset_preview)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)

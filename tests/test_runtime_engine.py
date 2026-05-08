@@ -276,6 +276,42 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertGreaterEqual(best_current["buildSteps"], 140)
         self.assertIn("video", best_current["summary"].lower())
 
+    def test_settings_preset_preview_lists_changed_fields(self):
+        code, stdout, stderr = run_runtime_command(
+            "settings-preset-preview",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--preset-id",
+            "coding-fast",
+            "--current-profile",
+            "balanced",
+            "--current-context",
+            "262144",
+            "--current-output",
+            "8192",
+            "--current-build",
+            "120",
+            "--current-plan",
+            "80",
+            "--current-general",
+            "100",
+            "--current-explore",
+            "60",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["preset"]["id"], "coding-fast")
+        self.assertIn("profile", payload["changedFields"])
+        self.assertIn("contextSize", payload["changedFields"])
+        self.assertIn("maxOutputTokens", payload["changedFields"])
+        self.assertTrue(any("balanced -> speed" in line.lower() for line in payload["compareLines"]))
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

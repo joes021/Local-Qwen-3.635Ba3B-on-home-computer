@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.6.1
+- Quick preset tok sada ima compare pregled koji jasno prikazuje sta ce se promeniti u odnosu na trenutno sacuvana podesavanja pre nego sto kliknes na Sacuvaj
+- Windows Control Center prikazuje isti shared preset compare payload direktno u Podesavanja tabu, pa je odmah vidljivo koje profile, context, output i step vrednosti preset menja
+- Linux settings TUI sada nakon izbora quick preset-a ispisuje isti compare pregled pre nego sto predje na eventualni manuelni unos
+
 v2.6.0
 - Windows Podesavanja tab sada ima Quick presets: Laptop safe, Coding fast, Long context i Best current setup, sa kratkim objasnjenjem sta svaki preset radi i koji tradeoff pravi
 - Best current setup sada koristi shared recommendation engine, pa Windows i Linux dobijaju isti hardverski-aware preset umesto rucno odrzavanih razlicitih vrednosti

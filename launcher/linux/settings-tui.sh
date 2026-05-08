@@ -88,6 +88,13 @@ PY
 fi
 
 if [[ -n "$selected_preset_json" ]]; then
+  preset_preview_json="$(get_settings_preset_preview_json "${gpu_mib:-0}" "${ram_gib:-0}" "${cpu_threads:-0}" \
+    "$(python3 - <<'PY' "$selected_preset_json"
+import json, sys
+print(json.loads(sys.argv[1])["id"])
+PY
+)" \
+    "$current_profile" "$current_ctx" "$current_out" "$current_build" "$current_plan" "$current_general" "$current_explore")"
   mapfile -t preset_values < <(python3 - <<'PY' "$selected_preset_json"
 import json, sys
 preset = json.loads(sys.argv[1])
@@ -117,6 +124,13 @@ PY
   echo "Za koga je: ${preset_values[8]}"
   echo "Sta radi: ${preset_values[9]}"
   echo "Tradeoff: ${preset_values[10]}"
+  echo "Sta se menja:"
+  python3 - <<'PY' "$preset_preview_json"
+import json, sys
+payload = json.loads(sys.argv[1])
+for line in payload.get("compareLines", []):
+    print(f"- {line}")
+PY
   echo
 fi
 

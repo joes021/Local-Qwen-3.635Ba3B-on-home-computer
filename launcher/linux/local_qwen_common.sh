@@ -202,6 +202,33 @@ get_settings_presets_json() {
   run_runtime_engine_json settings-presets --defaults "$(get_defaults_path)" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$cpu_threads"
 }
 
+get_settings_preset_preview_json() {
+  local gpu_mib="${1:-0}"
+  local ram_gib="${2:-0}"
+  local cpu_threads="${3:-0}"
+  local preset_id="${4:-}"
+  local current_profile="${5:-balanced}"
+  local current_context="${6:-262144}"
+  local current_output="${7:-8192}"
+  local current_build="${8:-120}"
+  local current_plan="${9:-80}"
+  local current_general="${10:-100}"
+  local current_explore="${11:-60}"
+  run_runtime_engine_json settings-preset-preview \
+    --defaults "$(get_defaults_path)" \
+    --gpu-mib "$gpu_mib" \
+    --ram-gib "$ram_gib" \
+    --cpu-threads "$cpu_threads" \
+    --preset-id "$preset_id" \
+    --current-profile "$current_profile" \
+    --current-context "$current_context" \
+    --current-output "$current_output" \
+    --current-build "$current_build" \
+    --current-plan "$current_plan" \
+    --current-general "$current_general" \
+    --current-explore "$current_explore"
+}
+
 get_installed_model_ids_csv() {
   local state_path defaults_path models_dir
   state_path="$(get_install_state_path)"

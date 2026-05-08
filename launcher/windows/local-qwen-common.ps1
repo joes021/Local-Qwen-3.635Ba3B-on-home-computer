@@ -704,6 +704,39 @@ function Get-SettingsPresetsBundle {
     )
 }
 
+function Get-SettingsPresetPreview {
+    param(
+        [Parameter(Mandatory = $true)][string]$PresetId,
+        [Parameter(Mandatory = $true)][string]$CurrentProfile,
+        [Parameter(Mandatory = $true)][int]$CurrentContext,
+        [Parameter(Mandatory = $true)][int]$CurrentOutput,
+        [Parameter(Mandatory = $true)][int]$CurrentBuild,
+        [Parameter(Mandatory = $true)][int]$CurrentPlan,
+        [Parameter(Mandatory = $true)][int]$CurrentGeneral,
+        [Parameter(Mandatory = $true)][int]$CurrentExplore
+    )
+
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "settings-preset-preview",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads),
+        "--preset-id", $PresetId,
+        "--current-profile", $CurrentProfile,
+        "--current-context", ([string]$CurrentContext),
+        "--current-output", ([string]$CurrentOutput),
+        "--current-build", ([string]$CurrentBuild),
+        "--current-plan", ([string]$CurrentPlan),
+        "--current-general", ([string]$CurrentGeneral),
+        "--current-explore", ([string]$CurrentExplore)
+    )
+}
+
 function Get-InstalledModelIds {
     $catalog = @(Get-ModelCatalog)
     $installed = New-Object System.Collections.Generic.List[string]
