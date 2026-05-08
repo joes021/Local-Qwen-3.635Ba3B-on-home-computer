@@ -15,6 +15,7 @@ LAUNCHERS_DIR="$INSTALL_ROOT/launchers"
 CONFIG_DIR="$INSTALL_ROOT/config"
 ASSETS_DIR="$INSTALL_ROOT/assets"
 DESKTOP_DIR="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+INSTALL_REPORT_PATH="$STATE_DIR/install-report.json"
 
 if [ -f /etc/os-release ]; then
   . /etc/os-release
@@ -226,6 +227,58 @@ EOF
 
 chmod +x "$DESKTOP_DIR/local-qwen-control-center.desktop" "$DESKTOP_DIR/opencode-local-qwen.desktop"
 
+LLAMA_UPSTREAM_PATH="$APPS_DIR/llama.cpp/build/bin/llama-server"
+TURBO_RUNTIME_PATH="$APPS_DIR/llama.cpp-turboquant/build-cuda/bin/llama-server"
+OPENCODE_PATH="$(command -v opencode || true)"
+
+python3 - <<'PY' "$INSTALL_REPORT_PATH" "$INSTALL_ROOT" "$STATE_DIR/install-state.json" "$LAUNCHERS_DIR" "$DESKTOP_DIR" "$LLAMA_UPSTREAM_PATH" "$TURBO_RUNTIME_PATH" "$MODEL_PATH" "$OPENCODE_PATH" "$PROFILE"
+import json, os, sys
+
+(report_path, install_root, state_path, launchers_dir, desktop_dir,
+ llama_path, turbo_path, model_path, opencode_path, profile) = sys.argv[1:11]
+
+report = {
+    "generatedAt": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+    "platform": "linux",
+    "profile": profile,
+    "installRoot": install_root,
+    "components": {
+        "installState": {
+            "path": state_path,
+            "ok": os.path.isfile(state_path),
+        },
+        "launchers": {
+            "path": launchers_dir,
+            "ok": os.path.isfile(os.path.join(launchers_dir, "control-center.sh")),
+        },
+        "desktopLaunchers": {
+            "path": desktop_dir,
+            "ok": os.path.isfile(os.path.join(desktop_dir, "local-qwen-control-center.desktop")),
+        },
+        "llamaCppRuntime": {
+            "path": llama_path,
+            "ok": os.path.isfile(llama_path),
+        },
+        "turboQuantRuntime": {
+            "path": turbo_path,
+            "ok": os.path.isfile(turbo_path),
+        },
+        "model": {
+            "path": model_path,
+            "ok": os.path.isfile(model_path),
+            "sizeBytes": os.path.getsize(model_path) if os.path.isfile(model_path) else 0,
+        },
+        "opencodeCommand": {
+            "path": opencode_path,
+            "ok": bool(opencode_path and os.path.isfile(opencode_path)),
+        },
+    },
+}
+
+with open(report_path, "w", encoding="utf-8") as f:
+    json.dump(report, f, indent=2)
+PY
+
 cat <<EOF
 Linux installer je pripremio lokalni stack.
 
@@ -234,6 +287,9 @@ $INSTALL_ROOT
 
 State:
 $STATE_DIR/install-state.json
+
+Install report:
+$INSTALL_REPORT_PATH
 
 Launchers:
 $LAUNCHERS_DIR

@@ -356,6 +356,7 @@ The Linux path is public and packaged, but still needs more real-world validatio
 ## Documentation
 
 - [Installer status](./docs/installers.md)
+- [Roadmap](./docs/roadmap.md)
 - [Design notes](./docs/superpowers/specs/2026-05-07-local-qwen-home-computer-design.md)
 
 ## Feedback

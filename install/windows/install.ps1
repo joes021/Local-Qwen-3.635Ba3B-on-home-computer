@@ -24,6 +24,7 @@ $assetsDir = Join-Path $InstallRoot "assets"
 $docsDir = Join-Path $InstallRoot "docs"
 $desktopTargetDir = Join-Path $DesktopFolder "Local Qwen Home Computer"
 $statePath = Join-Path $stateDir "install-state.json"
+$installReportPath = Join-Path $stateDir "install-report.json"
 
 function Ensure-Dir {
     param([string]$Path)
@@ -320,6 +321,66 @@ function Write-InstallState {
     $state | ConvertTo-Json -Depth 10 | Set-Content -Path $StatePath -Encoding UTF8
 }
 
+function Write-InstallReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][string]$InstallRootStatePath,
+        [Parameter(Mandatory = $true)][string]$InstallReportPath,
+        [Parameter(Mandatory = $true)][string]$ModelFile,
+        [Parameter(Mandatory = $true)][string]$LlamaBinDir,
+        [Parameter(Mandatory = $true)][string]$TurboDir,
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$DesktopTargetDir,
+        [Parameter(Mandatory = $true)][string]$Profile,
+        [Parameter(Mandatory = $true)]$Warnings
+    )
+
+    $llamaServerPath = Join-Path $LlamaBinDir "llama-server.exe"
+    $turboServerPath = Join-Path $TurboDir "$($defaults.turboquant.buildDir)\bin\llama-server.exe"
+    $configPath = Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
+
+    $report = [ordered]@{
+        generatedAt = (Get-Date).ToString("s")
+        platform = "windows"
+        profile = $Profile
+        installRoot = $InstallRoot
+        components = [ordered]@{
+            installState = [ordered]@{
+                path = $InstallRootStatePath
+                ok = (Test-Path $InstallRootStatePath)
+            }
+            launchers = [ordered]@{
+                path = $LaunchersDir
+                ok = (Test-Path (Join-Path $LaunchersDir "control-center.ps1"))
+            }
+            desktopShortcuts = [ordered]@{
+                path = $DesktopTargetDir
+                ok = (Test-Path (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk"))
+            }
+            llamaCppRuntime = [ordered]@{
+                path = $llamaServerPath
+                ok = (Test-Path $llamaServerPath)
+            }
+            turboQuantRuntime = [ordered]@{
+                path = $turboServerPath
+                ok = (Test-Path $turboServerPath)
+            }
+            model = [ordered]@{
+                path = $ModelFile
+                ok = (Test-Path $ModelFile)
+                sizeBytes = if (Test-Path $ModelFile) { (Get-Item $ModelFile).Length } else { 0 }
+            }
+            opencodeConfig = [ordered]@{
+                path = $configPath
+                ok = (Test-Path $configPath)
+            }
+        }
+        warnings = @($Warnings)
+    }
+
+    $report | ConvertTo-Json -Depth 10 | Set-Content -Path $InstallReportPath -Encoding UTF8
+}
+
 function New-Shortcut {
     param(
         [string]$ShortcutPath,
@@ -569,6 +630,18 @@ Write-InstallState `
     -Defaults $defaults `
     -TurboServerExe $(if (Test-Path $turboServerExe) { $turboServerExe } else { $null })
 
+Write-InstallReport `
+    -InstallRoot $InstallRoot `
+    -InstallRootStatePath $statePath `
+    -InstallReportPath $installReportPath `
+    -ModelFile $modelFile `
+    -LlamaBinDir $llamaBinDir `
+    -TurboDir $turboDir `
+    -LaunchersDir $launchersDir `
+    -DesktopTargetDir $desktopTargetDir `
+    -Profile $Profile `
+    -Warnings $warnings
+
 $summary = @"
 Windows install state written to:
 $statePath
@@ -584,6 +657,9 @@ $launchersDir
 
 Model path:
 $modelFile
+
+Install report:
+$installReportPath
 "@
 
 if ($warnings.Count -gt 0) {
