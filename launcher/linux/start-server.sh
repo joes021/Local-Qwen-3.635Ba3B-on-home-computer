@@ -32,16 +32,50 @@ server = state.get("turboServerExe") or state["llamaServerExe"]
 model = state["modelFile"]
 port = state["port"]
 threads = state["threads"]
+gpu_layers = 999
+uses_turbo = bool(state.get("turboServerExe")) and os.path.abspath(server) == os.path.abspath(state["turboServerExe"])
+
+if not uses_turbo:
+    detected_vram_mib = None
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        first_line = result.stdout.strip().splitlines()[0]
+        detected_vram_mib = int(first_line.strip())
+    except Exception:
+        detected_vram_mib = None
+
+    if detected_vram_mib is not None and detected_vram_mib <= 8192:
+        gpu_layers = 10
+        ctx = min(ctx, 4096)
+        out_tokens = min(out_tokens, 1024)
+    elif detected_vram_mib is not None and detected_vram_mib <= 12288:
+        gpu_layers = 20
+        ctx = min(ctx, 8192)
+        out_tokens = min(out_tokens, 2048)
+    elif detected_vram_mib is not None:
+        gpu_layers = 28
+        ctx = min(ctx, 16384)
+        out_tokens = min(out_tokens, 4096)
+    else:
+        gpu_layers = 20
+        ctx = min(ctx, 8192)
+        out_tokens = min(out_tokens, 2048)
+
 args = [
     server, "-m", model, "--port", str(port),
-    "-ngl", "999",
+    "-ngl", str(gpu_layers),
     "-ncmoe", str(profile_data["ncmoe"]),
     "-c", str(ctx),
     "-fa", "on",
     "-n", str(out_tokens),
     "-t", str(threads),
 ]
-if state.get("turboServerExe") and os.path.abspath(server) == os.path.abspath(state["turboServerExe"]):
+if uses_turbo:
     args.extend(["-ctk", profile_data["cacheTypeK"], "-ctv", profile_data["cacheTypeV"]])
 if state.get("noMmap", True):
     args.append("--no-mmap")

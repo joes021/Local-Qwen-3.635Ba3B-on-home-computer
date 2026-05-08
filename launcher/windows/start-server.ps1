@@ -27,11 +27,11 @@ $modelPath = Get-LlamaModelPath
 
 $ctx = if ($settings.llama.contextSize) { [int]$settings.llama.contextSize } else { [int]$profileData.contextSize }
 $maxOutput = if ($settings.llama.maxOutputTokens) { [int]$settings.llama.maxOutputTokens } else { 8192 }
+$gpuLayers = 999
 
 $args = @(
     "-m", $modelPath,
     "--port", $state.port,
-    "-ngl", "999",
     "-ncmoe", [string]$profileData.ncmoe,
     "-c", [string]$ctx,
     "-fa", "on",
@@ -47,6 +47,48 @@ if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
         $usesTurboQuant = $false
     }
 }
+
+if ($usesTurboQuant) {
+    $args += @(
+        "-ctk", [string]$profileData.cacheTypeK,
+        "-ctv", [string]$profileData.cacheTypeV
+    )
+} else {
+    $detectedGpuMiB = Get-DetectedGpuMemoryMiB
+
+    if ($settings.llama.PSObject.Properties["gpuLayers"] -and $settings.llama.gpuLayers) {
+        $gpuLayers = [int]$settings.llama.gpuLayers
+    } elseif ($detectedGpuMiB) {
+        if ($detectedGpuMiB -le 8192) {
+            $gpuLayers = 10
+            $ctx = [math]::Min($ctx, 4096)
+            $maxOutput = [math]::Min($maxOutput, 1024)
+        } elseif ($detectedGpuMiB -le 12288) {
+            $gpuLayers = 20
+            $ctx = [math]::Min($ctx, 8192)
+            $maxOutput = [math]::Min($maxOutput, 2048)
+        } else {
+            $gpuLayers = 28
+            $ctx = [math]::Min($ctx, 16384)
+            $maxOutput = [math]::Min($maxOutput, 4096)
+        }
+    } else {
+        $gpuLayers = 20
+        $ctx = [math]::Min($ctx, 8192)
+        $maxOutput = [math]::Min($maxOutput, 2048)
+    }
+}
+
+$args = @(
+    "-m", $modelPath,
+    "--port", $state.port,
+    "-ngl", [string]$gpuLayers,
+    "-ncmoe", [string]$profileData.ncmoe,
+    "-c", [string]$ctx,
+    "-fa", "on",
+    "-n", [string]$maxOutput,
+    "-t", [string]$state.threads
+)
 
 if ($usesTurboQuant) {
     $args += @(

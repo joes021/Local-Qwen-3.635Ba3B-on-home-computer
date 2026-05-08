@@ -243,7 +243,10 @@ function Download-RecommendedModel {
     )
 
     $python = Ensure-PythonRuntime
-    Invoke-Native $python.Command @($python.Arguments + @("-m", "pip", "install", "--user", "-U", "huggingface_hub"))
+    & $python.Command @($python.Arguments + @("-m", "pip", "install", "--user", "-U", "huggingface_hub"))
+    if ($LASTEXITCODE -ne 0) {
+        throw "Komanda nije uspela: $($python.Command) -m pip install --user -U huggingface_hub"
+    }
 
     $targetDir = Split-Path -Parent $TargetPath
     Ensure-Dir $targetDir
@@ -260,7 +263,10 @@ hf_hub_download(
 
     $tmpPy = Join-Path $env:TEMP "local_qwen_hf_download.py"
     Set-Content -Path $tmpPy -Value $pyCode -Encoding UTF8
-    Invoke-Native $python.Command @($python.Arguments + @($tmpPy))
+    & $python.Command @($python.Arguments + @($tmpPy))
+    if ($LASTEXITCODE -ne 0) {
+        throw "Komanda nije uspela: $($python.Command) $tmpPy"
+    }
     Remove-Item -LiteralPath $tmpPy -Force
 
     if (!(Test-Path $TargetPath)) {

@@ -99,6 +99,24 @@ function Test-LlamaHealth {
     }
 }
 
+function Get-DetectedGpuMemoryMiB {
+    try {
+        $controllers = Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.AdapterRAM -gt 0 }
+        if (-not $controllers) {
+            return $null
+        }
+
+        $maxBytes = ($controllers | Measure-Object -Property AdapterRAM -Maximum).Maximum
+        if (-not $maxBytes) {
+            return $null
+        }
+
+        return [int]([math]::Round($maxBytes / 1MB))
+    } catch {
+        return $null
+    }
+}
+
 function Get-LlamaServerExe {
     $state = Get-InstallState
     $candidates = @()
