@@ -342,38 +342,60 @@ function Refresh-LaunchStatus {
     $hardwareBox.Text = Format-ServerPlan -Plan $plan
 }
 
-function Invoke-StartProfile {
+function Start-LlamaBackground {
     param([string]$Profile)
 
-    Write-LaunchMessage @("Pokrecem profil '$Profile'...")
     $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript -Profile $Profile 2>&1
-    $result += & powershell.exe -ExecutionPolicy Bypass -File $startServerScript -Profile $Profile 2>&1
-    Write-LaunchMessage @($result)
+    if ($LASTEXITCODE -ne 0) {
+        Write-LaunchMessage @($result)
+        throw ($result -join [Environment]::NewLine)
+    }
+
+    Write-LaunchMessage @(
+        "Pokrecem llama.cpp u pozadini za profil '$Profile'...",
+        "Server ce se sam potvrditi cim /health postane dostupan."
+    )
+    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $startServerScript,
+        "-Profile", $Profile,
+        "-WaitSeconds", "90"
+    ) -WindowStyle Hidden
+
+    if ($result) {
+        Write-LaunchMessage @($result)
+    }
     Refresh-LaunchStatus
 }
 
 $startBalanced = New-Object System.Windows.Forms.Button
 $startBalanced.Text = "Start balanced"
 $startBalanced.Location = New-Object System.Drawing.Point(18, 82)
-$startBalanced.Size = New-Object System.Drawing.Size(150, 36)
+$startBalanced.Size = New-Object System.Drawing.Size(120, 36)
 $launchTab.Controls.Add($startBalanced)
 
 $startVideo = New-Object System.Windows.Forms.Button
 $startVideo.Text = "Start video"
-$startVideo.Location = New-Object System.Drawing.Point(178, 82)
-$startVideo.Size = New-Object System.Drawing.Size(150, 36)
+$startVideo.Location = New-Object System.Drawing.Point(148, 82)
+$startVideo.Size = New-Object System.Drawing.Size(120, 36)
 $launchTab.Controls.Add($startVideo)
 
 $startSpeed = New-Object System.Windows.Forms.Button
 $startSpeed.Text = "Start speed"
-$startSpeed.Location = New-Object System.Drawing.Point(338, 82)
-$startSpeed.Size = New-Object System.Drawing.Size(150, 36)
+$startSpeed.Location = New-Object System.Drawing.Point(278, 82)
+$startSpeed.Size = New-Object System.Drawing.Size(120, 36)
 $launchTab.Controls.Add($startSpeed)
+
+$startLlama = New-Object System.Windows.Forms.Button
+$startLlama.Text = "Start llama.cpp"
+$startLlama.Location = New-Object System.Drawing.Point(408, 82)
+$startLlama.Size = New-Object System.Drawing.Size(130, 36)
+$launchTab.Controls.Add($startLlama)
 
 $stopServer = New-Object System.Windows.Forms.Button
 $stopServer.Text = "Stop server"
-$stopServer.Location = New-Object System.Drawing.Point(498, 82)
-$stopServer.Size = New-Object System.Drawing.Size(168, 36)
+$stopServer.Location = New-Object System.Drawing.Point(548, 82)
+$stopServer.Size = New-Object System.Drawing.Size(118, 36)
 $launchTab.Controls.Add($stopServer)
 
 $openOpenCode = New-Object System.Windows.Forms.Button
@@ -682,9 +704,35 @@ $launchAgentButton.Add_Click({
     }
 })
 
-$startBalanced.Add_Click({ Invoke-StartProfile -Profile "balanced" })
-$startVideo.Add_Click({ Invoke-StartProfile -Profile "video" })
-$startSpeed.Add_Click({ Invoke-StartProfile -Profile "speed" })
+$startBalanced.Add_Click({
+    try {
+        Start-LlamaBackground -Profile "balanced"
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$startVideo.Add_Click({
+    try {
+        Start-LlamaBackground -Profile "video"
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$startSpeed.Add_Click({
+    try {
+        Start-LlamaBackground -Profile "speed"
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$startLlama.Add_Click({
+    try {
+        $profile = [string](Get-Settings).profile
+        Start-LlamaBackground -Profile $profile
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
 
 $stopServer.Add_Click({
     $result = & powershell.exe -ExecutionPolicy Bypass -File $stopServerScript 2>&1
@@ -715,6 +763,27 @@ $openFolderButton.Add_Click({
     Write-LaunchMessage @("Otvoren install folder: $root")
 })
 
+$refreshTimer = New-Object System.Windows.Forms.Timer
+$refreshTimer.Interval = 3000
+$refreshTimer.Add_Tick({
+    Refresh-LaunchStatus
+})
+$refreshTimer.Start()
+
 Refresh-LaunchStatus
+
+$form.Add_Shown({
+    if (-not (Test-LlamaHealth)) {
+        try {
+            $profile = [string](Get-Settings).profile
+            Write-LaunchMessage @("Control Center je otvoren. Auto-start llama.cpp za profil '$profile'.")
+            Start-LlamaBackground -Profile $profile
+        } catch {
+            Write-LaunchMessage @($_.Exception.Message)
+        }
+    } else {
+        Write-LaunchMessage @("llama.cpp je vec aktivan.")
+    }
+})
 
 [void]$form.ShowDialog()
