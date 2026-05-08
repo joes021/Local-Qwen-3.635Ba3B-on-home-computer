@@ -5,11 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
 show_status() {
-  if test_llama_health; then
-    echo "Status: server aktivan na $(get_health_url)"
-  else
-    echo "Status: server nije aktivan"
-  fi
+  python3 - <<'PY' "$(get_effective_service_status_json)" "$(get_health_url)"
+import json, sys
+status = json.loads(sys.argv[1])
+health_url = sys.argv[2]
+state = status.get("state", "inactive")
+reason = status.get("reason", "")
+if state == "active":
+    print(f"Status: server aktivan na {health_url}")
+elif state == "warming":
+    print("Status: STARTING / WARMING - servis se jos podize")
+elif state == "failed":
+    print(f"Status: start nije uspeo - {reason}")
+else:
+    print("Status: server nije aktivan")
+PY
 }
 
 show_settings() {
@@ -134,6 +144,49 @@ print(f"Action id: {data['actionId']}")
 PY
 }
 
+show_diagnostics() {
+  python3 - <<'PY' "$(get_effective_service_status_json)" "$(get_service_lifecycle_json)" "$(get_install_state_path)" "$(get_settings_path)" "$(get_runtime_engine_path)" "$(get_local_qwen_root)/version.json"
+import json, os, subprocess, sys
+status_json, lifecycle_json, state_path, settings_path, runtime_script, version_path = sys.argv[1:7]
+status = json.loads(status_json)
+lifecycle = json.loads(lifecycle_json)
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(settings_path, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+current_version = "unknown"
+if os.path.exists(version_path):
+    try:
+        with open(version_path, "r", encoding="utf-8") as f:
+            current_version = json.load(f).get("version", "unknown")
+    except Exception:
+        pass
+payload = subprocess.run(
+    [sys.executable, runtime_script, "latest-release", "--repo", "joes021/Local-Qwen-3.635Ba3B-on-home-computer", "--current-version", current_version],
+    capture_output=True,
+    text=True,
+)
+latest = None
+if payload.returncode == 0 and payload.stdout.strip():
+    try:
+        latest = json.loads(payload.stdout)
+    except Exception:
+        latest = None
+print("Diagnostics")
+print(f"- Effective state: {status.get('state')}")
+print(f"- Effective reason: {status.get('reason')}")
+print(f"- Lifecycle state: {lifecycle.get('state')}")
+print(f"- Lifecycle updated: {lifecycle.get('updatedAt')}")
+print(f"- Stdout log: {lifecycle.get('stdout')}")
+print(f"- Stderr log: {lifecycle.get('stderr')}")
+print(f"- Profile: {settings.get('profile')}")
+print(f"- Model: {state.get('modelId')}")
+if latest:
+    print(f"- GitHub latest: {latest.get('latestVersion')}")
+    print(f"- Update available: {'da' if latest.get('updateAvailable') else 'ne'}")
+PY
+}
+
 get_next_action_id() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
 import json, os, subprocess, sys, urllib.request
@@ -238,6 +291,7 @@ while true; do
   show_agent_audit
   show_onboarding
   show_next_action
+  show_diagnostics
   echo "1) Start server (saved profile)"
   echo "2) Start server (choose profile)"
   echo "3) Stop server"
@@ -254,7 +308,8 @@ while true; do
   echo "14) Check updates"
   echo "15) Agent audit"
   echo "16) Run next action"
-  echo "17) Exit"
+  echo "17) Refresh diagnostics only"
+  echo "18) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -283,7 +338,8 @@ while true; do
         *) echo "Nepoznat next action: $next_action" ;;
       esac
       ;;
-    17) exit 0 ;;
+    17) show_diagnostics ;;
+    18) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

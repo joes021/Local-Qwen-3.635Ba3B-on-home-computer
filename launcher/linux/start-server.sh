@@ -39,6 +39,7 @@ if output_customized is None:
     output_customized = int(out_tokens) != 8192
 else:
     output_customized = bool(output_customized)
+
 server = state.get("turboServerExe") or state["llamaServerExe"]
 model = state["modelFile"]
 port = state["port"]
@@ -106,6 +107,17 @@ os.makedirs(log_dir, exist_ok=True)
 stamp = time.strftime("%Y%m%d-%H%M%S")
 stdout_path = os.path.join(log_dir, f"llama-{profile}-{stamp}.out.log")
 stderr_path = os.path.join(log_dir, f"llama-{profile}-{stamp}.err.log")
+lifecycle_path = os.path.join(state["installRoot"], "state", "server-lifecycle.json")
+os.makedirs(os.path.dirname(lifecycle_path), exist_ok=True)
+with open(lifecycle_path, "w", encoding="utf-8") as f:
+    json.dump({
+        "state": "starting",
+        "profile": profile,
+        "stdout": stdout_path,
+        "stderr": stderr_path,
+        "reason": "llama.cpp startup requested",
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }, f, ensure_ascii=False, indent=2)
 
 with open(stdout_path, "wb") as out, open(stderr_path, "wb") as err:
     subprocess.Popen(args, stdout=out, stderr=err, start_new_session=True)
@@ -114,3 +126,37 @@ print(f"llama.cpp start requested for profile {profile}")
 print(f"stdout: {stdout_path}")
 print(f"stderr: {stderr_path}")
 PY
+
+(
+  deadline=$((SECONDS + 180))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sleep 3
+    if test_llama_health; then
+      lifecycle_json="$(get_service_lifecycle_json)"
+      stdout_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stdout", "") or "")
+PY
+)"
+      stderr_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stderr", "") or "")
+PY
+)"
+      set_service_lifecycle_state "active" "$PROFILE" "$stdout_path" "$stderr_path" "Health endpoint returned OK."
+      exit 0
+    fi
+  done
+  lifecycle_json="$(get_service_lifecycle_json)"
+  stdout_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stdout", "") or "")
+PY
+)"
+  stderr_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stderr", "") or "")
+PY
+)"
+  set_service_lifecycle_state "timeout" "$PROFILE" "$stdout_path" "$stderr_path" "Health endpoint nije postao dostupan u roku od 180 sekundi."
+) >/dev/null 2>&1 &

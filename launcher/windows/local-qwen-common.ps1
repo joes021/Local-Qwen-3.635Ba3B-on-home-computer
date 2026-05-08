@@ -123,9 +123,13 @@ function Get-AppVersion {
 
 function Get-ReleaseNotesPath {
     $root = Get-LocalQwenRoot
-    $path = Join-Path $root "docs\release-notes.txt"
-    if (Test-Path $path) {
-        return $path
+    foreach ($candidate in @(
+        (Join-Path $root "release-notes.txt"),
+        (Join-Path $root "docs\release-notes.txt")
+    )) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
     }
     return $null
 }
@@ -164,6 +168,52 @@ function Get-LogDirectory {
     $logDir = Join-Path $state.installRoot "logs"
     Ensure-Directory $logDir
     return $logDir
+}
+
+function Get-ServiceLifecyclePath {
+    $root = Get-LocalQwenRoot
+    return (Join-Path $root "state\server-lifecycle.json")
+}
+
+function Set-ServiceLifecycleState {
+    param(
+        [Parameter(Mandatory = $true)][string]$State,
+        [string]$Profile,
+        [string]$StdOut,
+        [string]$StdErr,
+        [string]$Reason
+    )
+
+    $path = Get-ServiceLifecyclePath
+    Ensure-Directory (Split-Path -Parent $path)
+    $payload = [ordered]@{
+        state = $State
+        profile = $Profile
+        stdout = $StdOut
+        stderr = $StdErr
+        reason = $Reason
+        updatedAt = (Get-Date).ToString("s")
+    }
+    $payload | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding UTF8
+}
+
+function Get-ServiceLifecycleState {
+    $path = Get-ServiceLifecyclePath
+    if (Test-Path $path) {
+        try {
+            return Get-Content -Raw $path | ConvertFrom-Json
+        } catch {
+        }
+    }
+
+    return [pscustomobject]@{
+        state = "inactive"
+        profile = $null
+        stdout = $null
+        stderr = $null
+        reason = $null
+        updatedAt = $null
+    }
 }
 
 function Get-LatestLlamaLogs {
@@ -538,6 +588,22 @@ function Get-LatestReleaseInfo {
         "--repo", (Get-GitHubRepositorySlug),
         "--current-version", $currentVersion
     )
+}
+
+function Get-EffectiveServiceStatus {
+    $health = Test-LlamaHealth
+    $lifecycle = Get-ServiceLifecycleState
+    $summary = Invoke-RuntimeEngineJson -Arguments @(
+        "service-status",
+        "--has-health", ([string]$health).ToLower(),
+        "--lifecycle-state", ([string]$lifecycle.state)
+    )
+
+    return [pscustomobject]@{
+        Health = $health
+        Lifecycle = $lifecycle
+        Summary = $summary
+    }
 }
 
 function Get-OnboardingChecklist {

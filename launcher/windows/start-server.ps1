@@ -106,9 +106,15 @@ $stdoutLog = Join-Path $logDir "llama-$Profile-$stamp.out.log"
 $stderrLog = Join-Path $logDir "llama-$Profile-$stamp.err.log"
 
 Get-Process llama-server -ErrorAction SilentlyContinue | Stop-Process -Force
+Set-ServiceLifecycleState -State "starting" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "llama.cpp startup requested"
 
 if ($Foreground) {
     & $serverExe @args
+    if ($LASTEXITCODE -eq 0) {
+        Set-ServiceLifecycleState -State "active" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Foreground process exited cleanly."
+    } else {
+        Set-ServiceLifecycleState -State "failed" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Foreground process exited with code $LASTEXITCODE."
+    }
     exit $LASTEXITCODE
 }
 
@@ -123,10 +129,12 @@ do {
 } until ((Get-Date) -ge $deadline)
 
 if (Test-LlamaHealth) {
+    Set-ServiceLifecycleState -State "active" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Health endpoint returned OK."
     Write-Host "llama.cpp je pokrenut na http://127.0.0.1:$($state.port)"
     Write-Host "Profil: $Profile"
     Write-Host "Model: $modelPath"
 } else {
-    Write-Host "Pokretanje nije potvrđeno u roku od $WaitSeconds sekundi. Pogledaj log:"
+    Set-ServiceLifecycleState -State "timeout" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Health endpoint nije postao dostupan u roku od $WaitSeconds sekundi."
+    Write-Host "Pokretanje nije potvrdjeno u roku od $WaitSeconds sekundi. Pogledaj log:"
     Write-Host $stderrLog
 }

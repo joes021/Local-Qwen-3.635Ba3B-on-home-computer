@@ -44,6 +44,8 @@ The current Windows installer now handles:
 - shared agent risk audit
 - onboarding checklist view
 - guided next-action workflow
+- lifecycle-aware service state that distinguishes `inactive`, `starting / warming`, and `failed`
+- live Windows diagnostics tab and Linux diagnostics view tied to the same shared status engine
 
 Recommended mental model for Windows install order:
 
@@ -121,6 +123,8 @@ It currently handles:
 - shared agent risk audit
 - onboarding checklist view
 - guided next-action workflow
+- lifecycle-aware service state that distinguishes `inactive`, `starting / warming`, and `failed`
+- Linux control center diagnostics output based on the same shared status engine used by Windows
 
 If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
 

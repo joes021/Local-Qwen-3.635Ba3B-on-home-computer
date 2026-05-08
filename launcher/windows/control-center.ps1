@@ -286,6 +286,11 @@ $logsTab.Text = "Logovi"
 $logsTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $tabs.TabPages.Add($logsTab)
 
+$diagnosticsTab = New-Object System.Windows.Forms.TabPage
+$diagnosticsTab.Text = "Diagnostics"
+$diagnosticsTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$tabs.TabPages.Add($diagnosticsTab)
+
 $settingsPanel = New-Object System.Windows.Forms.Panel
 $settingsPanel.Location = New-Object System.Drawing.Point(0, 0)
 $settingsPanel.Size = New-Object System.Drawing.Size(698, 556)
@@ -359,6 +364,42 @@ $logsContent.ScrollBars = "Vertical"
 $logsContent.ReadOnly = $true
 $logsContent.BackColor = [System.Drawing.Color]::White
 $logsTab.Controls.Add($logsContent)
+
+$diagnosticsLabel = New-Object System.Windows.Forms.Label
+$diagnosticsLabel.Text = "Zivi pregled stanja i odluka sistema"
+$diagnosticsLabel.Location = New-Object System.Drawing.Point(18, 16)
+$diagnosticsLabel.Size = New-Object System.Drawing.Size(320, 22)
+$diagnosticsTab.Controls.Add($diagnosticsLabel)
+
+$refreshDiagnosticsButton = New-Object System.Windows.Forms.Button
+$refreshDiagnosticsButton.Text = "Osvezi diagnostics"
+$refreshDiagnosticsButton.Location = New-Object System.Drawing.Point(408, 12)
+$refreshDiagnosticsButton.Size = New-Object System.Drawing.Size(128, 30)
+$diagnosticsTab.Controls.Add($refreshDiagnosticsButton)
+
+$exportDiagnosticsButton = New-Object System.Windows.Forms.Button
+$exportDiagnosticsButton.Text = "Export bundle"
+$exportDiagnosticsButton.Location = New-Object System.Drawing.Point(542, 12)
+$exportDiagnosticsButton.Size = New-Object System.Drawing.Size(124, 30)
+$diagnosticsTab.Controls.Add($exportDiagnosticsButton)
+
+$diagnosticsMeta = New-Object System.Windows.Forms.TextBox
+$diagnosticsMeta.Location = New-Object System.Drawing.Point(18, 48)
+$diagnosticsMeta.Size = New-Object System.Drawing.Size(648, 112)
+$diagnosticsMeta.Multiline = $true
+$diagnosticsMeta.ScrollBars = "Vertical"
+$diagnosticsMeta.ReadOnly = $true
+$diagnosticsMeta.BackColor = [System.Drawing.Color]::White
+$diagnosticsTab.Controls.Add($diagnosticsMeta)
+
+$diagnosticsContent = New-Object System.Windows.Forms.TextBox
+$diagnosticsContent.Location = New-Object System.Drawing.Point(18, 170)
+$diagnosticsContent.Size = New-Object System.Drawing.Size(648, 350)
+$diagnosticsContent.Multiline = $true
+$diagnosticsContent.ScrollBars = "Vertical"
+$diagnosticsContent.ReadOnly = $true
+$diagnosticsContent.BackColor = [System.Drawing.Color]::White
+$diagnosticsTab.Controls.Add($diagnosticsContent)
 
 $onboardingTitle = New-Object System.Windows.Forms.Label
 $onboardingTitle.Text = "Prvi start i provera"
@@ -521,16 +562,29 @@ function Refresh-LaunchStatus {
     $latest = Get-Settings
     $plan = Get-EffectiveServerPlan -Profile ([string]$latest.profile)
     $selectedModel = Get-ModelMetadata
-    $recommendation = Get-RecommendationBundle
-    if (Test-LlamaHealth) {
-        $serverStatus.Text = "Server status: AKTIVAN na $(Get-LlamaHealthUrl)"
-        $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
-    } else {
-        $serverStatus.Text = "Server status: NIJE aktivan"
-        $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+    $statusBundle = Get-EffectiveServiceStatus
+    $summaryState = [string]$statusBundle.Summary.state
+    $reason = [string]$statusBundle.Summary.reason
+    switch ($summaryState) {
+        "active" {
+            $serverStatus.Text = "Server status: AKTIVAN na $(Get-LlamaHealthUrl)"
+            $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        }
+        "warming" {
+            $serverStatus.Text = "Server status: STARTING / WARMING - servis se jos podize"
+            $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
+        }
+        "failed" {
+            $serverStatus.Text = "Server status: START NIJE USPEO - proveri diagnostics i logove"
+            $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        }
+        default {
+            $serverStatus.Text = "Server status: NIJE aktivan"
+            $serverStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        }
     }
 
-    $profileNote.Text = "Model: $($selectedModel.id) | Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps)"
+    $profileNote.Text = "Model: $($selectedModel.id) | Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps) | Lifecycle: $summaryState$(if ($reason) { ' - ' + $reason } else { '' })"
     $hardwareBox.Text = Format-ServerPlan -Plan $plan
     if ($modelCombo) {
         $selectedIndex = 0
@@ -542,6 +596,57 @@ function Refresh-LaunchStatus {
         }
         $modelCombo.SelectedIndex = $selectedIndex
     }
+}
+
+function Refresh-DiagnosticsView {
+    $statusBundle = Get-EffectiveServiceStatus
+    $latestLogs = Get-LatestLlamaLogs
+    $latestRelease = Get-LatestReleaseInfo
+    $onboarding = Get-OnboardingChecklist
+    $nextAction = Get-NextActionRecommendation
+    $state = Get-InstallState
+    $settings = Get-Settings
+    $selectedModel = Get-ModelMetadata
+
+    $metaLines = @(
+        "Version: v$(Get-AppVersion)",
+        "Lifecycle: $($statusBundle.Lifecycle.state)",
+        "Effective state: $($statusBundle.Summary.state)",
+        "Reason: $($statusBundle.Summary.reason)",
+        "Health: $(if ($statusBundle.Health) { 'ok' } else { 'not-ready' })",
+        "Profile: $($settings.profile)",
+        "Model: $($selectedModel.id)",
+        "Port: $($state.port)",
+        "OpenCode config: $(Get-OpenCodeConfigPath)"
+    )
+    $diagnosticsMeta.Text = $metaLines -join [Environment]::NewLine
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("Latest release") | Out-Null
+    $lines.Add("Current: v$(Get-AppVersion)") | Out-Null
+    $lines.Add("GitHub latest: $($latestRelease.latestVersion)") | Out-Null
+    $lines.Add("Update available: $(if ($latestRelease.updateAvailable) { 'da' } else { 'ne' })") | Out-Null
+    $lines.Add("") | Out-Null
+    $lines.Add("Lifecycle details") | Out-Null
+    $lines.Add("Updated: $($statusBundle.Lifecycle.updatedAt)") | Out-Null
+    $lines.Add("Stdout: $($statusBundle.Lifecycle.stdout)") | Out-Null
+    $lines.Add("Stderr: $($statusBundle.Lifecycle.stderr)") | Out-Null
+    $lines.Add("") | Out-Null
+    $lines.Add("Onboarding") | Out-Null
+    $lines.Add("Ready: $(if ($onboarding.ready) { 'da' } else { 'ne' })") | Out-Null
+    foreach ($step in $onboarding.steps) {
+        $lines.Add("- $($step.title): $($step.status)") | Out-Null
+    }
+    $lines.Add("") | Out-Null
+    $lines.Add("Next action") | Out-Null
+    $lines.Add("$($nextAction.title)") | Out-Null
+    $lines.Add("$($nextAction.reason)") | Out-Null
+    $lines.Add("") | Out-Null
+    $lines.Add("Logs") | Out-Null
+    $lines.Add("STDOUT: $(if ($latestLogs.StdOut) { $latestLogs.StdOut } else { 'nema' })") | Out-Null
+    $lines.Add("STDERR: $(if ($latestLogs.StdErr) { $latestLogs.StdErr } else { 'nema' })") | Out-Null
+    $lines.Add("Install report: $(if ($latestLogs.InstallReport) { $latestLogs.InstallReport } else { 'nema' })") | Out-Null
+    $diagnosticsContent.Text = $lines -join [Environment]::NewLine
 }
 
 function Show-AboutDialog {
@@ -603,6 +708,7 @@ function Start-LlamaBackground {
         "Pokrecem llama.cpp u pozadini za profil '$Profile'...",
         "Server ce se sam potvrditi cim /health postane dostupan."
     )
+    Set-ServiceLifecycleState -State "starting" -Profile $Profile -Reason "Control Center je pokrenuo start u pozadini."
     Start-Process -FilePath "powershell.exe" -ArgumentList @(
         "-ExecutionPolicy", "Bypass",
         "-File", $startServerScript,
@@ -614,6 +720,7 @@ function Start-LlamaBackground {
         Write-LaunchMessage @($result)
     }
     Refresh-LaunchStatus
+    Refresh-DiagnosticsView
 }
 
 $startBalanced = New-Object System.Windows.Forms.Button
@@ -1203,6 +1310,20 @@ $diagnosticsButton.Add_Click({
     try {
         $result = & powershell.exe -ExecutionPolicy Bypass -File $exportDiagnosticsScript 2>&1
         Write-LaunchMessage @($result)
+        Refresh-DiagnosticsView
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$refreshDiagnosticsButton.Add_Click({
+    Refresh-DiagnosticsView
+    Write-LaunchMessage @("Diagnostics pregled je osvezen.")
+})
+$exportDiagnosticsButton.Add_Click({
+    try {
+        $result = & powershell.exe -ExecutionPolicy Bypass -File $exportDiagnosticsScript 2>&1
+        Write-LaunchMessage @($result)
+        Refresh-DiagnosticsView
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -1224,6 +1345,7 @@ $refreshTimer = New-Object System.Windows.Forms.Timer
 $refreshTimer.Interval = 3000
 $refreshTimer.Add_Tick({
     Refresh-LaunchStatus
+    Refresh-DiagnosticsView
 })
 $refreshTimer.Start()
 
@@ -1231,9 +1353,11 @@ Refresh-LaunchStatus
 Refresh-LogsView
 Refresh-AgentAudit
 Refresh-OnboardingView
+Refresh-DiagnosticsView
 
 $form.Add_Shown({
-    if (-not (Test-LlamaHealth)) {
+    $effectiveStatus = Get-EffectiveServiceStatus
+    if ($effectiveStatus.Summary.state -eq "inactive" -or $effectiveStatus.Summary.state -eq "failed") {
         try {
             $profile = [string](Get-Settings).profile
             Write-LaunchMessage @("Control Center je otvoren. Auto-start llama.cpp za profil '$profile'.")
@@ -1241,6 +1365,8 @@ $form.Add_Shown({
         } catch {
             Write-LaunchMessage @($_.Exception.Message)
         }
+    } elseif ($effectiveStatus.Summary.state -eq "warming") {
+        Write-LaunchMessage @("llama.cpp je vec u STARTING / WARMING stanju. Cekam da health postane dostupan.")
     } else {
         Write-LaunchMessage @("llama.cpp je vec aktivan.")
     }

@@ -27,6 +27,59 @@ get_settings_path() {
   echo "$(get_local_qwen_root)/state/settings.json"
 }
 
+get_service_lifecycle_path() {
+  echo "$(get_local_qwen_root)/state/server-lifecycle.json"
+}
+
+set_service_lifecycle_state() {
+  local lifecycle_state="$1"
+  local profile="${2:-}"
+  local stdout_path="${3:-}"
+  local stderr_path="${4:-}"
+  local reason="${5:-}"
+  local lifecycle_path
+  lifecycle_path="$(get_service_lifecycle_path)"
+  mkdir -p "$(dirname "$lifecycle_path")"
+  python3 - <<'PY' "$lifecycle_path" "$lifecycle_state" "$profile" "$stdout_path" "$stderr_path" "$reason"
+import json, sys, time
+path, state, profile, stdout_path, stderr_path, reason = sys.argv[1:7]
+payload = {
+    "state": state,
+    "profile": profile or None,
+    "stdout": stdout_path or None,
+    "stderr": stderr_path or None,
+    "reason": reason or None,
+    "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False, indent=2)
+PY
+}
+
+get_service_lifecycle_json() {
+  local lifecycle_path
+  lifecycle_path="$(get_service_lifecycle_path)"
+  python3 - <<'PY' "$lifecycle_path"
+import json, os, sys
+path = sys.argv[1]
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            print(json.dumps(json.load(f)))
+            raise SystemExit(0)
+    except Exception:
+        pass
+print(json.dumps({
+    "state": "inactive",
+    "profile": None,
+    "stdout": None,
+    "stderr": None,
+    "reason": None,
+    "updatedAt": None,
+}))
+PY
+}
+
 run_runtime_engine_json() {
   local script_path
   script_path="$(get_runtime_engine_path)"
@@ -122,6 +175,22 @@ get_agent_audit_json() {
   local capability_mode="$2"
   local working_folder="$3"
   run_runtime_engine_json agent-audit --security-mode "$security_mode" --capability-mode "$capability_mode" --working-folder "$working_folder"
+}
+
+get_effective_service_status_json() {
+  local lifecycle_json has_health lifecycle_state
+  lifecycle_json="$(get_service_lifecycle_json)"
+  if test_llama_health; then
+    has_health="true"
+  else
+    has_health="false"
+  fi
+  lifecycle_state="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("state", "inactive"))
+PY
+)"
+  run_runtime_engine_json service-status --has-health "$has_health" --lifecycle-state "$lifecycle_state"
 }
 
 model_file_looks_complete() {

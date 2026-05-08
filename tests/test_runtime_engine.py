@@ -160,6 +160,54 @@ class RuntimeEngineTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["actionId"], "repair-install")
 
+    def test_service_status_reports_warming_when_starting_without_health(self):
+        code, stdout, stderr = run_runtime_command(
+            "service-status",
+            "--has-health",
+            "false",
+            "--lifecycle-state",
+            "starting",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["effectiveState"], "warming")
+
+    def test_service_status_reports_active_when_health_is_true(self):
+        code, stdout, stderr = run_runtime_command(
+            "service-status",
+            "--has-health",
+            "true",
+            "--lifecycle-state",
+            "starting",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["effectiveState"], "active")
+
+    def test_service_status_reports_failed_for_timeout(self):
+        code, stdout, stderr = run_runtime_command(
+            "service-status",
+            "--has-health",
+            "false",
+            "--lifecycle-state",
+            "timeout",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["effectiveState"], "failed")
+
+    def test_service_status_reports_inactive_without_health_or_lifecycle(self):
+        code, stdout, stderr = run_runtime_command(
+            "service-status",
+            "--has-health",
+            "false",
+            "--lifecycle-state",
+            "inactive",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["effectiveState"], "inactive")
+
 
 if __name__ == "__main__":
     unittest.main()

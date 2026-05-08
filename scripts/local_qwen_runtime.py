@@ -308,6 +308,45 @@ def command_next_action(args: argparse.Namespace) -> int:
     return 0
 
 
+def summarize_service_status(has_health: bool, lifecycle_state: str) -> dict:
+    if has_health:
+        return {
+            "state": "active",
+            "effectiveState": "active",
+            "title": "AKTIVAN",
+            "reason": "Health endpoint odgovara i server je spreman.",
+        }
+    if lifecycle_state in {"starting", "warming"}:
+        return {
+            "state": "warming",
+            "effectiveState": "warming",
+            "title": "STARTING / WARMING",
+            "reason": "Server se jos podize i model se ucitava u pozadini.",
+        }
+    if lifecycle_state in {"failed", "timeout"}:
+        return {
+            "state": "failed",
+            "effectiveState": "failed",
+            "title": "FAILED",
+            "reason": "Poslednji start nije potvrdjen ili je eksplicitno pao.",
+        }
+    return {
+        "state": "inactive",
+        "effectiveState": "inactive",
+        "title": "NIJE AKTIVAN",
+        "reason": "Nema health potvrde i nema aktivnog warmup/start lifecycle signala.",
+    }
+
+
+def command_service_status(args: argparse.Namespace) -> int:
+    payload = summarize_service_status(
+        has_health=parse_bool(args.has_health),
+        lifecycle_state=args.lifecycle_state,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Shared runtime helper for Local Qwen installers and launchers.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -347,6 +386,11 @@ def build_parser() -> argparse.ArgumentParser:
     next_action.add_argument("--has-model", required=True)
     next_action.add_argument("--has-opencode-config", required=True)
     next_action.set_defaults(func=command_next_action)
+
+    service_status = subparsers.add_parser("service-status")
+    service_status.add_argument("--has-health", required=True)
+    service_status.add_argument("--lifecycle-state", required=True)
+    service_status.set_defaults(func=command_service_status)
 
     return parser
 
