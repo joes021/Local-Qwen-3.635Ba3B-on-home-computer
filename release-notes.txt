@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.9
+- Windows Control Center sada startuje sa laganim statusom i placeholder prikazima, a teze tabove ucitava tek kada ih korisnik stvarno otvori
+- Prozor je ponovo normalno sizeable/maximizable, pa moze da se lakse snap-uje i rasporedi u shared/split screen layout
+
 v2.1.8
 - Windows Control Center timer sada radi samo lagani status refresh, bez stalnog ponovnog izracunavanja model kataloga i hardverskog plana na UI thread-u
 - Ovo dodatno smanjuje sansu da prozor ostane u trajnom busy/app-starting utisku dok je mis iznad njega

@@ -7,6 +7,7 @@ $root = Get-LocalQwenRoot
 $state = Get-InstallState
 $script:LatestReleaseCache = $null
 $script:LatestReleaseCacheAt = $null
+$script:ModelUiLoaded = $false
 
 $configureSettingsScript = Join-Path $PSScriptRoot "configure-settings.ps1"
 $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
@@ -221,9 +222,9 @@ function Load-AgentMeta {
 
 $settings = Get-Settings
 $agentMeta = Load-AgentMeta
-$modelCatalog = @(Get-ModelCatalog)
-$currentModelMeta = Get-ModelMetadata
-$recommendationBundle = Get-RecommendationBundle
+$modelCatalog = @()
+$currentModelMeta = [pscustomobject]@{ id = [string]$state.modelId }
+$recommendationBundle = $null
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local Qwen Home Computer v$(Get-AppVersion)"
@@ -232,7 +233,8 @@ $form.Size = New-Object System.Drawing.Size(760, 720)
 $form.MinimumSize = New-Object System.Drawing.Size(760, 720)
 $form.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 251)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$form.MaximizeBox = $false
+$form.MaximizeBox = $true
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
 
 if (Test-Path $iconPath) {
     $form.Icon = New-Object System.Drawing.Icon($iconPath)
@@ -728,6 +730,36 @@ function Refresh-ThroughputView {
     ) -join [Environment]::NewLine
 }
 
+function Ensure-ModelUiState {
+    if ($script:ModelUiLoaded) {
+        return
+    }
+
+    $modelCatalog = @(Get-ModelCatalog)
+    $currentModelMeta = Get-ModelMetadata
+    $recommendationBundle = Get-RecommendationBundle
+    $script:ModelUiLoaded = $true
+
+    if ($modelCombo) {
+        $modelCombo.Items.Clear()
+        foreach ($item in $modelCatalog) {
+            [void]$modelCombo.Items.Add("$($item.label) | $($item.approxSizeGiB) GiB")
+        }
+
+        $initialModelIndex = 0
+        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+            if ($modelCatalog[$i].id -eq $currentModelMeta.id) {
+                $initialModelIndex = $i
+                break
+            }
+        }
+
+        if ($modelCombo.Items.Count -gt 0) {
+            $modelCombo.SelectedIndex = $initialModelIndex
+        }
+    }
+}
+
 function Show-AboutDialog {
     $aboutForm = New-Object System.Windows.Forms.Form
     $aboutForm.Text = "About"
@@ -901,14 +933,6 @@ $modelCombo.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 foreach ($item in $modelCatalog) {
     [void]$modelCombo.Items.Add("$($item.label) | $($item.approxSizeGiB) GiB")
 }
-$initialModelIndex = 0
-for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
-    if ($modelCatalog[$i].id -eq $currentModelMeta.id) {
-        $initialModelIndex = $i
-        break
-    }
-}
-$modelCombo.SelectedIndex = $initialModelIndex
 $settingsPanel.Controls.Add($modelCombo)
 
 $downloadModelButton = New-Object System.Windows.Forms.Button
@@ -1119,16 +1143,19 @@ $autoRadio.Add_CheckedChanged({ if ($autoRadio.Checked) { Refresh-AgentAudit } }
 $folderBox.Add_TextChanged({ Refresh-AgentAudit })
 
 $resetSettingsButton.Add_Click({
+    Ensure-ModelUiState
     $contextRow.Track.Value = 3
     $outputRow.Numeric.Value = 8192
     $buildRow.Numeric.Value = 120
     $planRow.Numeric.Value = 80
     $generalRow.Numeric.Value = 100
     $exploreRow.Numeric.Value = 60
-    for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
-        if ($modelCatalog[$i].id -eq $recommendationBundle.recommendedModel.id) {
-            $modelCombo.SelectedIndex = $i
-            break
+    if ($recommendationBundle) {
+        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+            if ($modelCatalog[$i].id -eq $recommendationBundle.recommendedModel.id) {
+                $modelCombo.SelectedIndex = $i
+                break
+            }
         }
     }
     Write-LaunchMessage @("Vracene preporucene vrednosti u formi. Klikni 'Sacuvaj podesavanja' da postanu aktivne.")
@@ -1136,6 +1163,7 @@ $resetSettingsButton.Add_Click({
 
 $saveSettingsButton.Add_Click({
     try {
+        Ensure-ModelUiState
         $contextValue = $contextRow.Presets[$contextRow.Track.Value]
         $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
         if ($selectedModel) {
@@ -1434,12 +1462,28 @@ $refreshTimer.Add_Tick({
 })
 $refreshTimer.Start()
 
-Refresh-LaunchStatus
-Refresh-LogsView
-Refresh-AgentAudit
-Refresh-OnboardingView
-Refresh-DiagnosticsView
-Refresh-ThroughputView
+Refresh-LaunchStatus -Lightweight
+$hardwareBox.Text = "Hardverski plan ce se ucitati na zahtev ili posle prvog punog refresh-a."
+$logsContent.Text = "Logovi ce se ucitati kada otvoris tab ili kliknes osvezavanje."
+$onboardingBox.Text = "Onboarding pregled ce se ucitati kada otvoris tab ili kliknes osvezavanje."
+$nextActionBox.Text = "Sledeci korak ce se ucitati kada otvoris Onboarding tab."
+$diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
+$diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
+$throughputBox.Text = "Benchmark jos nije izmeren.`r`nPokreni 'Test prompt' da dobijes input/output tokene po sekundi i istoriju poslednjih merenja."
+$agentAuditLabel.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
+
+$tabs.Add_SelectedIndexChanged({
+    switch ($tabs.SelectedTab.Text) {
+        "Podesavanja" { Ensure-ModelUiState }
+        "Onboarding" { Refresh-OnboardingView }
+        "Logovi" { Refresh-LogsView }
+        "Agent" { Refresh-AgentAudit }
+        "Diagnostics" {
+            Refresh-DiagnosticsView
+            Refresh-ThroughputView
+        }
+    }
+})
 
 $startupTimer = New-Object System.Windows.Forms.Timer
 $startupTimer.Interval = 800
