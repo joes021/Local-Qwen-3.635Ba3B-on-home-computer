@@ -199,6 +199,7 @@ The Windows `Local Qwen Control Center` now includes:
 - `Pokretanje`: status sada razlikuje `AKTIVAN`, `STARTING / WARMING`, `FAILED` i `NIJE AKTIVAN`
 - `Pokretanje`: benchmark prikaz poslednjeg prompt/output throughput merenja i kratke istorije
 - `Podesavanja`: `model variant`, `context size`, `max output tokens`, `build steps`, `plan steps`, `general steps`, `explore steps`
+- `Podesavanja`: `Quick presets` za `Laptop safe`, `Coding fast`, `Long context` i `Best current setup`, sa kratkim objasnjenjem svakog preset-a
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
 - `Agent`: zivi risk audit koji pokazuje koliko je izabrani rezim opasan za sistem
 - `Onboarding`: checklist koji jasno kaze sta jos fali za prvi rad
@@ -218,6 +219,8 @@ After install, the main commands are:
 ```bash
 /home/$USER/local-qwen-home/launchers/start-opencode.sh
 ```
+
+Linux `settings-tui.sh` sada nudi iste `Quick presets` opcije kao Windows pre nego sto predje na rucni unos vrednosti.
 
 ```bash
 /home/$USER/local-qwen-home/launchers/start-server.sh

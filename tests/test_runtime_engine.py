@@ -230,6 +230,52 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertGreater(quality["diskNeededGiB"], 0)
         self.assertFalse(quality["hasEnoughDisk"])
 
+    def test_settings_presets_expose_all_quick_presets(self):
+        code, stdout, stderr = run_runtime_command(
+            "settings-presets",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        preset_ids = [item["id"] for item in payload["presets"]]
+        self.assertEqual(
+            preset_ids,
+            ["laptop-safe", "coding-fast", "long-context", "best-current-setup"],
+        )
+        best_current = next(item for item in payload["presets"] if item["id"] == "best-current-setup")
+        self.assertEqual(best_current["profile"], "speed")
+        self.assertEqual(best_current["contextSize"], 131072)
+        self.assertEqual(best_current["maxOutputTokens"], 6144)
+        self.assertIn("preporuku", best_current["summary"].lower())
+
+    def test_settings_presets_scale_best_current_setup_for_stronger_hardware(self):
+        code, stdout, stderr = run_runtime_command(
+            "settings-presets",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "24576",
+            "--ram-gib",
+            "64",
+            "--cpu-threads",
+            "24",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        best_current = next(item for item in payload["presets"] if item["id"] == "best-current-setup")
+        self.assertEqual(best_current["profile"], "video")
+        self.assertEqual(best_current["contextSize"], 262144)
+        self.assertEqual(best_current["maxOutputTokens"], 12288)
+        self.assertGreaterEqual(best_current["buildSteps"], 140)
+        self.assertIn("video", best_current["summary"].lower())
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

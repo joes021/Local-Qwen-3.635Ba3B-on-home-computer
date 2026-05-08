@@ -9,6 +9,9 @@ $script:LatestReleaseCache = $null
 $script:LatestReleaseCacheAt = $null
 $script:ModelUiLoaded = $false
 $script:VisibleModelList = @()
+$script:SettingsPresetsBundle = $null
+$script:PendingSettingsProfile = $null
+$script:SelectedSettingsPreset = $null
 
 $configureSettingsScript = Join-Path $PSScriptRoot "configure-settings.ps1"
 $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
@@ -309,6 +312,7 @@ $agentMeta = Load-AgentMeta
 $modelCatalog = @()
 $currentModelMeta = [pscustomobject]@{ id = [string]$state.modelId }
 $recommendationBundle = $null
+$script:PendingSettingsProfile = [string]$settings.profile
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local Qwen Home Computer v$(Get-AppVersion)"
@@ -1119,9 +1123,105 @@ function Ensure-ModelUiState {
     $modelCatalog = @(Get-ModelCatalog)
     $currentModelMeta = Get-ModelMetadata
     $recommendationBundle = Get-RecommendationBundle
+    $script:SettingsPresetsBundle = Get-SettingsPresetsBundle
     $script:ModelUiLoaded = $true
 
     Apply-ModelFilters
+}
+
+function Set-SettingsProfileVisuals {
+    if ($settingsProfileLabel) {
+        $settingsProfileLabel.Text = "Profil koji ce biti sacuvan: $($script:PendingSettingsProfile)"
+    }
+}
+
+function Get-SettingsPresetById {
+    param([string]$PresetId)
+
+    Ensure-ModelUiState
+    foreach ($item in @($script:SettingsPresetsBundle.presets)) {
+        if ([string]$item.id -eq [string]$PresetId) {
+            return $item
+        }
+    }
+    return $null
+}
+
+function Format-SettingsPresetText {
+    param($Preset)
+
+    if (-not $Preset) {
+        return "Izaberi quick preset da odmah dobijes i objasnjenje i spremne vrednosti za cuvanje."
+    }
+
+    return @(
+        "$($Preset.title) | profil: $($Preset.profile)",
+        "Za koga je: $($Preset.target)",
+        "Sta radi: $($Preset.summary)",
+        "Tradeoff: $($Preset.tradeoff)",
+        "Vrednosti: ctx $($Preset.contextSize) | out $($Preset.maxOutputTokens) | build $($Preset.buildSteps) | plan $($Preset.planSteps) | general $($Preset.generalSteps) | explore $($Preset.exploreSteps)"
+    ) -join [Environment]::NewLine
+}
+
+function Try-SelectVisibleModelById {
+    param([string]$ModelId)
+
+    if (-not $ModelId) {
+        return $false
+    }
+    for ($i = 0; $i -lt $script:VisibleModelList.Count; $i++) {
+        if ([string]$script:VisibleModelList[$i].id -eq [string]$ModelId) {
+            $modelCombo.SelectedIndex = $i
+            return $true
+        }
+    }
+    return $false
+}
+
+function Apply-SettingsPresetToForm {
+    param([string]$PresetId)
+
+    $preset = Get-SettingsPresetById -PresetId $PresetId
+    if (-not $preset) {
+        throw "Quick preset nije pronadjen: $PresetId"
+    }
+
+    $script:SelectedSettingsPreset = $preset
+    $script:PendingSettingsProfile = [string]$preset.profile
+
+    $contextIndex = 0
+    for ($i = 0; $i -lt $contextRow.Presets.Count; $i++) {
+        if ([int]$contextRow.Presets[$i] -eq [int]$preset.contextSize) {
+            $contextIndex = $i
+            break
+        }
+    }
+    $contextRow.Track.Value = $contextIndex
+    $outputRow.Numeric.Value = [Math]::Min([decimal]$outputRow.Numeric.Maximum, [decimal]([int]$preset.maxOutputTokens))
+    $buildRow.Numeric.Value = [Math]::Min([decimal]$buildRow.Numeric.Maximum, [decimal]([int]$preset.buildSteps))
+    $planRow.Numeric.Value = [Math]::Min([decimal]$planRow.Numeric.Maximum, [decimal]([int]$preset.planSteps))
+    $generalRow.Numeric.Value = [Math]::Min([decimal]$generalRow.Numeric.Maximum, [decimal]([int]$preset.generalSteps))
+    $exploreRow.Numeric.Value = [Math]::Min([decimal]$exploreRow.Numeric.Maximum, [decimal]([int]$preset.exploreSteps))
+
+    if ($presetInfoBox) {
+        $presetInfoBox.Text = Format-SettingsPresetText -Preset $preset
+    }
+    Set-SettingsProfileVisuals
+
+    $selectedModelApplied = $false
+    if ($preset.modelId) {
+        $selectedModelApplied = Try-SelectVisibleModelById -ModelId ([string]$preset.modelId)
+    }
+    Refresh-ModelSelectionInfo
+
+    $settingsStatus.Text = "Quick preset pripremljen: $($preset.title)"
+    $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+
+    if ($selectedModelApplied) {
+        Write-LaunchMessage @("Quick preset '$($preset.title)' je pripremljen. Klikni 'Sacuvaj podesavanja' da postane aktivan.")
+    } else {
+        Write-LaunchMessage @("Quick preset '$($preset.title)' je pripremljen. Model izbor ostaje kakav je trenutno vidljiv pod aktivnim filterima.")
+    }
 }
 
 function Apply-ModelFilters {
@@ -1769,23 +1869,67 @@ $modelInfoBox.ReadOnly = $true
 $modelInfoBox.BackColor = [System.Drawing.Color]::White
 $settingsPanel.Controls.Add($modelInfoBox)
 
-$contextRow = Add-ContextRow -Parent $settingsPanel -Y 268 -SelectedValue ([int]$settings.llama.contextSize)
-$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 356 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
-$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 444 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
-$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 532 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
-$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 620 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
-$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 708 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
+$presetGroup = New-Object System.Windows.Forms.GroupBox
+$presetGroup.Text = "Quick presets"
+$presetGroup.Location = New-Object System.Drawing.Point(18, 262)
+$presetGroup.Size = New-Object System.Drawing.Size(567, 172)
+$settingsPanel.Controls.Add($presetGroup)
+
+$settingsProfileLabel = New-Object System.Windows.Forms.Label
+$settingsProfileLabel.Location = New-Object System.Drawing.Point(16, 26)
+$settingsProfileLabel.Size = New-Object System.Drawing.Size(340, 22)
+$presetGroup.Controls.Add($settingsProfileLabel)
+
+$laptopSafeButton = New-Object System.Windows.Forms.Button
+$laptopSafeButton.Text = "Laptop safe"
+$laptopSafeButton.Location = New-Object System.Drawing.Point(16, 54)
+$laptopSafeButton.Size = New-Object System.Drawing.Size(126, 30)
+$presetGroup.Controls.Add($laptopSafeButton)
+
+$codingFastButton = New-Object System.Windows.Forms.Button
+$codingFastButton.Text = "Coding fast"
+$codingFastButton.Location = New-Object System.Drawing.Point(152, 54)
+$codingFastButton.Size = New-Object System.Drawing.Size(126, 30)
+$presetGroup.Controls.Add($codingFastButton)
+
+$longContextButton = New-Object System.Windows.Forms.Button
+$longContextButton.Text = "Long context"
+$longContextButton.Location = New-Object System.Drawing.Point(288, 54)
+$longContextButton.Size = New-Object System.Drawing.Size(126, 30)
+$presetGroup.Controls.Add($longContextButton)
+
+$bestCurrentButton = New-Object System.Windows.Forms.Button
+$bestCurrentButton.Text = "Best current setup"
+$bestCurrentButton.Location = New-Object System.Drawing.Point(424, 54)
+$bestCurrentButton.Size = New-Object System.Drawing.Size(126, 30)
+$presetGroup.Controls.Add($bestCurrentButton)
+
+$presetInfoBox = New-Object System.Windows.Forms.TextBox
+$presetInfoBox.Location = New-Object System.Drawing.Point(16, 92)
+$presetInfoBox.Size = New-Object System.Drawing.Size(534, 66)
+$presetInfoBox.Multiline = $true
+$presetInfoBox.ScrollBars = "Vertical"
+$presetInfoBox.ReadOnly = $true
+$presetInfoBox.BackColor = [System.Drawing.Color]::White
+$presetGroup.Controls.Add($presetInfoBox)
+
+$contextRow = Add-ContextRow -Parent $settingsPanel -Y 446 -SelectedValue ([int]$settings.llama.contextSize)
+$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 534 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
+$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 622 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
+$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 710 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
+$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 798 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
+$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 886 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
 
 $settingsStatus = New-Object System.Windows.Forms.Label
 $settingsStatus.Text = "Promene vaze za buduca pokretanja."
-$settingsStatus.Location = New-Object System.Drawing.Point(18, 798)
+$settingsStatus.Location = New-Object System.Drawing.Point(18, 976)
 $settingsStatus.Size = New-Object System.Drawing.Size(300, 24)
 $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $settingsPanel.Controls.Add($settingsStatus)
 
 $saveSettingsButton = New-Object System.Windows.Forms.Button
 $saveSettingsButton.Text = "Sacuvaj podesavanja"
-$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 792)
+$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 970)
 $saveSettingsButton.Size = New-Object System.Drawing.Size(155, 34)
 $saveSettingsButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $saveSettingsButton.ForeColor = [System.Drawing.Color]::White
@@ -1794,9 +1938,12 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 792)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 970)
 $resetSettingsButton.Size = New-Object System.Drawing.Size(132, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
+
+Set-SettingsProfileVisuals
+$presetInfoBox.Text = "Izaberi quick preset da odmah dobijes i objasnjenje i spremne vrednosti za cuvanje."
 
 $securityGroup = New-Object System.Windows.Forms.GroupBox
 $securityGroup.Text = "Zastita"
@@ -1970,8 +2117,28 @@ $confirmRadio.Add_CheckedChanged({ if ($confirmRadio.Checked) { Refresh-AgentAud
 $autoRadio.Add_CheckedChanged({ if ($autoRadio.Checked) { Refresh-AgentAudit } })
 $folderBox.Add_TextChanged({ Refresh-AgentAudit })
 
+$laptopSafeButton.Add_Click({
+    Apply-SettingsPresetToForm -PresetId "laptop-safe"
+})
+
+$codingFastButton.Add_Click({
+    Apply-SettingsPresetToForm -PresetId "coding-fast"
+})
+
+$longContextButton.Add_Click({
+    Apply-SettingsPresetToForm -PresetId "long-context"
+})
+
+$bestCurrentButton.Add_Click({
+    Apply-SettingsPresetToForm -PresetId "best-current-setup"
+})
+
 $resetSettingsButton.Add_Click({
     Ensure-ModelUiState
+    $script:PendingSettingsProfile = [string]$recommendationBundle.recommendedProfile
+    Set-SettingsProfileVisuals
+    $script:SelectedSettingsPreset = $null
+    $presetInfoBox.Text = "Vrati preporuku postavlja neutralne preporucene vrednosti u formu. Ako zelis objasnjen preset, izaberi jedan od quick preset dugmica iznad."
     $contextRow.Track.Value = 3
     $outputRow.Numeric.Value = 8192
     $buildRow.Numeric.Value = 120
@@ -2002,6 +2169,7 @@ $saveSettingsButton.Add_Click({
             & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
         }
         $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript `
+            -Profile $script:PendingSettingsProfile `
             -ContextSize $contextValue `
             -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
             -BuildSteps ([int]$buildRow.Numeric.Value) `

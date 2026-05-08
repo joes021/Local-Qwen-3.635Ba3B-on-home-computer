@@ -456,6 +456,129 @@ def build_recommendation(defaults: dict, gpu_mib: int | None, ram_gib: int | Non
     }
 
 
+def build_settings_presets(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
+    recommendation = build_recommendation(defaults, gpu_mib, ram_gib, cpu_threads)
+    recommended_profile = str(recommendation.get("recommendedProfile") or "balanced")
+    recommended_model = recommendation.get("recommendedModel") or {}
+    recommended_model_label = str(recommended_model.get("label") or "trenutna preporuka")
+    recommended_model_id = str(recommended_model.get("id") or "")
+    defaults_steps = defaults.get("opencode", {}).get("steps", {})
+    default_build = int(defaults_steps.get("build", 120) or 120)
+    default_plan = int(defaults_steps.get("plan", 80) or 80)
+    default_general = int(defaults_steps.get("general", 100) or 100)
+    default_explore = int(defaults_steps.get("explore", 60) or 60)
+
+    strong_hardware = bool((gpu_mib or 0) >= 16384 or (ram_gib or 0) >= 32)
+    medium_hardware = bool((gpu_mib or 0) >= 8192 or (ram_gib or 0) >= 24)
+
+    best_current_context = int(defaults.get("profiles", {}).get(recommended_profile, {}).get("contextSize", 262144) or 262144)
+    best_current_output = 8192
+    best_current_build = default_build
+    best_current_plan = default_plan
+    best_current_general = default_general
+    best_current_explore = default_explore
+    best_current_summary = f"Prati trenutnu preporuku za ovu masinu: profil '{recommended_profile}' i model '{recommended_model_label}'."
+
+    if recommended_profile == "speed":
+        best_current_context = 131072
+        best_current_output = 6144
+        best_current_build = 120
+        best_current_plan = 80
+        best_current_general = 100
+        best_current_explore = 60
+    elif recommended_profile == "balanced":
+        best_current_context = 262144
+        best_current_output = 8192
+        best_current_build = 130
+        best_current_plan = 90
+        best_current_general = 110
+        best_current_explore = 70
+    elif recommended_profile == "video":
+        best_current_context = 262144
+        best_current_output = 12288
+        best_current_build = 150
+        best_current_plan = 100
+        best_current_general = 120
+        best_current_explore = 80
+        best_current_summary = f"Prati video-klasu preporuke za ovu masinu i koristi agresivniji preset uz model '{recommended_model_label}'."
+
+    long_context_profile = "video" if strong_hardware else "balanced"
+    long_context_context = 327680 if strong_hardware else 262144
+    long_context_output = 12288 if strong_hardware else 8192
+
+    presets = [
+        {
+            "id": "laptop-safe",
+            "title": "Laptop safe",
+            "profile": "speed",
+            "contextSize": 65536 if not medium_hardware else 131072,
+            "maxOutputTokens": 4096 if not medium_hardware else 6144,
+            "buildSteps": 80,
+            "planSteps": 60,
+            "generalSteps": 80,
+            "exploreSteps": 50,
+            "target": "Slabiji laptop ili masina gde zelis najmanji termalni i VRAM pritisak.",
+            "summary": "Najstabilniji preset za tisi i sigurniji rad kada je prioritet da sve radi bez naprezanja.",
+            "tradeoff": "Manji context i kraci izlaz nego kod jacih presetova.",
+            "modelId": recommended_model_id,
+        },
+        {
+            "id": "coding-fast",
+            "title": "Coding fast",
+            "profile": "speed",
+            "contextSize": 131072,
+            "maxOutputTokens": 6144,
+            "buildSteps": 140,
+            "planSteps": 100,
+            "generalSteps": 110,
+            "exploreSteps": 80,
+            "target": "Brzi dnevni coding tok za OpenCode i agentic rad na lokalnoj masini.",
+            "summary": "Naglasak je na brzom odzivu i jacem code-oriented agent ritmu uz speed profil.",
+            "tradeoff": "Manje prostora za long-context zadatke nego kod context-heavy presetova.",
+            "modelId": "qwen2.5-coder-7b-instruct-q5_k_m.gguf",
+        },
+        {
+            "id": "long-context",
+            "title": "Long context",
+            "profile": long_context_profile,
+            "contextSize": long_context_context,
+            "maxOutputTokens": long_context_output,
+            "buildSteps": 120 if not strong_hardware else 140,
+            "planSteps": 90 if not strong_hardware else 100,
+            "generalSteps": 110 if not strong_hardware else 120,
+            "exploreSteps": 70 if not strong_hardware else 80,
+            "target": "Sesije gde ti je prioritet veci context i duzi kontinuitet rada.",
+            "summary": "Podize context sto vise ima smisla za ovu klasu hardvera, uz oprezniji output balans.",
+            "tradeoff": "Vise memorijskog pritiska i potencijalno sporiji odziv od coding-fast preset-a.",
+            "modelId": recommended_model_id,
+        },
+        {
+            "id": "best-current-setup",
+            "title": "Best current setup",
+            "profile": recommended_profile,
+            "contextSize": best_current_context,
+            "maxOutputTokens": best_current_output,
+            "buildSteps": best_current_build,
+            "planSteps": best_current_plan,
+            "generalSteps": best_current_general,
+            "exploreSteps": best_current_explore,
+            "target": "Automatski prati preporuku za ovu konkretnu masinu.",
+            "summary": best_current_summary,
+            "tradeoff": "Menja se sa klasom hardvera i zato nije univerzalan preset za svaku masinu.",
+            "modelId": recommended_model_id,
+        },
+    ]
+
+    return {
+        "recommendedProfile": recommended_profile,
+        "detectedClass": recommendation["detectedClass"],
+        "reason": recommendation["reason"],
+        "hardware": recommendation["hardware"],
+        "recommendedModel": recommended_model,
+        "presets": presets,
+    }
+
+
 def command_catalog(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     print(json.dumps({"models": normalize_models(defaults)}, indent=2))
@@ -538,6 +661,13 @@ def command_model_browser(args: argparse.Namespace) -> int:
         coder_only=args.coder_only,
         verified_only=args.verified_only,
     )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_settings_presets(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    payload = build_settings_presets(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -1200,6 +1330,13 @@ def build_parser() -> argparse.ArgumentParser:
     model_browser_parser.add_argument("--coder-only", action="store_true")
     model_browser_parser.add_argument("--verified-only", action="store_true")
     model_browser_parser.set_defaults(func=command_model_browser)
+
+    settings_presets_parser = subparsers.add_parser("settings-presets")
+    settings_presets_parser.add_argument("--defaults", required=True)
+    settings_presets_parser.add_argument("--gpu-mib", type=int, default=0)
+    settings_presets_parser.add_argument("--ram-gib", type=int, default=0)
+    settings_presets_parser.add_argument("--cpu-threads", type=int, default=0)
+    settings_presets_parser.set_defaults(func=command_settings_presets)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)

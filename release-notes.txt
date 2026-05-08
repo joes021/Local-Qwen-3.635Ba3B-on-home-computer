@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.6.0
+- Windows Podesavanja tab sada ima Quick presets: Laptop safe, Coding fast, Long context i Best current setup, sa kratkim objasnjenjem sta svaki preset radi i koji tradeoff pravi
+- Best current setup sada koristi shared recommendation engine, pa Windows i Linux dobijaju isti hardverski-aware preset umesto rucno odrzavanih razlicitih vrednosti
+- Linux settings TUI sada prikazuje iste quick preset opcije pre manuelnog unosa i moze da popuni profil, context, output i OpenCode step vrednosti direktno iz shared preset payload-a
+
 v2.5.0
 - Model browser 2.0 sada prikazuje installed size, potreban dodatni disk prostor, slobodan disk i procenu da li model staje na trenutni storage
 - Dodata je procena brzine za ovu masinu i nove jasne oznake kao sto su best-starter-model, best-coding-model i best-quality-model
