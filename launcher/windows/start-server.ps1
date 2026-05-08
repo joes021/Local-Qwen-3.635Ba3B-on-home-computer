@@ -34,12 +34,26 @@ $args = @(
     "-ngl", "999",
     "-ncmoe", [string]$profileData.ncmoe,
     "-c", [string]$ctx,
-    "-ctk", [string]$profileData.cacheTypeK,
-    "-ctv", [string]$profileData.cacheTypeV,
     "-fa", "on",
     "-n", [string]$maxOutput,
     "-t", [string]$state.threads
 )
+
+$usesTurboQuant = $false
+if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
+    try {
+        $usesTurboQuant = ((Resolve-Path $serverExe).Path -eq (Resolve-Path $state.turboServerExe).Path)
+    } catch {
+        $usesTurboQuant = $false
+    }
+}
+
+if ($usesTurboQuant) {
+    $args += @(
+        "-ctk", [string]$profileData.cacheTypeK,
+        "-ctv", [string]$profileData.cacheTypeV
+    )
+}
 
 if ($state.noMmap) {
     $args += "--no-mmap"

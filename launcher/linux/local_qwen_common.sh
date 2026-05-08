@@ -70,3 +70,47 @@ test_llama_health() {
   url="$(get_health_url)"
   curl -fsS "$url" >/dev/null 2>&1
 }
+
+get_model_min_expected_bytes() {
+  local state_path defaults_path model_id
+  state_path="$(get_install_state_path)"
+  defaults_path="$(get_defaults_path)"
+  model_id="$(python3 - <<'PY' "$state_path"
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    print(json.load(f).get("modelId", ""))
+PY
+)"
+
+  python3 - <<'PY' "$defaults_path" "$model_id"
+import json, sys
+defaults_path, model_id = sys.argv[1:3]
+with open(defaults_path, 'r', encoding='utf-8') as f:
+    defaults = json.load(f)
+for item in defaults.get("modelChoices", {}).values():
+    if item.get("id") == model_id or item.get("filename") == model_id:
+        print(item.get("minExpectedBytes", 0))
+        break
+else:
+    print(0)
+PY
+}
+
+model_file_looks_complete() {
+  local path="$1"
+  local min_bytes
+  [ -f "$path" ] || return 1
+  min_bytes="$(get_model_min_expected_bytes)"
+  if [ "${min_bytes:-0}" -le 0 ]; then
+    return 0
+  fi
+
+  local size
+  size="$(python3 - <<'PY' "$path"
+import os, sys
+print(os.path.getsize(sys.argv[1]))
+PY
+)"
+
+  [ "$size" -ge "$min_bytes" ]
+}

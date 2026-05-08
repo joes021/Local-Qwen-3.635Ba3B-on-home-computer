@@ -52,7 +52,8 @@
     "recommendedWindows3060_12gb": {
       "id": "qwen36-35b-a3b-IQ2_M.gguf",
       "source": "KikoCis/Qwen3.6-35B-A3B-IQ2_M-GGUF",
-      "filename": "qwen36-35b-a3b-IQ2_M.gguf"
+      "filename": "qwen36-35b-a3b-IQ2_M.gguf",
+      "minExpectedBytes": 1000000000
     }
   },
   "turboquant": {

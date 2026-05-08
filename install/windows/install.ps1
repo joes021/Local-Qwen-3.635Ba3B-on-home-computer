@@ -238,7 +238,8 @@ function Download-RecommendedModel {
     param(
         [string]$RepoId,
         [string]$Filename,
-        [string]$TargetPath
+        [string]$TargetPath,
+        [Int64]$MinExpectedBytes = 0
     )
 
     $python = Ensure-PythonRuntime
@@ -261,6 +262,17 @@ hf_hub_download(
     Set-Content -Path $tmpPy -Value $pyCode -Encoding UTF8
     Invoke-Native $python.Command @($python.Arguments + @($tmpPy))
     Remove-Item -LiteralPath $tmpPy -Force
+
+    if (!(Test-Path $TargetPath)) {
+        throw "Model download nije proizveo ocekivani fajl: $TargetPath"
+    }
+
+    if ($MinExpectedBytes -gt 0) {
+        $downloadedSize = (Get-Item $TargetPath).Length
+        if ($downloadedSize -lt $MinExpectedBytes) {
+            throw "Model je skinut nepotpuno: $TargetPath ($downloadedSize bajtova, ocekivano najmanje $MinExpectedBytes)"
+        }
+    }
 }
 
 function Write-InstallState {
@@ -484,11 +496,12 @@ if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
     Invoke-Native npm install -g opencode-ai
 }
 
-if ((-not $SkipModelDownload) -and !(Test-Path $modelFile)) {
+if ((-not $SkipModelDownload) -and ((!(Test-Path $modelFile)) -or ((Get-Item $modelFile -ErrorAction SilentlyContinue).Length -lt [int64]$modelChoice.minExpectedBytes))) {
     Download-RecommendedModel `
         -RepoId $modelChoice.source `
         -Filename $modelChoice.filename `
-        -TargetPath $modelFile
+        -TargetPath $modelFile `
+        -MinExpectedBytes ([int64]$modelChoice.minExpectedBytes)
 }
 
 $settings = [ordered]@{

@@ -127,8 +127,14 @@ PY
 )"
 MODEL_PATH="$MODELS_DIR/$MODEL_FILENAME"
 MODEL_VENV_DIR="$STATE_DIR/model-download-venv"
+MODEL_MIN_EXPECTED_BYTES="$(python3 - <<'PY' "$DEFAULTS_PATH"
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    print(json.load(f)["modelChoices"]["recommendedWindows3060_12gb"].get("minExpectedBytes", 0))
+PY
+)"
 
-if [ "$SKIP_MODEL_DOWNLOAD" != "1" ] && [ ! -f "$MODEL_PATH" ]; then
+if [ "$SKIP_MODEL_DOWNLOAD" != "1" ] && { [ ! -f "$MODEL_PATH" ] || [ "$(stat -c%s "$MODEL_PATH" 2>/dev/null || echo 0)" -lt "$MODEL_MIN_EXPECTED_BYTES" ]; }; then
   python3 -m venv "$MODEL_VENV_DIR"
   "$MODEL_VENV_DIR/bin/python" -m pip install -U pip
   "$MODEL_VENV_DIR/bin/python" -m pip install -U huggingface_hub
@@ -138,6 +144,16 @@ import sys
 repo_id, filename, local_dir = sys.argv[1:4]
 hf_hub_download(repo_id=repo_id, filename=filename, local_dir=local_dir, local_dir_use_symlinks=False)
 PY
+
+  if [ ! -f "$MODEL_PATH" ]; then
+    echo "Model download nije proizveo ocekivani fajl: $MODEL_PATH"
+    exit 1
+  fi
+
+  if [ "$MODEL_MIN_EXPECTED_BYTES" -gt 0 ] && [ "$(stat -c%s "$MODEL_PATH")" -lt "$MODEL_MIN_EXPECTED_BYTES" ]; then
+    echo "Model je skinut nepotpuno: $MODEL_PATH"
+    exit 1
+  fi
 fi
 
 cat > "$STATE_DIR/install-state.json" <<EOF

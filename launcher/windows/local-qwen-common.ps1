@@ -120,10 +120,54 @@ function Get-LlamaServerExe {
     throw "llama-server.exe nije pronadjen ni u TurboQuant ni u upstream bin folderu."
 }
 
+function Get-ModelMetadata {
+    $state = Get-InstallState
+    $defaults = Get-Defaults
+
+    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
+        $candidate = $property.Value
+        if ($candidate.id -eq $state.modelId -or $candidate.filename -eq $state.modelId) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Test-ModelFileLooksComplete {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (!(Test-Path $Path)) {
+        return $false
+    }
+
+    $meta = Get-ModelMetadata
+    if (-not $meta) {
+        return $true
+    }
+
+    $minExpectedBytes = 0
+    if ($meta.PSObject.Properties["minExpectedBytes"] -and $meta.minExpectedBytes) {
+        $minExpectedBytes = [int64]$meta.minExpectedBytes
+    }
+
+    if ($minExpectedBytes -le 0) {
+        return $true
+    }
+
+    return ((Get-Item $Path).Length -ge $minExpectedBytes)
+}
+
 function Get-LlamaModelPath {
     $state = Get-InstallState
     if (!(Test-Path $state.modelFile)) {
         throw "Model nije pronadjen: $($state.modelFile)"
+    }
+    if (-not (Test-ModelFileLooksComplete -Path $state.modelFile)) {
+        $file = Get-Item $state.modelFile
+        $meta = Get-ModelMetadata
+        $minExpectedBytes = if ($meta -and $meta.PSObject.Properties["minExpectedBytes"]) { [int64]$meta.minExpectedBytes } else { 0 }
+        throw "Model deluje nepotpuno: $($state.modelFile) (trenutno $($file.Length) bajtova, ocekivano najmanje $minExpectedBytes)"
     }
     return $state.modelFile
 }

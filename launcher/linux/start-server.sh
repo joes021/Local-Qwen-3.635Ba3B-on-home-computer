@@ -37,12 +37,12 @@ args = [
     "-ngl", "999",
     "-ncmoe", str(profile_data["ncmoe"]),
     "-c", str(ctx),
-    "-ctk", profile_data["cacheTypeK"],
-    "-ctv", profile_data["cacheTypeV"],
     "-fa", "on",
     "-n", str(out_tokens),
     "-t", str(threads),
 ]
+if state.get("turboServerExe") and os.path.abspath(server) == os.path.abspath(state["turboServerExe"]):
+    args.extend(["-ctk", profile_data["cacheTypeK"], "-ctv", profile_data["cacheTypeV"]])
 if state.get("noMmap", True):
     args.append("--no-mmap")
 if state.get("mlock", True):
