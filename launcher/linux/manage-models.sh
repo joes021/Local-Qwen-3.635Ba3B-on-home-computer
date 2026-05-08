@@ -35,6 +35,25 @@ print(json.load(sys.stdin)["recommendedModel"]["id"])
 PY
 }
 
+get_download_candidates_for_current_machine() {
+  local gpu_mib="0" ram_gib="0" cpu_threads="0"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+  fi
+  ram_gib="$(python3 - <<'PY'
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            print(round(int(line.split()[1]) / 1024 / 1024))
+            break
+    else:
+        print(0)
+PY
+)"
+  cpu_threads="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
+  get_download_candidates_json "$gpu_mib" "$ram_gib" "$cpu_threads"
+}
+
 select_model() {
   local selected_id="$1"
   python3 - <<'PY' "$STATE_PATH" "$DEFAULTS_PATH" "$selected_id" "$MODELS_DIR" "$SETTINGS_PATH"
@@ -80,7 +99,28 @@ PY
     recommended_id="$(get_recommended_model_id)"
     echo "Aktivni model: $current_id"
     echo "Preporuceni model: $recommended_id"
-    get_model_catalog_json
+    get_download_candidates_for_current_machine | python3 - <<'PY' "$current_id" "$recommended_id"
+import json, sys
+current_id, recommended_id = sys.argv[1:3]
+payload = json.load(sys.stdin)
+print(f"Hardverska klasa: {payload.get('detectedClass')}")
+print(f"Preporucen profil: {payload.get('recommendedProfile')}")
+print()
+groups = [
+    ("Preporuceni za ovu masinu", payload.get("groups", {}).get("recommended", [])),
+    ("Moze da radi uz kompromis", payload.get("groups", {}).get("canRun", [])),
+    ("Nije preporuceno za ovu konfiguraciju", payload.get("groups", {}).get("notRecommended", [])),
+]
+for title, items in groups:
+    print(title)
+    for item in items:
+        marker = "*" if item.get("id") == current_id else "+" if item.get("id") == recommended_id else "-"
+        print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | GPU {item.get('minimumGpuMiB')}/{item.get('recommendedGpuMiB')} MiB | RAM {item.get('minimumRamGiB')} GiB | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
+        print(f"    {item.get('description')}")
+    print()
+print("* = trenutno aktivan model")
+print("+ = preporucen model za ovaj hardver")
+PY
     ;;
   use)
     [ -n "$MODEL_ID" ] || { echo "Prosledi model id."; exit 1; }

@@ -62,8 +62,31 @@ class RuntimeEngineTests(unittest.TestCase):
         payload = json.loads(stdout)
         ids = {item["id"] for item in payload["models"]}
         self.assertIn("qwen36-35b-a3b-IQ2_M.gguf", ids)
+        self.assertIn("gemma-3-4b-it-Q4_K_M.gguf", ids)
         iq2 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
         self.assertGreaterEqual(len(iq2["sources"]), 2)
+
+    def test_download_candidates_group_models_for_6gb_gpu(self):
+        code, stdout, stderr = run_runtime_command(
+            "download-candidates",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        recommended_ids = {item["id"] for item in payload["groups"]["recommended"]}
+        can_run_ids = {item["id"] for item in payload["groups"]["canRun"]}
+        not_recommended_ids = {item["id"] for item in payload["groups"]["notRecommended"]}
+        self.assertIn("qwen36-35b-a3b-IQ2_M.gguf", recommended_ids)
+        self.assertIn("qwen2.5-coder-7b-instruct-q5_k_m.gguf", recommended_ids)
+        self.assertIn("gemma-3-4b-it-Q4_K_M.gguf", can_run_ids | recommended_ids)
+        self.assertIn("Qwen3.6-35B-A3B-Q4_K_M.gguf", not_recommended_ids)
 
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(

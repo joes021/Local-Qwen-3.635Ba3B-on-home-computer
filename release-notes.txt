@@ -1,5 +1,11 @@
 Local Qwen Home Computer - recent fixes
 
+v2.3.0
+- Prosiren kurirani llama.cpp model katalog za agentic/OpenCode rad: sada ukljucuje Qwen, Qwen Coder, Gemma, Gemma 3n, Llama i DeepSeek Distill fallback varijante
+- Dodat shared download-candidates engine koji modele deli na preporucene, moze da radi uz kompromis i nije preporuceno za ovu konfiguraciju
+- Windows i Linux model manager sada prikazuju grupisane preporuke po hardveru, sa Family, Agentic i OpenCode fit signalima
+- Windows Podesavanja tab sada za izabrani model prikazuje status za ovu masinu, porodicu modela, GPU/RAM pragove i kratko objasnjenje zasto model ima ili nema smisla
+
 v2.2.3
 - Dodat stalni Quick status / Quick actions blok u vrhu Windows Control Center-a sa pregledom Server, Health, OpenCode, Model i poslednjeg throughput signala
 - Dodate su i brze akcije Start, Stop, OpenCode i Osvezi direktno u tom gornjem bloku

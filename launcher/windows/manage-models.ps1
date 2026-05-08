@@ -8,6 +8,7 @@ param(
 
 $state = Get-InstallState
 $recommendation = Get-RecommendationBundle
+$downloadCandidates = Get-DownloadCandidates
 $catalog = @(Get-ModelCatalog)
 
 if ($UseRecommended) {
@@ -30,16 +31,27 @@ if ($ModelId) {
 
 Write-Host "Trenutno izabran model: $($state.modelId)"
 Write-Host "Preporucen model za ovu masinu: $($recommendation.recommendedModel.id)"
+Write-Host "Hardverska klasa: $($downloadCandidates.detectedClass)"
+Write-Host "Preporucen profil: $($downloadCandidates.recommendedProfile)"
 Write-Host ""
-Write-Host "Katalog:"
 
-foreach ($item in $catalog) {
-    $marker = if ($item.id -eq $state.modelId) { "*" } elseif ($item.id -eq $recommendation.recommendedModel.id) { "+" } else { "-" }
-    $line = "{0} {1} | {2} GiB | min GPU {3} MiB | min RAM {4} GiB" -f $marker, $item.id, $item.approxSizeGiB, $item.recommendedGpuMiB, $item.minimumRamGiB
-    Write-Host $line
-    Write-Host "    $($item.description)"
+$groups = [ordered]@{
+    "Preporuceni za ovu masinu" = @($downloadCandidates.groups.recommended)
+    "Moze da radi uz kompromis" = @($downloadCandidates.groups.canRun)
+    "Nije preporuceno za ovu konfiguraciju" = @($downloadCandidates.groups.notRecommended)
 }
 
-Write-Host ""
+foreach ($groupName in $groups.Keys) {
+    Write-Host $groupName
+    foreach ($item in $groups[$groupName]) {
+        $marker = if ($item.id -eq $state.modelId) { "*" } elseif ($item.id -eq $recommendation.recommendedModel.id) { "+" } else { "-" }
+        $line = "{0} {1} | {2} | {3} GiB | GPU {4}/{5} MiB | RAM {6} GiB | Agentic {7}/10 | OpenCode {8}/10" -f `
+            $marker, $item.id, $item.family, $item.approxSizeGiB, $item.minimumGpuMiB, $item.recommendedGpuMiB, $item.minimumRamGiB, $item.agenticScore, $item.opencodeFit
+        Write-Host $line
+        Write-Host "    $($item.description)"
+    }
+    Write-Host ""
+}
+
 Write-Host "* = trenutno aktivan model"
 Write-Host "+ = preporucen model za ovaj hardver"

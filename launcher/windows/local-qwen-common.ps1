@@ -676,6 +676,20 @@ function Get-RecommendationBundle {
     )
 }
 
+function Get-DownloadCandidates {
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "download-candidates",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads)
+    )
+}
+
 function Get-LatestReleaseInfo {
     $currentVersion = Get-AppVersion
     return Invoke-RuntimeEngineJson -Arguments @(

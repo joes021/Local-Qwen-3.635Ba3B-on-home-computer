@@ -964,7 +964,7 @@ function Ensure-ModelUiState {
     if ($modelCombo) {
         $modelCombo.Items.Clear()
         foreach ($item in $modelCatalog) {
-            [void]$modelCombo.Items.Add("$($item.label) | $($item.approxSizeGiB) GiB")
+            [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB")
         }
 
         $initialModelIndex = 0
@@ -978,6 +978,56 @@ function Ensure-ModelUiState {
         if ($modelCombo.Items.Count -gt 0) {
             $modelCombo.SelectedIndex = $initialModelIndex
         }
+    }
+}
+
+function Refresh-ModelSelectionInfo {
+    try {
+        Ensure-ModelUiState
+        if (-not $modelCombo -or $modelCombo.SelectedIndex -lt 0) {
+            return
+        }
+
+        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        $downloadCandidates = Get-DownloadCandidates
+        $selectedFit = $null
+        $selectedGroup = "nepoznato"
+
+        foreach ($groupName in @("recommended", "canRun", "notRecommended")) {
+            foreach ($item in @($downloadCandidates.groups.$groupName)) {
+                if ($item.id -eq $selectedModel.id) {
+                    $selectedFit = $item
+                    $selectedGroup = $groupName
+                    break
+                }
+            }
+            if ($selectedFit) {
+                break
+            }
+        }
+
+        $statusText = switch ($selectedGroup) {
+            "recommended" { "preporucen za ovu masinu" }
+            "canRun" { "moze da radi uz kompromis" }
+            "notRecommended" { "nije preporucen za ovu konfiguraciju" }
+            default { "status nije poznat" }
+        }
+
+        $fitReasons = if ($selectedFit -and $selectedFit.fitReasons) {
+            (@($selectedFit.fitReasons) | Select-Object -First 3) -join " "
+        } else {
+            ""
+        }
+
+        $modelInfoBox.Text = @(
+            "Status: $statusText"
+            "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10"
+            "GPU prag: $($selectedModel.minimumGpuMiB) MiB | Preporuceni GPU: $($selectedModel.recommendedGpuMiB) MiB | RAM: $($selectedModel.minimumRamGiB) GiB"
+            "Opis: $($selectedModel.description)"
+            "$(if ($fitReasons) { 'Fit: ' + $fitReasons } else { '' })"
+        ) -join [Environment]::NewLine
+    } catch {
+        $modelInfoBox.Text = "Model info trenutno nije dostupna."
     }
 }
 
@@ -1158,7 +1208,7 @@ $modelCombo.Size = New-Object System.Drawing.Size(567, 30)
 $modelCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
 $modelCombo.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 foreach ($item in $modelCatalog) {
-    [void]$modelCombo.Items.Add("$($item.label) | $($item.approxSizeGiB) GiB")
+    [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB")
 }
 $settingsPanel.Controls.Add($modelCombo)
 
@@ -1168,23 +1218,36 @@ $downloadModelButton.Location = New-Object System.Drawing.Point(400, 78)
 $downloadModelButton.Size = New-Object System.Drawing.Size(185, 32)
 $settingsPanel.Controls.Add($downloadModelButton)
 
-$contextRow = Add-ContextRow -Parent $settingsPanel -Y 122 -SelectedValue ([int]$settings.llama.contextSize)
-$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 210 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
-$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 298 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
-$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 386 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
-$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 474 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
-$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 562 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
+$modelCombo.Add_SelectedIndexChanged({
+    Refresh-ModelSelectionInfo
+})
+
+$modelInfoBox = New-Object System.Windows.Forms.TextBox
+$modelInfoBox.Location = New-Object System.Drawing.Point(18, 122)
+$modelInfoBox.Size = New-Object System.Drawing.Size(567, 108)
+$modelInfoBox.Multiline = $true
+$modelInfoBox.ScrollBars = "Vertical"
+$modelInfoBox.ReadOnly = $true
+$modelInfoBox.BackColor = [System.Drawing.Color]::White
+$settingsPanel.Controls.Add($modelInfoBox)
+
+$contextRow = Add-ContextRow -Parent $settingsPanel -Y 244 -SelectedValue ([int]$settings.llama.contextSize)
+$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 332 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
+$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 420 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
+$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 508 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
+$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 596 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
+$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 684 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
 
 $settingsStatus = New-Object System.Windows.Forms.Label
 $settingsStatus.Text = "Promene vaze za buduca pokretanja."
-$settingsStatus.Location = New-Object System.Drawing.Point(18, 652)
+$settingsStatus.Location = New-Object System.Drawing.Point(18, 774)
 $settingsStatus.Size = New-Object System.Drawing.Size(300, 24)
 $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $settingsPanel.Controls.Add($settingsStatus)
 
 $saveSettingsButton = New-Object System.Windows.Forms.Button
 $saveSettingsButton.Text = "Sacuvaj podesavanja"
-$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 646)
+$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 768)
 $saveSettingsButton.Size = New-Object System.Drawing.Size(155, 34)
 $saveSettingsButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $saveSettingsButton.ForeColor = [System.Drawing.Color]::White
@@ -1193,7 +1256,7 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 646)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 768)
 $resetSettingsButton.Size = New-Object System.Drawing.Size(132, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
 
@@ -1385,6 +1448,7 @@ $resetSettingsButton.Add_Click({
             }
         }
     }
+    Refresh-ModelSelectionInfo
     Write-LaunchMessage @("Vracene preporucene vrednosti u formi. Klikni 'Sacuvaj podesavanja' da postanu aktivne.")
 })
 
@@ -1695,12 +1759,16 @@ $nextActionBox.Text = "Sledeci korak ce se ucitati kada otvoris Onboarding tab."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
 $throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
+$modelInfoBox.Text = "Model info ce se ucitati kada otvoris Podesavanja tab."
 $agentWarning.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 
 $tabs.Add_SelectedIndexChanged({
     switch ($tabs.SelectedTab.Text) {
-        "Podesavanja" { Ensure-ModelUiState }
+        "Podesavanja" {
+            Ensure-ModelUiState
+            Refresh-ModelSelectionInfo
+        }
         "Onboarding" { Refresh-OnboardingView }
         "Logovi" { Refresh-LogsView }
         "Agent" { Refresh-AgentAudit }

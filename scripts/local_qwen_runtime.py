@@ -18,6 +18,13 @@ def normalize_models(defaults: dict) -> list[dict]:
         item = dict(raw)
         item.setdefault("key", key)
         item.setdefault("label", item.get("id", key))
+        item.setdefault("family", "Other")
+        item.setdefault("agenticScore", 5)
+        item.setdefault("opencodeFit", 5)
+        item.setdefault("useCase", "agentic-general")
+        item.setdefault("curationLevel", "supported")
+        item.setdefault("minimumGpuMiB", item.get("recommendedGpuMiB", 0) or 0)
+        item.setdefault("primaryRecommendation", False)
         item.setdefault("sources", [])
         if item.get("source"):
             item["sources"] = [{"repo": item["source"], "filename": item["filename"]}] + item["sources"]
@@ -63,12 +70,33 @@ def choose_profile(gpu_mib: int | None) -> tuple[str, str, str]:
 def score_model(model: dict, gpu_mib: int | None, ram_gib: int | None, profile: str) -> tuple[float, list[str]]:
     score = 0.0
     reasons: list[str] = []
+    minimum_gpu = int(model.get("minimumGpuMiB", 0) or 0)
     recommended_gpu = int(model.get("recommendedGpuMiB", 0) or 0)
     minimum_ram = int(model.get("minimumRamGiB", 0) or 0)
     approx_size = float(model.get("approxSizeGiB", 0) or 0)
     preferred_profiles = set(model.get("preferredProfiles", []))
+    agentic_score = int(model.get("agenticScore", 5) or 5)
+    opencode_fit = int(model.get("opencodeFit", 5) or 5)
+    curation_level = str(model.get("curationLevel", "supported"))
+    primary_recommendation = bool(model.get("primaryRecommendation", False))
 
-    if gpu_mib and recommended_gpu:
+    score += agentic_score * 3
+    score += opencode_fit * 4
+    if primary_recommendation:
+        score += 18
+        reasons.append("Ovo je primarni preporuceni model za Local Qwen setup.")
+
+    if curation_level == "verified":
+        score += 12
+        reasons.append("Kurirani verified izbor za agentic/OpenCode rad.")
+    elif curation_level == "experimental":
+        score -= 4
+        reasons.append("Model je oznacen kao eksperimentalni izbor.")
+
+    if gpu_mib and minimum_gpu and gpu_mib < minimum_gpu:
+        score -= 60
+        reasons.append(f"GPU je ispod minimalnog praga za {model['label']}.")
+    elif gpu_mib and recommended_gpu:
         gap = gpu_mib - recommended_gpu
         if gap >= 0:
             score += 60
@@ -100,6 +128,66 @@ def score_model(model: dict, gpu_mib: int | None, ram_gib: int | None, profile: 
         score += 8 if gpu_mib and gpu_mib <= 12288 else 1
 
     return score, reasons
+
+
+def classify_download_group(model: dict, gpu_mib: int | None, ram_gib: int | None, score: float) -> tuple[str, list[str]]:
+    reasons: list[str] = []
+    minimum_gpu = int(model.get("minimumGpuMiB", 0) or 0)
+    recommended_gpu = int(model.get("recommendedGpuMiB", 0) or 0)
+    minimum_ram = int(model.get("minimumRamGiB", 0) or 0)
+    agentic_score = int(model.get("agenticScore", 5) or 5)
+    opencode_fit = int(model.get("opencodeFit", 5) or 5)
+
+    if minimum_gpu and gpu_mib and gpu_mib < minimum_gpu:
+        reasons.append("GPU je ispod minimalnog praga.")
+        return "notRecommended", reasons
+    if minimum_ram and ram_gib and ram_gib < minimum_ram:
+        reasons.append("RAM je ispod minimalnog praga.")
+        return "notRecommended", reasons
+
+    if recommended_gpu and gpu_mib and gpu_mib >= recommended_gpu and agentic_score >= 7 and opencode_fit >= 7:
+        reasons.append("Hardver i agentic/OpenCode fit su dobri za ovu masinu.")
+        return "recommended", reasons
+
+    if score >= 35:
+        reasons.append("Model moze da radi uz kompromis u brzini, kontekstu ili izlazu.")
+        return "canRun", reasons
+
+    reasons.append("Model je vidljiv radi orijentacije, ali nije preporucen za ovu konfiguraciju.")
+    return "notRecommended", reasons
+
+
+def build_download_candidates(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
+    recommendation = build_recommendation(defaults, gpu_mib, ram_gib, cpu_threads)
+    groups = {
+        "recommended": [],
+        "canRun": [],
+        "notRecommended": [],
+    }
+
+    for candidate in recommendation["candidateScores"]:
+        model = dict(candidate["model"])
+        group, extra_reasons = classify_download_group(model, gpu_mib, ram_gib, float(candidate["score"]))
+        groups[group].append(
+            {
+                **model,
+                "score": candidate["score"],
+                "fitGroup": group,
+                "fitReasons": candidate["reasons"] + extra_reasons,
+            }
+        )
+
+    for key in groups:
+        groups[key].sort(key=lambda item: float(item.get("score", 0)), reverse=True)
+
+    return {
+        "recommendedProfile": recommendation["recommendedProfile"],
+        "detectedClass": recommendation["detectedClass"],
+        "reason": recommendation["reason"],
+        "hardware": recommendation["hardware"],
+        "recommendedModel": recommendation["recommendedModel"],
+        "groups": groups,
+    }
 
 
 def build_recommendation(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
@@ -141,6 +229,13 @@ def command_catalog(args: argparse.Namespace) -> int:
 def command_recommend(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     payload = build_recommendation(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_download_candidates(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    payload = build_download_candidates(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -576,6 +671,13 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--ram-gib", type=int, default=0)
     recommend.add_argument("--cpu-threads", type=int, default=0)
     recommend.set_defaults(func=command_recommend)
+
+    download_candidates = subparsers.add_parser("download-candidates")
+    download_candidates.add_argument("--defaults", required=True)
+    download_candidates.add_argument("--gpu-mib", type=int, default=0)
+    download_candidates.add_argument("--ram-gib", type=int, default=0)
+    download_candidates.add_argument("--cpu-threads", type=int, default=0)
+    download_candidates.set_defaults(func=command_download_candidates)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)
