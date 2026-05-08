@@ -224,7 +224,7 @@ $currentModelMeta = Get-ModelMetadata
 $recommendationBundle = Get-RecommendationBundle
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Local Qwen Home Computer"
+$form.Text = "Local Qwen Home Computer v$(Get-AppVersion)"
 $form.StartPosition = "CenterScreen"
 $form.Size = New-Object System.Drawing.Size(760, 720)
 $form.MinimumSize = New-Object System.Drawing.Size(760, 720)
@@ -244,7 +244,7 @@ $title.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 14, [System.Dr
 $form.Controls.Add($title)
 
 $subtitle = New-Object System.Windows.Forms.Label
-$subtitle.Text = "Jedno mesto za pokretanje, podesavanja i agent rezim."
+$subtitle.Text = "Jedno mesto za pokretanje, podesavanja i agent rezim. Aktivna verzija: v$(Get-AppVersion)"
 $subtitle.Location = New-Object System.Drawing.Point(20, 44)
 $subtitle.Size = New-Object System.Drawing.Size(520, 22)
 $subtitle.ForeColor = [System.Drawing.Color]::FromArgb(85, 85, 85)
@@ -726,7 +726,7 @@ function Show-AboutDialog {
     $notesBox.ScrollBars = "Vertical"
     $notesBox.ReadOnly = $true
     $notesBox.BackColor = [System.Drawing.Color]::White
-    $notesBox.Text = Get-ReleaseNotesText
+    $notesBox.Text = Get-FormattedReleaseNotesText
     $aboutForm.Controls.Add($notesBox)
 
     $closeButton = New-Object System.Windows.Forms.Button

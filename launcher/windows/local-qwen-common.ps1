@@ -147,6 +147,37 @@ function Get-ReleaseNotesText {
     }
 }
 
+function Get-FormattedReleaseNotesText {
+    $raw = Get-ReleaseNotesText
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        return "Release notes nisu dostupne."
+    }
+
+    $lines = $raw -split "(`r`n|`n|`r)"
+    $formatted = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) {
+            $formatted.Add("") | Out-Null
+            continue
+        }
+
+        if ($trimmed -match '^v\d') {
+            $formatted.Add($trimmed) | Out-Null
+            continue
+        }
+
+        if ($trimmed -like '- *') {
+            $formatted.Add(("• " + $trimmed.Substring(2).Trim())) | Out-Null
+            continue
+        }
+
+        $formatted.Add($trimmed) | Out-Null
+    }
+
+    return ($formatted -join [Environment]::NewLine)
+}
+
 function Get-GitHubRepositorySlug {
     return "joes021/Local-Qwen-3.635Ba3B-on-home-computer"
 }
@@ -1095,6 +1126,30 @@ exit /b %EXITCODE%
     return $cmdPath
 }
 
+function New-HiddenVbsLauncher {
+    param(
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$VbsName,
+        [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [string]$ExtraArguments = ""
+    )
+
+    $vbsPath = Join-Path $LaunchersDir $VbsName
+    $escapedScriptName = $PsScriptName.Replace('"', '""')
+    $escapedExtraArguments = $ExtraArguments.Replace('"', '""')
+    $content = @"
+Dim shell, scriptDir, psScript, command
+Set shell = CreateObject("WScript.Shell")
+scriptDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
+psScript = scriptDir & "\$escapedScriptName"
+command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
+shell.Run command, 0, False
+"@
+
+    Set-Content -Path $vbsPath -Value $content -Encoding ASCII
+    return $vbsPath
+}
+
 function New-DesktopShortcutFile {
     param(
         [string]$ShortcutPath,
@@ -1124,13 +1179,13 @@ function Repair-DesktopShortcuts {
 
     $controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"
     $opencodeIcon = Join-Path $assetsDir "icons\opencode-local-qwen.ico"
-    $controlCenterCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "open-control-center.cmd" -PsScriptName "control-center.ps1"
+    $controlCenterVbs = New-HiddenVbsLauncher -LaunchersDir $launchersDir -VbsName "open-control-center.vbs" -PsScriptName "control-center.ps1"
     $openCodeCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "repair-install.cmd" -PsScriptName "repair-install.ps1"
     $testPromptCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "test-prompt.cmd" -PsScriptName "test-prompt.ps1"
 
-    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$controlCenterCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Control center for local Qwen + OpenCode"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk") -TargetPath "wscript.exe" -Arguments "`"$controlCenterVbs`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Control center for local Qwen + OpenCode"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "OpenCode - Local Qwen.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$openCodeCmd`"" -WorkingDirectory $launchersDir -IconLocation "$opencodeIcon,0" -Description "Launch OpenCode wired to local Qwen"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Verify Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$verifyCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Verify local Qwen installation"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Repair Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$repairCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Repair local Qwen install"

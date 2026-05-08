@@ -493,6 +493,30 @@ exit /b %EXITCODE%
     return $cmdPath
 }
 
+function Write-HiddenVbsLauncher {
+    param(
+        [Parameter(Mandatory = $true)][string]$LaunchersDir,
+        [Parameter(Mandatory = $true)][string]$VbsName,
+        [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [string]$ExtraArguments = ""
+    )
+
+    $vbsPath = Join-Path $LaunchersDir $VbsName
+    $escapedScriptName = $PsScriptName.Replace('"', '""')
+    $escapedExtraArguments = $ExtraArguments.Replace('"', '""')
+    $content = @"
+Dim shell, scriptDir, psScript, command
+Set shell = CreateObject("WScript.Shell")
+scriptDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
+psScript = scriptDir & "\$escapedScriptName"
+command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
+shell.Run command, 0, False
+"@
+
+    Set-Content -Path $vbsPath -Value $content -Encoding ASCII
+    return $vbsPath
+}
+
 function Write-DesktopShortcuts {
     param(
         [Parameter(Mandatory = $true)][string]$LaunchersDir,
@@ -504,15 +528,15 @@ function Write-DesktopShortcuts {
 
     $controlCenterIcon = Join-Path $AssetsDir "icons\control-center.ico"
     $opencodeIcon = Join-Path $AssetsDir "icons\opencode-local-qwen.ico"
-    $controlCenterCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-control-center.cmd" -PsScriptName "control-center.ps1"
+    $controlCenterVbs = Write-HiddenVbsLauncher -LaunchersDir $LaunchersDir -VbsName "open-control-center.vbs" -PsScriptName "control-center.ps1"
     $openCodeCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "repair-app-control.cmd" -PsScriptName "repair-app-control.ps1"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk") `
-        -TargetPath $env:ComSpec `
-        -Arguments "/c `"$controlCenterCmd`"" `
+        -TargetPath "wscript.exe" `
+        -Arguments "`"$controlCenterVbs`"" `
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$controlCenterIcon,0" `
         -Description "Control center for local Qwen + OpenCode"
@@ -575,6 +599,7 @@ Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination
 Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
 Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
 Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
 
 Write-InstallState `

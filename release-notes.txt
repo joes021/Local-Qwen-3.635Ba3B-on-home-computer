@@ -1,5 +1,11 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.2
+- Windows Control Center desktop launcher vise ne otvara ruzeni cmd prozor pre GUI-ja, vec koristi skriveni VBS launcher
+- About sada prikazuje uredjene bullet stavke umesto slepljenog teksta
+- Glavni prozor sada jasno pokazuje aktivnu verziju da se odmah vidi da li je stvarno ucitan novi installer
+- Windows installer sada kopira release-notes i u install root da About uvek cita najsvezije beleške
+
 v2.1.1
 - Dodat benchmark prikaz za prompt/output tokene po sekundi uz poslednje merenje i kratku istoriju
 - Windows Control Center sada prikazuje throughput u Pokretanje i Diagnostics tabu
