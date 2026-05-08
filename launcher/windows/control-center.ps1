@@ -242,6 +242,11 @@ $agentTab.Text = "Agent"
 $agentTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $tabs.TabPages.Add($agentTab)
 
+$logsTab = New-Object System.Windows.Forms.TabPage
+$logsTab.Text = "Logovi"
+$logsTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$tabs.TabPages.Add($logsTab)
+
 $settingsPanel = New-Object System.Windows.Forms.Panel
 $settingsPanel.Location = New-Object System.Drawing.Point(0, 0)
 $settingsPanel.Size = New-Object System.Drawing.Size(698, 556)
@@ -286,6 +291,36 @@ $launchOutput.BackColor = [System.Drawing.Color]::White
 $launchOutput.Text = "Ovde ce se pojavljivati status i rezultati akcija."
 $launchTab.Controls.Add($launchOutput)
 
+$logsLabel = New-Object System.Windows.Forms.Label
+$logsLabel.Text = "Centralni pregled poslednjih logova"
+$logsLabel.Location = New-Object System.Drawing.Point(18, 16)
+$logsLabel.Size = New-Object System.Drawing.Size(320, 22)
+$logsTab.Controls.Add($logsLabel)
+
+$refreshLogsButton = New-Object System.Windows.Forms.Button
+$refreshLogsButton.Text = "Osvezi logove"
+$refreshLogsButton.Location = New-Object System.Drawing.Point(538, 12)
+$refreshLogsButton.Size = New-Object System.Drawing.Size(128, 30)
+$logsTab.Controls.Add($refreshLogsButton)
+
+$logsMeta = New-Object System.Windows.Forms.TextBox
+$logsMeta.Location = New-Object System.Drawing.Point(18, 48)
+$logsMeta.Size = New-Object System.Drawing.Size(648, 88)
+$logsMeta.Multiline = $true
+$logsMeta.ScrollBars = "Vertical"
+$logsMeta.ReadOnly = $true
+$logsMeta.BackColor = [System.Drawing.Color]::White
+$logsTab.Controls.Add($logsMeta)
+
+$logsContent = New-Object System.Windows.Forms.TextBox
+$logsContent.Location = New-Object System.Drawing.Point(18, 146)
+$logsContent.Size = New-Object System.Drawing.Size(648, 374)
+$logsContent.Multiline = $true
+$logsContent.ScrollBars = "Vertical"
+$logsContent.ReadOnly = $true
+$logsContent.BackColor = [System.Drawing.Color]::White
+$logsTab.Controls.Add($logsContent)
+
 function Write-LaunchMessage {
     param([string[]]$Lines)
 
@@ -306,6 +341,8 @@ function Write-LaunchMessage {
 function Format-ServerPlan {
     param($Plan)
 
+    $hardware = Get-HardwareProfileSummary -Profile $Plan.Profile
+
     $runtime = if ($Plan.UsesTurboQuant) { "TurboQuant" } else { "Upstream fallback" }
     $gpu = if ($Plan.GpuName) { "$($Plan.GpuName) ($($Plan.GpuMemoryMiB) MiB)" } else { "GPU nije ocitan" }
     $cpu = if ($Plan.CpuName) { $Plan.CpuName } else { "CPU nije ocitan" }
@@ -321,6 +358,8 @@ function Format-ServerPlan {
         "Memorija: $ram",
         "",
         "Efektivni runtime plan",
+        "Detektovana klasa: $($hardware.DetectedClass)",
+        "Preporuceni profil: $($hardware.RecommendedProfile)",
         "Profil: $($Plan.Profile)",
         "Runtime: $runtime",
         "Server: $($Plan.ServerExe)",
@@ -333,8 +372,48 @@ function Format-ServerPlan {
         "Cache K/V: $($Plan.CacheTypeK) / $($Plan.CacheTypeV)",
         "",
         "Napomene",
-        $notes
+        $notes,
+        "",
+        "Zasto je ovo izabrano",
+        $hardware.Reason
     ) -join [Environment]::NewLine
+}
+
+function Refresh-LogsView {
+    $latest = Get-LatestLlamaLogs
+    $metaLines = @(
+        "Log folder: $($latest.LogDir)",
+        "STDOUT: $(if ($latest.StdOut) { $latest.StdOut } else { 'nema' })",
+        "STDERR: $(if ($latest.StdErr) { $latest.StdErr } else { 'nema' })",
+        "Install summary: $(if ($latest.InstallSummary) { $latest.InstallSummary } else { 'nema' })",
+        "Install report: $(if ($latest.InstallReport) { $latest.InstallReport } else { 'nema' })"
+    )
+    $logsMeta.Text = $metaLines -join [Environment]::NewLine
+
+    $parts = New-Object System.Collections.Generic.List[string]
+
+    if ($latest.StdErr) {
+        $parts.Add("===== STDERR =====") | Out-Null
+        $parts.Add((Get-Content $latest.StdErr -Raw -ErrorAction SilentlyContinue)) | Out-Null
+    }
+    if ($latest.StdOut) {
+        $parts.Add("===== STDOUT =====") | Out-Null
+        $parts.Add((Get-Content $latest.StdOut -Raw -ErrorAction SilentlyContinue)) | Out-Null
+    }
+    if ($latest.InstallSummary) {
+        $parts.Add("===== INSTALL SUMMARY =====") | Out-Null
+        $parts.Add((Get-Content $latest.InstallSummary -Raw -ErrorAction SilentlyContinue)) | Out-Null
+    }
+    if ($latest.InstallReport) {
+        $parts.Add("===== INSTALL REPORT =====") | Out-Null
+        $parts.Add((Get-Content $latest.InstallReport -Raw -ErrorAction SilentlyContinue)) | Out-Null
+    }
+
+    if ($parts.Count -eq 0) {
+        $logsContent.Text = "Nema logova za prikaz."
+    } else {
+        $logsContent.Text = ($parts -join [Environment]::NewLine + [Environment]::NewLine)
+    }
 }
 
 function Refresh-LaunchStatus {
@@ -814,6 +893,10 @@ $refreshStatus.Add_Click({
     Refresh-LaunchStatus
     Write-LaunchMessage @("Status i hardverski plan su osvezeni.")
 })
+$refreshLogsButton.Add_Click({
+    Refresh-LogsView
+    Write-LaunchMessage @("Logovi su osvezeni.")
+})
 $openFolderButton.Add_Click({
     Start-Process explorer.exe $root
     Write-LaunchMessage @("Otvoren install folder: $root")
@@ -831,6 +914,7 @@ $refreshTimer.Add_Tick({
 $refreshTimer.Start()
 
 Refresh-LaunchStatus
+Refresh-LogsView
 
 $form.Add_Shown({
     if (-not (Test-LlamaHealth)) {

@@ -130,6 +130,29 @@ function Get-OpenCodeConfigPath {
     return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
 }
 
+function Get-LogDirectory {
+    $state = Get-InstallState
+    $logDir = Join-Path $state.installRoot "logs"
+    Ensure-Directory $logDir
+    return $logDir
+}
+
+function Get-LatestLlamaLogs {
+    $logDir = Get-LogDirectory
+    $stdout = Get-ChildItem $logDir -Filter "llama-*.out.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $stderr = Get-ChildItem $logDir -Filter "llama-*.err.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $installSummary = Join-Path (Get-LocalQwenRoot) "state\install-summary.txt"
+    $installReport = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+
+    return [pscustomobject]@{
+        LogDir = $logDir
+        StdOut = if ($stdout) { $stdout.FullName } else { $null }
+        StdErr = if ($stderr) { $stderr.FullName } else { $null }
+        InstallSummary = if (Test-Path $installSummary) { $installSummary } else { $null }
+        InstallReport = if (Test-Path $installReport) { $installReport } else { $null }
+    }
+}
+
 function Ensure-Directory {
     param([string]$Path)
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
@@ -345,6 +368,41 @@ function Get-EffectiveServerPlan {
         ContextCustomized = $contextCustomized
         OutputCustomized = $outputCustomized
         AdjustmentNotes = @($adjustmentNotes)
+    }
+}
+
+function Get-HardwareProfileSummary {
+    param(
+        [ValidateSet("speed", "balanced", "video")]
+        [string]$Profile
+    )
+
+    $plan = Get-EffectiveServerPlan -Profile $Profile
+    $gpuMiB = if ($plan.GpuMemoryMiB) { [int]$plan.GpuMemoryMiB } else { 0 }
+
+    if ($gpuMiB -le 0) {
+        $class = "unknown"
+        $recommendedProfile = "balanced"
+        $reason = "GPU VRAM nije ocitan, pa sistem koristi konzervativniji fallback."
+    } elseif ($gpuMiB -le 8192) {
+        $class = "8GB-or-lower"
+        $recommendedProfile = "speed"
+        $reason = "GPU klasa do 8 GB ima najmanje VRAM prostora i najvise koristi od manjih context/output limita."
+    } elseif ($gpuMiB -le 12288) {
+        $class = "12GB-class"
+        $recommendedProfile = "balanced"
+        $reason = "GPU klasa do 12 GB je ciljana preporucena klasa za dnevni rad sa ovim setupom."
+    } else {
+        $class = "above-12GB"
+        $recommendedProfile = "video"
+        $reason = "Jaci GPU moze da nosi agresivniji profil i visi context bez istog pritiska kao 8/12 GB klasa."
+    }
+
+    return [pscustomobject]@{
+        DetectedClass = $class
+        RecommendedProfile = $recommendedProfile
+        Reason = $reason
+        EffectivePlan = $plan
     }
 }
 

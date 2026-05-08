@@ -46,6 +46,7 @@ What this version is meant to improve:
 - clearer hardware summary
 - better automatic profile recommendations
 - more transparent runtime plan selection
+- cross-platform visibility into latest runtime and install logs
 
 ## v1.5.0
 

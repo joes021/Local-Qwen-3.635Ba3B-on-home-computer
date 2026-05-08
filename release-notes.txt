@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.4.0
+- Dodat centralni pregled logova na Windows strani kroz novi Logovi tab
+- Dodat Linux show-logs launcher i hardverski pregled u TUI control centeru
+- Jaci hardware profiling sada prikazuje preporuceni profil i razlog izbora
+
 v1.3.0
 - Dodat javni roadmap za v1.3.0, v1.4.0 i v1.5.0 sa redosledom unapredjenja
 - Dodata install-report osnova na Windows i Linux strani
