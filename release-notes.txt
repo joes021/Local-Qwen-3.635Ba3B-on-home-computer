@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.8
+- Windows Control Center timer sada radi samo lagani status refresh, bez stalnog ponovnog izracunavanja model kataloga i hardverskog plana na UI thread-u
+- Ovo dodatno smanjuje sansu da prozor ostane u trajnom busy/app-starting utisku dok je mis iznad njega
+
 v2.1.7
 - Windows Control Center vise ne proverava GitHub latest release na svakom 3s refresh tick-u, vec koristi kesirani rezultat da UI ne deluje stalno zauzet
 - Auto-start llama.cpp je pomeren malo posle otvaranja prozora, da se Control Center prvo potpuno iscrta pre pozadinskog start toka

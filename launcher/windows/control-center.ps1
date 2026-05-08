@@ -571,9 +571,11 @@ function Refresh-OnboardingView {
 }
 
 function Refresh-LaunchStatus {
+    param(
+        [switch]$Lightweight
+    )
+
     $latest = Get-Settings
-    $plan = Get-EffectiveServerPlan -Profile ([string]$latest.profile)
-    $selectedModel = Get-ModelMetadata
     $statusBundle = Get-EffectiveServiceStatus
     $summaryState = [string]$statusBundle.Summary.state
     $reason = [string]$statusBundle.Summary.reason
@@ -596,17 +598,23 @@ function Refresh-LaunchStatus {
         }
     }
 
-    $profileNote.Text = "Model: $($selectedModel.id) | Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps) | Lifecycle: $summaryState$(if ($reason) { ' - ' + $reason } else { '' })"
-    $hardwareBox.Text = Format-ServerPlan -Plan $plan
-    if ($modelCombo) {
-        $selectedIndex = 0
-        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
-            if ($modelCatalog[$i].id -eq $selectedModel.id) {
-                $selectedIndex = $i
-                break
+    if (-not $Lightweight) {
+        $plan = Get-EffectiveServerPlan -Profile ([string]$latest.profile)
+        $selectedModel = Get-ModelMetadata
+        $profileNote.Text = "Model: $($selectedModel.id) | Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps) | Lifecycle: $summaryState$(if ($reason) { ' - ' + $reason } else { '' })"
+        $hardwareBox.Text = Format-ServerPlan -Plan $plan
+        if ($modelCombo) {
+            $selectedIndex = 0
+            for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
+                if ($modelCatalog[$i].id -eq $selectedModel.id) {
+                    $selectedIndex = $i
+                    break
+                }
             }
+            $modelCombo.SelectedIndex = $selectedIndex
         }
-        $modelCombo.SelectedIndex = $selectedIndex
+    } else {
+        $profileNote.Text = "Context: $($latest.llama.contextSize) | Output: $($latest.llama.maxOutputTokens) | Steps: B $($latest.opencode.buildSteps) / P $($latest.opencode.planSteps) / G $($latest.opencode.generalSteps) / E $($latest.opencode.exploreSteps) | Lifecycle: $summaryState$(if ($reason) { ' - ' + $reason } else { '' })"
     }
 }
 
@@ -1422,8 +1430,7 @@ $aboutButton.Add_Click({
 $refreshTimer = New-Object System.Windows.Forms.Timer
 $refreshTimer.Interval = 3000
 $refreshTimer.Add_Tick({
-    Refresh-LaunchStatus
-    Refresh-ThroughputView
+    Refresh-LaunchStatus -Lightweight
 })
 $refreshTimer.Start()
 
