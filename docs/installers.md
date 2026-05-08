@@ -43,6 +43,7 @@ The current Windows installer now handles:
 - release update checker
 - shared agent risk audit
 - onboarding checklist view
+- guided next-action workflow
 
 Recommended mental model for Windows install order:
 
@@ -119,6 +120,7 @@ It currently handles:
 - release update checker
 - shared agent risk audit
 - onboarding checklist view
+- guided next-action workflow
 
 If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
 

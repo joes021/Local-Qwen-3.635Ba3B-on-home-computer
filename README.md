@@ -200,6 +200,7 @@ The Windows `Local Qwen Control Center` now includes:
 - `Agent`: security mode, autonomy mode, working folder, save and launch actions
 - `Agent`: zivi risk audit koji pokazuje koliko je izabrani rezim opasan za sistem
 - `Onboarding`: checklist koji jasno kaze sta jos fali za prvi rad
+- `Onboarding`: guided next step koji moze odmah da pokrene preporucenu akciju
 - `Logovi`: latest `stdout`, `stderr`, `install summary`, `install report`
 
 ### Ubuntu 24.04
@@ -236,7 +237,7 @@ After install, the main commands are:
 
 What they do:
 
-- `control-center.sh` opens the main Linux TUI menu i prikazuje onboarding spremnost
+- `control-center.sh` opens the main Linux TUI menu, prikazuje onboarding spremnost i vodi ka sledecem koraku
 - `start-opencode.sh` starts the local server if needed and then opens `OpenCode`
 - `start-server.sh` starts only the `llama.cpp` server
 - `settings-tui.sh` changes saved settings without reinstalling

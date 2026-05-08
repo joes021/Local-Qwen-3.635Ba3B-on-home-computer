@@ -132,6 +132,34 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertTrue(payload["ready"])
         self.assertTrue(all(step["status"] == "done" for step in payload["steps"]))
 
+    def test_next_action_prefers_start_server_when_server_missing(self):
+        code, stdout, stderr = run_runtime_command(
+            "next-action",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-opencode-config",
+            "true",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["actionId"], "start-server")
+
+    def test_next_action_prefers_repair_when_model_missing(self):
+        code, stdout, stderr = run_runtime_command(
+            "next-action",
+            "--has-server",
+            "false",
+            "--has-model",
+            "false",
+            "--has-opencode-config",
+            "true",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["actionId"], "repair-install")
+
 
 if __name__ == "__main__":
     unittest.main()

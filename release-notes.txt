@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.0.0
+- Uveden guided workflow sa shared next-action logikom za Windows i Linux
+- Windows Onboarding tab sada prikazuje i preporuceni sledeci korak sa direktnim pokretanjem
+- Linux control center sada ima isti guided next action tok umesto samo pasivnog statusa
+
 v1.9.0
 - Dodat onboarding checklist engine i poseban Onboarding tab u Windows Control Center-u
 - Linux TUI sada prikazuje onboarding spremnost pri svakom otvaranju control center-a

@@ -102,6 +102,67 @@ for step in data["steps"]:
 PY
 }
 
+show_next_action() {
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
+import json, os, subprocess, sys, urllib.request
+state_path, runtime_script, health_url, opencode_config = sys.argv[1:5]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+has_server = False
+try:
+    with urllib.request.urlopen(health_url, timeout=3) as response:
+        has_server = response.status == 200
+except Exception:
+    pass
+payload = subprocess.run(
+    [
+        sys.executable,
+        runtime_script,
+        "next-action",
+        "--has-server", str(has_server).lower(),
+        "--has-model", str(os.path.isfile(state.get("modelFile", ""))).lower(),
+        "--has-opencode-config", str(os.path.isfile(opencode_config)).lower(),
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+data = json.loads(payload.stdout)
+print(f"Next action: {data['title']}")
+print(f"Reason: {data['reason']}")
+print(f"Action id: {data['actionId']}")
+PY
+}
+
+get_next_action_id() {
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
+import json, os, subprocess, sys, urllib.request
+state_path, runtime_script, health_url, opencode_config = sys.argv[1:5]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+has_server = False
+try:
+    with urllib.request.urlopen(health_url, timeout=3) as response:
+        has_server = response.status == 200
+except Exception:
+    pass
+payload = subprocess.run(
+    [
+        sys.executable,
+        runtime_script,
+        "next-action",
+        "--has-server", str(has_server).lower(),
+        "--has-model", str(os.path.isfile(state.get("modelFile", ""))).lower(),
+        "--has-opencode-config", str(os.path.isfile(opencode_config)).lower(),
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+print(json.loads(payload.stdout)["actionId"])
+PY
+}
+
 show_hardware() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_defaults_path)" "$(get_runtime_engine_path)"
 import json, os, subprocess, sys
@@ -176,6 +237,7 @@ while true; do
   show_hardware
   show_agent_audit
   show_onboarding
+  show_next_action
   echo "1) Start server (saved profile)"
   echo "2) Start server (choose profile)"
   echo "3) Stop server"
@@ -191,7 +253,8 @@ while true; do
   echo "13) Export diagnostics"
   echo "14) Check updates"
   echo "15) Agent audit"
-  echo "16) Exit"
+  echo "16) Run next action"
+  echo "17) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -210,7 +273,17 @@ while true; do
     13) "$SCRIPT_DIR/export-diagnostics.sh" ;;
     14) "$SCRIPT_DIR/check-updates.sh" ;;
     15) "$SCRIPT_DIR/agent-audit.sh" ;;
-    16) exit 0 ;;
+    16)
+      next_action="$(get_next_action_id)"
+      case "$next_action" in
+        repair-install) "$SCRIPT_DIR/repair-install.sh" ;;
+        start-server) "$SCRIPT_DIR/start-server.sh" ;;
+        write-opencode-config) "$SCRIPT_DIR/configure-settings.sh" ;;
+        open-opencode) "$SCRIPT_DIR/start-opencode.sh" ;;
+        *) echo "Nepoznat next action: $next_action" ;;
+      esac
+      ;;
+    17) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

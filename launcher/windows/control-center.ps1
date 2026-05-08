@@ -381,6 +381,26 @@ $refreshOnboardingButton.Location = New-Object System.Drawing.Point(18, 440)
 $refreshOnboardingButton.Size = New-Object System.Drawing.Size(150, 32)
 $onboardingTab.Controls.Add($refreshOnboardingButton)
 
+$nextActionLabel = New-Object System.Windows.Forms.Label
+$nextActionLabel.Text = "Sledeci preporuceni korak"
+$nextActionLabel.Location = New-Object System.Drawing.Point(18, 486)
+$nextActionLabel.Size = New-Object System.Drawing.Size(220, 22)
+$onboardingTab.Controls.Add($nextActionLabel)
+
+$nextActionBox = New-Object System.Windows.Forms.TextBox
+$nextActionBox.Location = New-Object System.Drawing.Point(18, 514)
+$nextActionBox.Size = New-Object System.Drawing.Size(490, 50)
+$nextActionBox.Multiline = $true
+$nextActionBox.ReadOnly = $true
+$nextActionBox.BackColor = [System.Drawing.Color]::White
+$onboardingTab.Controls.Add($nextActionBox)
+
+$runNextActionButton = New-Object System.Windows.Forms.Button
+$runNextActionButton.Text = "Pokreni sledeci korak"
+$runNextActionButton.Location = New-Object System.Drawing.Point(520, 520)
+$runNextActionButton.Size = New-Object System.Drawing.Size(146, 38)
+$onboardingTab.Controls.Add($runNextActionButton)
+
 function Write-LaunchMessage {
     param([string[]]$Lines)
 
@@ -481,6 +501,7 @@ function Refresh-LogsView {
 
 function Refresh-OnboardingView {
     $checklist = Get-OnboardingChecklist
+    $nextAction = Get-NextActionRecommendation
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("Spremno za rad: $(if ($checklist.ready) { 'DA' } else { 'NE' })") | Out-Null
     $lines.Add("Profil: $($checklist.profile)") | Out-Null
@@ -493,6 +514,7 @@ function Refresh-OnboardingView {
     $lines.Add("") | Out-Null
     $lines.Add("Preporuka: ako nesto nije gotovo, idi redom od vrha na dole.") | Out-Null
     $onboardingBox.Text = ($lines -join [Environment]::NewLine)
+    $nextActionBox.Text = "$($nextAction.title)$([Environment]::NewLine)$($nextAction.reason)"
 }
 
 function Refresh-LaunchStatus {
@@ -1112,6 +1134,38 @@ $refreshLogsButton.Add_Click({
 $refreshOnboardingButton.Add_Click({
     Refresh-OnboardingView
     Write-LaunchMessage @("Onboarding pregled je osvezen.")
+})
+$runNextActionButton.Add_Click({
+    try {
+        $nextAction = Get-NextActionRecommendation
+        switch ($nextAction.actionId) {
+            "repair-install" {
+                $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
+                Write-LaunchMessage @($result)
+            }
+            "start-server" {
+                $profile = [string](Get-Settings).profile
+                Start-LlamaBackground -Profile $profile
+            }
+            "write-opencode-config" {
+                $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript -Profile ([string](Get-Settings).profile) 2>&1
+                Write-LaunchMessage @($result)
+            }
+            "open-opencode" {
+                Start-Process -FilePath "powershell.exe" -ArgumentList @(
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", $startOpenCodeScript,
+                    "-Profile", ([string](Get-Settings).profile)
+                )
+                Write-LaunchMessage @("Otvaram OpenCode kao sledeci korak.")
+            }
+        }
+        Refresh-LaunchStatus
+        Refresh-LogsView
+        Refresh-OnboardingView
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
 })
 $openFolderButton.Add_Click({
     Start-Process explorer.exe $root

@@ -562,6 +562,25 @@ function Get-OnboardingChecklist {
     )
 }
 
+function Get-NextActionRecommendation {
+    $state = Get-InstallState
+    $hasServer = Test-LlamaHealth
+    $hasModel = $false
+    try {
+        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+    } catch {
+        $hasModel = $false
+    }
+    $configPath = Get-OpenCodeConfigPath
+
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "next-action",
+        "--has-server", ([string]$hasServer).ToLower(),
+        "--has-model", ([string]$hasModel).ToLower(),
+        "--has-opencode-config", ([string](Test-Path $configPath)).ToLower()
+    )
+}
+
 function Get-AgentAudit {
     param(
         [Parameter(Mandatory = $true)][string]$SecurityMode,

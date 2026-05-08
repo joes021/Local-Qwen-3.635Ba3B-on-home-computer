@@ -272,6 +272,42 @@ def command_onboarding_checklist(args: argparse.Namespace) -> int:
     return 0
 
 
+def decide_next_action(has_server: bool, has_model: bool, has_opencode_config: bool) -> dict:
+    if not has_model:
+        return {
+            "actionId": "repair-install",
+            "title": "Pokreni repair install",
+            "reason": "Model nedostaje ili nije potpun, pa je repair najbrzi put do zdravog stanja.",
+        }
+    if not has_server:
+        return {
+            "actionId": "start-server",
+            "title": "Pokreni llama.cpp server",
+            "reason": "Model postoji, ali server jos nije aktivan.",
+        }
+    if not has_opencode_config:
+        return {
+            "actionId": "write-opencode-config",
+            "title": "Upisi OpenCode config",
+            "reason": "Server radi, ali OpenCode jos nema vezu ka lokalnom endpointu.",
+        }
+    return {
+        "actionId": "open-opencode",
+        "title": "Otvori OpenCode",
+        "reason": "Osnovne komponente su spremne za rad.",
+    }
+
+
+def command_next_action(args: argparse.Namespace) -> int:
+    payload = decide_next_action(
+        has_server=parse_bool(args.has_server),
+        has_model=parse_bool(args.has_model),
+        has_opencode_config=parse_bool(args.has_opencode_config),
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Shared runtime helper for Local Qwen installers and launchers.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -305,6 +341,12 @@ def build_parser() -> argparse.ArgumentParser:
     onboarding.add_argument("--profile", required=True)
     onboarding.add_argument("--model-id", required=True)
     onboarding.set_defaults(func=command_onboarding_checklist)
+
+    next_action = subparsers.add_parser("next-action")
+    next_action.add_argument("--has-server", required=True)
+    next_action.add_argument("--has-model", required=True)
+    next_action.add_argument("--has-opencode-config", required=True)
+    next_action.set_defaults(func=command_next_action)
 
     return parser
 
