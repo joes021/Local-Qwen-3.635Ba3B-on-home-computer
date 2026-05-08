@@ -32,18 +32,47 @@ for path in $latest_log; do
   copy_if_present "$path"
 done
 
-python3 - <<'PY' "$BUNDLE_DIR/diagnostics-meta.json" "$ROOT"
-import json, os, subprocess, sys
-target, root = sys.argv[1:3]
+python3 - <<'PY' "$BUNDLE_DIR/diagnostics-meta.json" "$ROOT" "$(get_runtime_engine_path)" "$(get_install_state_path)" "$(get_settings_path)"
+import json, os, subprocess, sys, urllib.request
+target, root, runtime_script, state_path, settings_path = sys.argv[1:6]
 version = "unknown"
 version_path = os.path.join(root, "version.json")
 if os.path.exists(version_path):
     with open(version_path, "r", encoding="utf-8") as f:
         version = json.load(f).get("version", "unknown")
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(settings_path, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+health_url = f"http://127.0.0.1:{state.get('port', 8091)}/health"
+has_server = False
+try:
+    with urllib.request.urlopen(health_url, timeout=3) as response:
+        has_server = response.status == 200
+except Exception:
+    pass
+payload = subprocess.run(
+    [
+        sys.executable,
+        runtime_script,
+        "onboarding-checklist",
+        "--has-server", str(has_server).lower(),
+        "--has-model", str(os.path.isfile(state.get("modelFile", ""))).lower(),
+        "--has-opencode-config", str(os.path.isfile(os.path.expanduser("~/.config/opencode/opencode.json"))).lower(),
+        "--profile", settings.get("profile", "balanced"),
+        "--model-id", state.get("modelId", "n/a"),
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+)
 payload = {
     "generatedAt": __import__("datetime").datetime.utcnow().isoformat(),
     "appVersion": version,
     "installRoot": root,
+    "healthUrl": health_url,
+    "serverHealthy": has_server,
+    "onboarding": json.loads(payload.stdout),
 }
 with open(target, "w", encoding="utf-8") as f:
     json.dump(payload, f, indent=2)

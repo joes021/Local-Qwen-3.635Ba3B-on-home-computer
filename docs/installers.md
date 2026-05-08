@@ -42,6 +42,7 @@ The current Windows installer now handles:
 - diagnostics bundle export
 - release update checker
 - shared agent risk audit
+- onboarding checklist view
 
 Recommended mental model for Windows install order:
 
@@ -117,6 +118,7 @@ It currently handles:
 - diagnostics bundle export
 - release update checker
 - shared agent risk audit
+- onboarding checklist view
 
 If a tag like `vX.Y.Z` is pushed, the Linux workflow should publish both:
 

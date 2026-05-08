@@ -94,6 +94,44 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(payload["riskLevel"], "low")
         self.assertFalse(payload["requiresWarning"])
 
+    def test_onboarding_checklist_marks_missing_server_as_not_ready(self):
+        code, stdout, stderr = run_runtime_command(
+            "onboarding-checklist",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--profile",
+            "balanced",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ready"])
+        self.assertEqual(payload["steps"][0]["status"], "todo")
+
+    def test_onboarding_checklist_marks_all_ready(self):
+        code, stdout, stderr = run_runtime_command(
+            "onboarding-checklist",
+            "--has-server",
+            "true",
+            "--has-model",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--profile",
+            "balanced",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["ready"])
+        self.assertTrue(all(step["status"] == "done" for step in payload["steps"]))
+
 
 if __name__ == "__main__":
     unittest.main()

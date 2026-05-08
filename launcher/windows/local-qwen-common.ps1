@@ -540,6 +540,28 @@ function Get-LatestReleaseInfo {
     )
 }
 
+function Get-OnboardingChecklist {
+    $state = Get-InstallState
+    $hasServer = Test-LlamaHealth
+    $hasModel = $false
+    try {
+        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+    } catch {
+        $hasModel = $false
+    }
+    $configPath = Get-OpenCodeConfigPath
+    $profile = [string](Get-Settings).profile
+
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "onboarding-checklist",
+        "--has-server", ([string]$hasServer).ToLower(),
+        "--has-model", ([string]$hasModel).ToLower(),
+        "--has-opencode-config", ([string](Test-Path $configPath)).ToLower(),
+        "--profile", $profile,
+        "--model-id", ([string]$state.modelId)
+    )
+}
+
 function Get-AgentAudit {
     param(
         [Parameter(Mandatory = $true)][string]$SecurityMode,
@@ -871,6 +893,7 @@ function Export-DiagnosticsBundle {
         installRoot = $root
         latestRelease = Get-LatestReleaseInfo
         recommendation = Get-RecommendationBundle
+        onboarding = Get-OnboardingChecklist
         hardware = [ordered]@{
             gpu = Get-PrimaryGpuInfo
             cpu = Get-CpuName

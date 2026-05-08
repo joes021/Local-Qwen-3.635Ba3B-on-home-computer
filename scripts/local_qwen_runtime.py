@@ -224,6 +224,54 @@ def command_agent_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_onboarding_checklist(has_server: bool, has_model: bool, has_opencode_config: bool, profile: str, model_id: str) -> dict:
+    steps = [
+        {
+            "id": "server",
+            "title": f"Pokreni llama.cpp server za profil '{profile}'",
+            "status": "done" if has_server else "todo",
+        },
+        {
+            "id": "model",
+            "title": f"Proveri da je model '{model_id}' dostupan i potpun",
+            "status": "done" if has_model else "todo",
+        },
+        {
+            "id": "opencode",
+            "title": "Upisi ili proveri OpenCode konfiguraciju",
+            "status": "done" if has_opencode_config else "todo",
+        },
+        {
+            "id": "smoke-test",
+            "title": "Posalji test prompt i proveri /health",
+            "status": "done" if (has_server and has_model) else "todo",
+        },
+    ]
+    ready = all(step["status"] == "done" for step in steps)
+    return {
+        "ready": ready,
+        "profile": profile,
+        "modelId": model_id,
+        "steps": steps,
+    }
+
+
+def command_onboarding_checklist(args: argparse.Namespace) -> int:
+    payload = build_onboarding_checklist(
+        has_server=parse_bool(args.has_server),
+        has_model=parse_bool(args.has_model),
+        has_opencode_config=parse_bool(args.has_opencode_config),
+        profile=args.profile,
+        model_id=args.model_id,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Shared runtime helper for Local Qwen installers and launchers.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -249,6 +297,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--capability-mode", required=True, choices=["read-only", "read-write", "confirm-commands", "auto-commands"])
     audit.add_argument("--working-folder", required=True)
     audit.set_defaults(func=command_agent_audit)
+
+    onboarding = subparsers.add_parser("onboarding-checklist")
+    onboarding.add_argument("--has-server", required=True)
+    onboarding.add_argument("--has-model", required=True)
+    onboarding.add_argument("--has-opencode-config", required=True)
+    onboarding.add_argument("--profile", required=True)
+    onboarding.add_argument("--model-id", required=True)
+    onboarding.set_defaults(func=command_onboarding_checklist)
 
     return parser
 

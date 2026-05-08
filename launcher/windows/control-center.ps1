@@ -261,6 +261,11 @@ $tabs.Location = New-Object System.Drawing.Point(18, 78)
 $tabs.Size = New-Object System.Drawing.Size(706, 586)
 $form.Controls.Add($tabs)
 
+$onboardingTab = New-Object System.Windows.Forms.TabPage
+$onboardingTab.Text = "Onboarding"
+$onboardingTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$tabs.TabPages.Add($onboardingTab)
+
 $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
@@ -354,6 +359,27 @@ $logsContent.ScrollBars = "Vertical"
 $logsContent.ReadOnly = $true
 $logsContent.BackColor = [System.Drawing.Color]::White
 $logsTab.Controls.Add($logsContent)
+
+$onboardingTitle = New-Object System.Windows.Forms.Label
+$onboardingTitle.Text = "Prvi start i provera"
+$onboardingTitle.Location = New-Object System.Drawing.Point(18, 16)
+$onboardingTitle.Size = New-Object System.Drawing.Size(220, 22)
+$onboardingTab.Controls.Add($onboardingTitle)
+
+$onboardingBox = New-Object System.Windows.Forms.TextBox
+$onboardingBox.Location = New-Object System.Drawing.Point(18, 48)
+$onboardingBox.Size = New-Object System.Drawing.Size(648, 380)
+$onboardingBox.Multiline = $true
+$onboardingBox.ScrollBars = "Vertical"
+$onboardingBox.ReadOnly = $true
+$onboardingBox.BackColor = [System.Drawing.Color]::White
+$onboardingTab.Controls.Add($onboardingBox)
+
+$refreshOnboardingButton = New-Object System.Windows.Forms.Button
+$refreshOnboardingButton.Text = "Osvezi onboarding"
+$refreshOnboardingButton.Location = New-Object System.Drawing.Point(18, 440)
+$refreshOnboardingButton.Size = New-Object System.Drawing.Size(150, 32)
+$onboardingTab.Controls.Add($refreshOnboardingButton)
 
 function Write-LaunchMessage {
     param([string[]]$Lines)
@@ -451,6 +477,22 @@ function Refresh-LogsView {
     } else {
         $logsContent.Text = ($parts -join [Environment]::NewLine + [Environment]::NewLine)
     }
+}
+
+function Refresh-OnboardingView {
+    $checklist = Get-OnboardingChecklist
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("Spremno za rad: $(if ($checklist.ready) { 'DA' } else { 'NE' })") | Out-Null
+    $lines.Add("Profil: $($checklist.profile)") | Out-Null
+    $lines.Add("Model: $($checklist.modelId)") | Out-Null
+    $lines.Add("") | Out-Null
+    foreach ($step in $checklist.steps) {
+        $prefix = if ($step.status -eq "done") { "[OK]" } else { "[ ]" }
+        $lines.Add("$prefix $($step.title)") | Out-Null
+    }
+    $lines.Add("") | Out-Null
+    $lines.Add("Preporuka: ako nesto nije gotovo, idi redom od vrha na dole.") | Out-Null
+    $onboardingBox.Text = ($lines -join [Environment]::NewLine)
 }
 
 function Refresh-LaunchStatus {
@@ -1067,6 +1109,10 @@ $refreshLogsButton.Add_Click({
     Refresh-LogsView
     Write-LaunchMessage @("Logovi su osvezeni.")
 })
+$refreshOnboardingButton.Add_Click({
+    Refresh-OnboardingView
+    Write-LaunchMessage @("Onboarding pregled je osvezen.")
+})
 $openFolderButton.Add_Click({
     Start-Process explorer.exe $root
     Write-LaunchMessage @("Otvoren install folder: $root")
@@ -1130,6 +1176,7 @@ $refreshTimer.Start()
 Refresh-LaunchStatus
 Refresh-LogsView
 Refresh-AgentAudit
+Refresh-OnboardingView
 
 $form.Add_Shown({
     if (-not (Test-LlamaHealth)) {

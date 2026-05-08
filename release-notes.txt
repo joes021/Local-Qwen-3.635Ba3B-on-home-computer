@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v1.9.0
+- Dodat onboarding checklist engine i poseban Onboarding tab u Windows Control Center-u
+- Linux TUI sada prikazuje onboarding spremnost pri svakom otvaranju control center-a
+- Diagnostics export sada nosi vise live stanja, ukljucujuci onboarding spremnost i health signal
+
 v1.8.0
 - Dodat shared agent risk audit koji Windows i Linux koriste za isti safety signal
 - Windows Agent tab sada prikazuje zivi risk audit prema security mode, autonomy mode i radnom folderu

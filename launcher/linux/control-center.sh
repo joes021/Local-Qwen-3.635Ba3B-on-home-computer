@@ -62,6 +62,46 @@ for reason in audit["reasons"]:
 PY
 }
 
+show_onboarding() {
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
+import json, os, subprocess, sys, urllib.request
+state_path, settings_path, runtime_script, health_url, opencode_config = sys.argv[1:6]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(settings_path, "r", encoding="utf-8") as f:
+    settings = json.load(f)
+has_server = False
+try:
+    with urllib.request.urlopen(health_url, timeout=3) as response:
+        has_server = response.status == 200
+except Exception:
+    pass
+model_path = state.get("modelFile", "")
+has_model = os.path.isfile(model_path)
+has_opencode = os.path.isfile(opencode_config)
+payload = subprocess.run(
+    [
+        sys.executable,
+        runtime_script,
+        "onboarding-checklist",
+        "--has-server", str(has_server).lower(),
+        "--has-model", str(has_model).lower(),
+        "--has-opencode-config", str(has_opencode).lower(),
+        "--profile", settings.get("profile", "balanced"),
+        "--model-id", state.get("modelId", "n/a"),
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+)
+data = json.loads(payload.stdout)
+print(f"Onboarding ready: {'yes' if data['ready'] else 'no'}")
+for step in data["steps"]:
+    prefix = "[OK]" if step["status"] == "done" else "[ ]"
+    print(f"{prefix} {step['title']}")
+PY
+}
+
 show_hardware() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_settings_path)" "$(get_defaults_path)" "$(get_runtime_engine_path)"
 import json, os, subprocess, sys
@@ -135,6 +175,7 @@ while true; do
   show_settings
   show_hardware
   show_agent_audit
+  show_onboarding
   echo "1) Start server (saved profile)"
   echo "2) Start server (choose profile)"
   echo "3) Stop server"
