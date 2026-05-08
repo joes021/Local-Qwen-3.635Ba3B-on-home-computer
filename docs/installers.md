@@ -1,5 +1,15 @@
 # Installer status
 
+## Shared versioning
+
+Windows and Linux releases intentionally use the same version number.
+
+- `version.json` is shared by both packaging flows
+- every release tag `vX.Y.Z` is treated as a cross-platform version label
+- the actual code change can still be platform-specific
+- if only Windows changed, Linux still gets a refreshed `.run` asset with the same version number
+- if only Linux changed, Windows still gets a refreshed `.exe` asset with the same version number
+
 ## Windows
 
 The current Windows installer now handles:

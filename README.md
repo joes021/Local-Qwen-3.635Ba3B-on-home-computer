@@ -22,6 +22,15 @@ The goal is simple:
 3. Let it prepare the local stack
 4. Get 1-2 launchers that are actually useful
 
+## Versioning Policy
+
+Windows and Linux always share the same release number.
+
+- one shared `version.json` is the single source of truth
+- every public release publishes both a Windows and a Linux installer with that same version
+- a fix can be Windows-only or Linux-only in code
+- even then, the public release number stays aligned across both platforms
+
 ## What It Does
 
 After install, this setup:

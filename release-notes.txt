@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v1.2.16
+- Dokumentovano da Windows i Linux uvek dele isti broj verzije
+- Potvrdjeno da poslednji Windows GUI slider fix nema Linux ekvivalentni bug
+
 v1.2.13
 - Control Center ponovo ima posebno dugme "Start llama.cpp"
 - Control Center sada automatski pokusava da podigne llama.cpp pri otvaranju
