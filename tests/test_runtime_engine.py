@@ -156,6 +156,35 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(payload["selectedModel"]["id"], "qwen36-35b-a3b-IQ2_M.gguf")
         self.assertEqual(payload["selectionMode"], "reuse-local-complete")
 
+    def test_model_browser_marks_installed_active_and_recommended_models(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--current-model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--installed-model-ids",
+            "qwen36-35b-a3b-IQ2_M.gguf,qwen2.5-coder-7b-instruct-q5_k_m.gguf",
+            "--search",
+            "qwen",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        qwen36 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
+        coder = next(item for item in payload["models"] if item["id"] == "qwen2.5-coder-7b-instruct-q5_k_m.gguf")
+        self.assertTrue(qwen36["installed"])
+        self.assertTrue(qwen36["active"])
+        self.assertTrue(qwen36["recommended"])
+        self.assertEqual(qwen36["fitGroup"], "recommended")
+        self.assertTrue(coder["installed"])
+        self.assertFalse(coder["active"])
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

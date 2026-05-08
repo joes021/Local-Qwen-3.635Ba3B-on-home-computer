@@ -195,6 +195,49 @@ get_download_candidates_json() {
   run_runtime_engine_json download-candidates --defaults "$(get_defaults_path)" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$cpu_threads"
 }
 
+get_installed_model_ids_csv() {
+  local state_path defaults_path models_dir
+  state_path="$(get_install_state_path)"
+  defaults_path="$(get_defaults_path)"
+  models_dir="$(get_local_qwen_root)/models"
+  python3 - <<'PY' "$state_path" "$defaults_path" "$models_dir"
+import json, os, sys
+state_path, defaults_path, models_dir = sys.argv[1:4]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+result = []
+for item in defaults.get("modelChoices", {}).values():
+    path = os.path.join(models_dir, item.get("filename", ""))
+    minimum = int(item.get("minExpectedBytes", 0) or 0)
+    if os.path.isfile(path) and (minimum <= 0 or os.path.getsize(path) >= minimum):
+        result.append(item.get("id"))
+print(",".join(result))
+PY
+}
+
+get_model_browser_json() {
+  local gpu_mib="${1:-0}"
+  local ram_gib="${2:-0}"
+  local cpu_threads="${3:-0}"
+  local current_model_id="${4:-}"
+  local installed_model_ids="${5:-}"
+  local search="${6:-}"
+  local family="${7:-}"
+  shift 7 || true
+  run_runtime_engine_json model-browser \
+    --defaults "$(get_defaults_path)" \
+    --gpu-mib "$gpu_mib" \
+    --ram-gib "$ram_gib" \
+    --cpu-threads "$cpu_threads" \
+    --current-model-id "$current_model_id" \
+    --installed-model-ids "$installed_model_ids" \
+    --search "$search" \
+    --family "$family" \
+    "$@"
+}
+
 get_agent_audit_json() {
   local security_mode="$1"
   local capability_mode="$2"

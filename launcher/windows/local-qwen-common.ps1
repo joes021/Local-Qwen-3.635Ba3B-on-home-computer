@@ -690,6 +690,19 @@ function Get-DownloadCandidates {
     )
 }
 
+function Get-InstalledModelIds {
+    $catalog = @(Get-ModelCatalog)
+    $installed = New-Object System.Collections.Generic.List[string]
+    $state = Get-InstallState
+    foreach ($item in $catalog) {
+        $candidatePath = Join-Path (Split-Path -Parent $state.modelFile) ([string]$item.filename)
+        if (Test-ModelFileLooksComplete -Path $candidatePath) {
+            $installed.Add([string]$item.id) | Out-Null
+        }
+    }
+    return @($installed)
+}
+
 function Get-FilteredModelCatalog {
     param(
         [switch]$VerifiedOnly,
@@ -717,6 +730,42 @@ function Get-FilteredModelCatalog {
     if ($FitOnly) {
         $arguments += "--fit-only"
     }
+
+    return Invoke-RuntimeEngineJson -Arguments $arguments
+}
+
+function Get-ModelBrowserPayload {
+    param(
+        [string]$Search = "",
+        [string]$Family = "",
+        [switch]$InstalledOnly,
+        [switch]$RecommendedOnly,
+        [switch]$FitOnly,
+        [switch]$CoderOnly,
+        [switch]$VerifiedOnly
+    )
+
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    $state = Get-InstallState
+    $arguments = @(
+        "model-browser",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads),
+        "--current-model-id", ([string]$state.modelId),
+        "--installed-model-ids", ([string]((Get-InstalledModelIds) -join ",")),
+        "--search", $Search,
+        "--family", $Family
+    )
+    if ($InstalledOnly) { $arguments += "--installed-only" }
+    if ($RecommendedOnly) { $arguments += "--recommended-only" }
+    if ($FitOnly) { $arguments += "--fit-only" }
+    if ($CoderOnly) { $arguments += "--coder-only" }
+    if ($VerifiedOnly) { $arguments += "--verified-only" }
 
     return Invoke-RuntimeEngineJson -Arguments $arguments
 }

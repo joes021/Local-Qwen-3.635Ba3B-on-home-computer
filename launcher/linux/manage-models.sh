@@ -5,7 +5,57 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
 ACTION="${1:-list}"
-MODEL_ID="${2:-}"
+shift || true
+MODEL_ID=""
+if [[ "$ACTION" != "list" && "$ACTION" != "recommend" && "$#" -gt 0 && "${1:-}" != --* ]]; then
+  MODEL_ID="$1"
+  shift || true
+fi
+
+SEARCH=""
+FAMILY=""
+INSTALLED_ONLY=0
+RECOMMENDED_ONLY=0
+FIT_ONLY=0
+CODER_ONLY=0
+VERIFIED_ONLY=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --search)
+      SEARCH="${2:-}"
+      shift 2
+      ;;
+    --family)
+      FAMILY="${2:-}"
+      shift 2
+      ;;
+    --installed-only)
+      INSTALLED_ONLY=1
+      shift
+      ;;
+    --recommended-only)
+      RECOMMENDED_ONLY=1
+      shift
+      ;;
+    --fit-only)
+      FIT_ONLY=1
+      shift
+      ;;
+    --coder-only)
+      CODER_ONLY=1
+      shift
+      ;;
+    --verified-only)
+      VERIFIED_ONLY=1
+      shift
+      ;;
+    *)
+      echo "Nepoznat argument: $1"
+      exit 1
+      ;;
+  esac
+done
 
 STATE_PATH="$(get_install_state_path)"
 SETTINGS_PATH="$(get_settings_path)"
@@ -54,6 +104,35 @@ PY
   get_download_candidates_json "$gpu_mib" "$ram_gib" "$cpu_threads"
 }
 
+get_model_browser_for_current_machine() {
+  local current_model_id="$1"
+  local installed_ids="$2"
+  local gpu_mib="0" ram_gib="0" cpu_threads="0"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+  fi
+  ram_gib="$(python3 - <<'PY'
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            print(round(int(line.split()[1]) / 1024 / 1024))
+            break
+    else:
+        print(0)
+PY
+)"
+  cpu_threads="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
+
+  local extra_args=()
+  [[ "$INSTALLED_ONLY" -eq 1 ]] && extra_args+=(--installed-only)
+  [[ "$RECOMMENDED_ONLY" -eq 1 ]] && extra_args+=(--recommended-only)
+  [[ "$FIT_ONLY" -eq 1 ]] && extra_args+=(--fit-only)
+  [[ "$CODER_ONLY" -eq 1 ]] && extra_args+=(--coder-only)
+  [[ "$VERIFIED_ONLY" -eq 1 ]] && extra_args+=(--verified-only)
+
+  get_model_browser_json "$gpu_mib" "$ram_gib" "$cpu_threads" "$current_model_id" "$installed_ids" "$SEARCH" "$FAMILY" "${extra_args[@]}"
+}
+
 select_model() {
   local selected_id="$1"
   python3 - <<'PY' "$STATE_PATH" "$DEFAULTS_PATH" "$selected_id" "$MODELS_DIR" "$SETTINGS_PATH"
@@ -97,27 +176,28 @@ with open(sys.argv[1], "r", encoding="utf-8") as f:
 PY
 )"
     recommended_id="$(get_recommended_model_id)"
+    installed_ids="$(get_installed_model_ids_csv)"
     echo "Aktivni model: $current_id"
     echo "Preporuceni model: $recommended_id"
-    get_download_candidates_for_current_machine | python3 - <<'PY' "$current_id" "$recommended_id"
+    get_model_browser_for_current_machine "$current_id" "$installed_ids" | python3 - <<'PY' "$current_id" "$recommended_id"
 import json, sys
 current_id, recommended_id = sys.argv[1:3]
 payload = json.load(sys.stdin)
 print(f"Hardverska klasa: {payload.get('detectedClass')}")
 print(f"Preporucen profil: {payload.get('recommendedProfile')}")
 print()
-groups = [
-    ("Preporuceni za ovu masinu", payload.get("groups", {}).get("recommended", [])),
-    ("Moze da radi uz kompromis", payload.get("groups", {}).get("canRun", [])),
-    ("Nije preporuceno za ovu konfiguraciju", payload.get("groups", {}).get("notRecommended", [])),
-]
-for title, items in groups:
-    print(title)
-    for item in items:
-        marker = "*" if item.get("id") == current_id else "+" if item.get("id") == recommended_id else "-"
-        print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | GPU {item.get('minimumGpuMiB')}/{item.get('recommendedGpuMiB')} MiB | RAM {item.get('minimumRamGiB')} GiB | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
-        print(f"    {item.get('description')}")
-    print()
+print(f"Model browser: {len(payload.get('models', []))} vidljivih modela")
+for item in payload.get("models", []):
+    marker = "*" if item.get("active") else "+" if item.get("recommended") else "-"
+    status = []
+    if item.get("installed"):
+        status.append("installed")
+    if item.get("recommended"):
+        status.append("recommended")
+    status.append(item.get("fitGroup"))
+    print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
+    print(f"    {item.get('description')}")
+print()
 print("* = trenutno aktivan model")
 print("+ = preporucen model za ovaj hardver")
 PY
@@ -145,7 +225,7 @@ PY
     INSTALL_ROOT="$ROOT" SKIP_RUNTIME_BUILD=1 bash "$ROOT/install/linux/install.sh"
     ;;
   *)
-    echo "Koriscenje: $0 [list|use <model-id>|recommend|download <model-id>]"
+    echo "Koriscenje: $0 [list|use <model-id>|recommend|download <model-id>] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"
     exit 1
     ;;
 esac

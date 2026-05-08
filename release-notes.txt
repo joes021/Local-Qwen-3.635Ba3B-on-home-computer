@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.4.0
+- Dodat pravi model browser u Windows Control Center-u: pretraga, family filter, statusi installed/active/recommended i akcije za aktivaciju i download
+- Shared runtime sada daje model-browser payload, pa Windows i Linux vide isti katalog sa statusima i fit signalima
+- Linux manage-models sada podrzava browser-style prikaz i filtere kao sto su search, family, installed-only, recommended-only, fit-only, coder-only i verified-only
+
 v2.3.2
 - Windows installer vise ne prepisuje aktivni model na novu preporuku kada se radi refresh sa SkipModelDownload ako vec postoji kompletan lokalni model
 - Ako je state vec polomljen, a u models folderu postoji neki kompletan GGUF, installer sada ume da vrati taj lokalni model kao aktivan umesto da ostane na praznoj putanji

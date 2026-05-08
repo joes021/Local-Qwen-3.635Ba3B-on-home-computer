@@ -1071,6 +1071,306 @@ function Refresh-ModelSelectionInfo {
     }
 }
 
+function Refresh-ModelUiFromInstallState {
+    try {
+        $currentModelMeta = Get-ModelMetadata
+        Apply-ModelFilters
+        Refresh-ModelSelectionInfo
+    } catch {
+    }
+}
+
+function Show-ModelBrowserDialog {
+    Ensure-ModelUiState
+
+    $browserForm = New-Object System.Windows.Forms.Form
+    $browserForm.Text = "Model browser"
+    $browserForm.StartPosition = "CenterParent"
+    $browserForm.Size = New-Object System.Drawing.Size(1120, 720)
+    $browserForm.MinimumSize = New-Object System.Drawing.Size(980, 640)
+    $browserForm.BackColor = [System.Drawing.Color]::WhiteSmoke
+    $browserForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+    if (Test-Path $iconPath) {
+        $browserForm.Icon = New-Object System.Drawing.Icon($iconPath)
+    }
+
+    $searchLabel = New-Object System.Windows.Forms.Label
+    $searchLabel.Text = "Pretraga"
+    $searchLabel.Location = New-Object System.Drawing.Point(18, 18)
+    $searchLabel.Size = New-Object System.Drawing.Size(80, 22)
+    $browserForm.Controls.Add($searchLabel)
+
+    $searchBox = New-Object System.Windows.Forms.TextBox
+    $searchBox.Location = New-Object System.Drawing.Point(18, 42)
+    $searchBox.Size = New-Object System.Drawing.Size(250, 28)
+    $browserForm.Controls.Add($searchBox)
+
+    $familyLabel = New-Object System.Windows.Forms.Label
+    $familyLabel.Text = "Family"
+    $familyLabel.Location = New-Object System.Drawing.Point(286, 18)
+    $familyLabel.Size = New-Object System.Drawing.Size(80, 22)
+    $browserForm.Controls.Add($familyLabel)
+
+    $familyCombo = New-Object System.Windows.Forms.ComboBox
+    $familyCombo.Location = New-Object System.Drawing.Point(286, 42)
+    $familyCombo.Size = New-Object System.Drawing.Size(180, 28)
+    $familyCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+    [void]$familyCombo.Items.Add("Sve")
+    foreach ($familyName in (($modelCatalog | ForEach-Object { [string]$_.family } | Sort-Object -Unique))) {
+        [void]$familyCombo.Items.Add($familyName)
+    }
+    $familyCombo.SelectedIndex = 0
+    $browserForm.Controls.Add($familyCombo)
+
+    $installedOnlyBrowser = New-Object System.Windows.Forms.CheckBox
+    $installedOnlyBrowser.Text = "Samo installed"
+    $installedOnlyBrowser.Location = New-Object System.Drawing.Point(486, 44)
+    $installedOnlyBrowser.Size = New-Object System.Drawing.Size(120, 24)
+    $browserForm.Controls.Add($installedOnlyBrowser)
+
+    $recommendedOnlyBrowser = New-Object System.Windows.Forms.CheckBox
+    $recommendedOnlyBrowser.Text = "Samo preporuceni"
+    $recommendedOnlyBrowser.Location = New-Object System.Drawing.Point(614, 44)
+    $recommendedOnlyBrowser.Size = New-Object System.Drawing.Size(140, 24)
+    $browserForm.Controls.Add($recommendedOnlyBrowser)
+
+    $fitOnlyBrowser = New-Object System.Windows.Forms.CheckBox
+    $fitOnlyBrowser.Text = "Samo za ovu masinu"
+    $fitOnlyBrowser.Location = New-Object System.Drawing.Point(762, 44)
+    $fitOnlyBrowser.Size = New-Object System.Drawing.Size(150, 24)
+    $fitOnlyBrowser.Checked = $true
+    $browserForm.Controls.Add($fitOnlyBrowser)
+
+    $coderOnlyBrowser = New-Object System.Windows.Forms.CheckBox
+    $coderOnlyBrowser.Text = "Samo coder"
+    $coderOnlyBrowser.Location = New-Object System.Drawing.Point(486, 72)
+    $coderOnlyBrowser.Size = New-Object System.Drawing.Size(110, 24)
+    $browserForm.Controls.Add($coderOnlyBrowser)
+
+    $verifiedOnlyBrowser = New-Object System.Windows.Forms.CheckBox
+    $verifiedOnlyBrowser.Text = "Samo verified"
+    $verifiedOnlyBrowser.Location = New-Object System.Drawing.Point(614, 72)
+    $verifiedOnlyBrowser.Size = New-Object System.Drawing.Size(120, 24)
+    $verifiedOnlyBrowser.Checked = $true
+    $browserForm.Controls.Add($verifiedOnlyBrowser)
+
+    $refreshBrowserButton = New-Object System.Windows.Forms.Button
+    $refreshBrowserButton.Text = "Osvezi"
+    $refreshBrowserButton.Location = New-Object System.Drawing.Point(930, 56)
+    $refreshBrowserButton.Size = New-Object System.Drawing.Size(90, 30)
+    $browserForm.Controls.Add($refreshBrowserButton)
+
+    $summaryLabel = New-Object System.Windows.Forms.Label
+    $summaryLabel.Text = "Ucitavam model browser..."
+    $summaryLabel.Location = New-Object System.Drawing.Point(18, 80)
+    $summaryLabel.Size = New-Object System.Drawing.Size(1000, 22)
+    $browserForm.Controls.Add($summaryLabel)
+
+    $grid = New-Object System.Windows.Forms.DataGridView
+    $grid.Location = New-Object System.Drawing.Point(18, 108)
+    $grid.Size = New-Object System.Drawing.Size(1068, 360)
+    $grid.ReadOnly = $true
+    $grid.AllowUserToAddRows = $false
+    $grid.AllowUserToDeleteRows = $false
+    $grid.AllowUserToResizeRows = $false
+    $grid.MultiSelect = $false
+    $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+    $grid.RowHeadersVisible = $false
+    $grid.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+    $grid.BackgroundColor = [System.Drawing.Color]::White
+    $grid.Columns.Add("status", "Status") | Out-Null
+    $grid.Columns.Add("id", "Model") | Out-Null
+    $grid.Columns.Add("family", "Family") | Out-Null
+    $grid.Columns.Add("fit", "Fit") | Out-Null
+    $grid.Columns.Add("size", "Velicina") | Out-Null
+    $grid.Columns.Add("agentic", "Agentic") | Out-Null
+    $grid.Columns.Add("opencode", "OpenCode") | Out-Null
+    $grid.Columns["status"].FillWeight = 110
+    $grid.Columns["id"].FillWeight = 220
+    $grid.Columns["family"].FillWeight = 95
+    $grid.Columns["fit"].FillWeight = 95
+    $grid.Columns["size"].FillWeight = 70
+    $grid.Columns["agentic"].FillWeight = 70
+    $grid.Columns["opencode"].FillWeight = 70
+    $browserForm.Controls.Add($grid)
+
+    $detailBox = New-Object System.Windows.Forms.TextBox
+    $detailBox.Location = New-Object System.Drawing.Point(18, 478)
+    $detailBox.Size = New-Object System.Drawing.Size(780, 164)
+    $detailBox.Multiline = $true
+    $detailBox.ScrollBars = "Vertical"
+    $detailBox.ReadOnly = $true
+    $detailBox.BackColor = [System.Drawing.Color]::White
+    $browserForm.Controls.Add($detailBox)
+
+    $activateButton = New-Object System.Windows.Forms.Button
+    $activateButton.Text = "Aktiviraj model"
+    $activateButton.Location = New-Object System.Drawing.Point(820, 478)
+    $activateButton.Size = New-Object System.Drawing.Size(130, 34)
+    $browserForm.Controls.Add($activateButton)
+
+    $downloadButton = New-Object System.Windows.Forms.Button
+    $downloadButton.Text = "Preuzmi / osvezi"
+    $downloadButton.Location = New-Object System.Drawing.Point(960, 478)
+    $downloadButton.Size = New-Object System.Drawing.Size(126, 34)
+    $browserForm.Controls.Add($downloadButton)
+
+    $useRecommendedButton = New-Object System.Windows.Forms.Button
+    $useRecommendedButton.Text = "Aktiviraj preporuku"
+    $useRecommendedButton.Location = New-Object System.Drawing.Point(820, 522)
+    $useRecommendedButton.Size = New-Object System.Drawing.Size(266, 34)
+    $browserForm.Controls.Add($useRecommendedButton)
+
+    $closeBrowserButton = New-Object System.Windows.Forms.Button
+    $closeBrowserButton.Text = "Zatvori"
+    $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 608)
+    $closeBrowserButton.Size = New-Object System.Drawing.Size(110, 34)
+    $closeBrowserButton.Add_Click({ $browserForm.Close() })
+    $browserForm.Controls.Add($closeBrowserButton)
+
+    $browserModels = @()
+
+    $updateBrowserDetails = {
+        if ($grid.SelectedRows.Count -eq 0) {
+            $detailBox.Text = "Izaberi model da vidis detalje."
+            return
+        }
+        $selected = $grid.SelectedRows[0].Tag
+        if (-not $selected) {
+            $detailBox.Text = "Detalji nisu dostupni."
+            return
+        }
+
+        $statusText = @()
+        if ($selected.active) { $statusText += "AKTIVAN" }
+        if ($selected.installed) { $statusText += "INSTALLED" }
+        if ($selected.recommended) { $statusText += "PREPORUCEN" }
+        if ($selected.fitGroup -eq "recommended") { $statusText += "DOBAR FIT" }
+        elseif ($selected.fitGroup -eq "canRun") { $statusText += "MOZE DA RADI" }
+        else { $statusText += "NIJE PREPORUCEN" }
+
+        $detailBox.Text = @(
+            "Status: $($statusText -join ' | ')",
+            "Model: $($selected.id)",
+            "Family: $($selected.family) | Use case: $($selected.useCase)",
+            "Velicina: $($selected.approxSizeGiB) GiB | GPU: $($selected.minimumGpuMiB)/$($selected.recommendedGpuMiB) MiB | RAM: $($selected.minimumRamGiB) GiB",
+            "Agentic: $($selected.agenticScore)/10 | OpenCode: $($selected.opencodeFit)/10 | Curation: $($selected.curationLevel)",
+            "Opis: $($selected.description)"
+        ) -join [Environment]::NewLine
+    }.GetNewClosure()
+
+    $refreshBrowserGrid = {
+        try {
+            $familyFilter = if ($familyCombo.SelectedIndex -gt 0) { [string]$familyCombo.SelectedItem } else { "" }
+            $payload = Get-ModelBrowserPayload `
+                -Search $searchBox.Text `
+                -Family $familyFilter `
+                -InstalledOnly:([bool]$installedOnlyBrowser.Checked) `
+                -RecommendedOnly:([bool]$recommendedOnlyBrowser.Checked) `
+                -FitOnly:([bool]$fitOnlyBrowser.Checked) `
+                -CoderOnly:([bool]$coderOnlyBrowser.Checked) `
+                -VerifiedOnly:([bool]$verifiedOnlyBrowser.Checked)
+
+            $browserModels = @($payload.models)
+            $grid.Rows.Clear()
+            foreach ($item in $browserModels) {
+                $status = @()
+                if ($item.active) { $status += "AKTIVAN" }
+                if ($item.installed) { $status += "INSTALLED" }
+                if ($item.recommended) { $status += "PREPORUKA" }
+                $status += switch ($item.fitGroup) {
+                    "recommended" { "FIT" }
+                    "canRun" { "KOMPROMIS" }
+                    default { "SLAB FIT" }
+                }
+                $rowIndex = $grid.Rows.Add(
+                    ($status -join " | "),
+                    [string]$item.id,
+                    [string]$item.family,
+                    [string]$item.fitGroup,
+                    ("{0} GiB" -f $item.approxSizeGiB),
+                    ("{0}/10" -f $item.agenticScore),
+                    ("{0}/10" -f $item.opencodeFit)
+                )
+                $grid.Rows[$rowIndex].Tag = $item
+            }
+
+            $summaryLabel.Text = "Prikazano: $($browserModels.Count) | Preporuceni profil: $($payload.recommendedProfile) | Hardverska klasa: $($payload.detectedClass)"
+            if ($grid.Rows.Count -gt 0) {
+                $grid.ClearSelection()
+                $grid.Rows[0].Selected = $true
+            }
+            & $updateBrowserDetails
+        } catch {
+            $summaryLabel.Text = "Model browser trenutno nije dostupan."
+            $detailBox.Text = $_.Exception.Message
+        }
+    }.GetNewClosure()
+
+    $refreshBrowserHandler = { & $refreshBrowserGrid }.GetNewClosure()
+    $refreshBrowserButton.Add_Click($refreshBrowserHandler)
+    $searchBox.Add_TextChanged($refreshBrowserHandler)
+    $familyCombo.Add_SelectedIndexChanged($refreshBrowserHandler)
+    $installedOnlyBrowser.Add_CheckedChanged($refreshBrowserHandler)
+    $recommendedOnlyBrowser.Add_CheckedChanged($refreshBrowserHandler)
+    $fitOnlyBrowser.Add_CheckedChanged($refreshBrowserHandler)
+    $coderOnlyBrowser.Add_CheckedChanged($refreshBrowserHandler)
+    $verifiedOnlyBrowser.Add_CheckedChanged($refreshBrowserHandler)
+    $grid.Add_SelectionChanged({ & $updateBrowserDetails }.GetNewClosure())
+
+    $activateButton.Add_Click({
+        if ($grid.SelectedRows.Count -eq 0 -or -not $grid.SelectedRows[0].Tag) {
+            return
+        }
+        $selected = $grid.SelectedRows[0].Tag
+        try {
+            $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selected.id) 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw ($result -join [Environment]::NewLine)
+            }
+            Write-LaunchMessage @($result)
+            Refresh-ModelUiFromInstallState
+            Refresh-LaunchStatus
+            & $refreshBrowserGrid
+        } catch {
+            Write-LaunchMessage @($_.Exception.Message)
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+        }
+    }.GetNewClosure())
+
+    $downloadButton.Add_Click({
+        if ($grid.SelectedRows.Count -eq 0 -or -not $grid.SelectedRows[0].Tag) {
+            return
+        }
+        $selected = $grid.SelectedRows[0].Tag
+        Invoke-BackgroundShellScript -Name "Model browser download" -ScriptPath $manageModelsScript -ArgumentList @("-ModelId", ([string]$selected.id), "-Download") -OnSuccess ({
+            Refresh-ModelUiFromInstallState
+            Refresh-LaunchStatus
+            Refresh-LogsView
+            & $refreshBrowserGrid
+        }.GetNewClosure())
+    }.GetNewClosure())
+
+    $useRecommendedButton.Add_Click({
+        try {
+            $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -UseRecommended 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw ($result -join [Environment]::NewLine)
+            }
+            Write-LaunchMessage @($result)
+            Refresh-ModelUiFromInstallState
+            Refresh-LaunchStatus
+            & $refreshBrowserGrid
+        } catch {
+            Write-LaunchMessage @($_.Exception.Message)
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+        }
+    }.GetNewClosure())
+
+    & $refreshBrowserGrid
+    [void]$browserForm.ShowDialog($form)
+}
+
 function Show-AboutDialog {
     $aboutForm = New-Object System.Windows.Forms.Form
     $aboutForm.Text = "About"
@@ -1775,8 +2075,8 @@ $testPromptButton.Add_Click({
 })
 $modelManagerButton.Add_Click({
     try {
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript 2>&1
-        Write-LaunchMessage @($result)
+        Show-ModelBrowserDialog
+        Write-LaunchMessage @("Otvoren model browser.")
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }

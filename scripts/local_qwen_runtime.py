@@ -283,6 +283,98 @@ def resolve_install_model(
     }
 
 
+def build_model_browser(
+    defaults: dict,
+    gpu_mib: int | None,
+    ram_gib: int | None,
+    cpu_threads: int | None,
+    current_model_id: str | None = None,
+    installed_model_ids: list[str] | None = None,
+    search: str = "",
+    family: str = "",
+    installed_only: bool = False,
+    recommended_only: bool = False,
+    fit_only: bool = False,
+    coder_only: bool = False,
+    verified_only: bool = False,
+) -> dict:
+    recommendation = build_recommendation(defaults, gpu_mib, ram_gib, cpu_threads)
+    download_candidates = build_download_candidates(defaults, gpu_mib, ram_gib, cpu_threads)
+    installed_set = {str(item) for item in (installed_model_ids or []) if str(item)}
+    current_model_id = str(current_model_id or "")
+    search = str(search or "").strip().lower()
+    family = str(family or "").strip().lower()
+
+    fit_map: dict[str, str] = {}
+    for group_name in ("recommended", "canRun", "notRecommended"):
+        for item in download_candidates["groups"].get(group_name, []):
+            fit_map[str(item.get("id"))] = group_name
+
+    visible: list[dict] = []
+    for model in normalize_models(defaults):
+        model_id = str(model.get("id"))
+        model_family = str(model.get("family", ""))
+        use_case = str(model.get("useCase", ""))
+        label = str(model.get("label", ""))
+        fit_group = fit_map.get(model_id, "unknown")
+        installed = model_id in installed_set
+        active = bool(current_model_id and model_id == current_model_id)
+        recommended = bool(recommendation.get("recommendedModel") and recommendation["recommendedModel"].get("id") == model_id)
+
+        if search:
+            haystack = " ".join([model_id, label, model_family, use_case, str(model.get("description", ""))]).lower()
+            if search not in haystack:
+                continue
+        if family and model_family.lower() != family:
+            continue
+        if installed_only and not installed:
+            continue
+        if recommended_only and not recommended:
+            continue
+        if fit_only and fit_group not in {"recommended", "canRun"}:
+            continue
+        if coder_only and "coder" not in model_family.lower() and "code" not in use_case.lower() and "coder" not in label.lower():
+            continue
+        if verified_only and str(model.get("curationLevel", "")).lower() != "verified":
+            continue
+
+        entry = dict(model)
+        entry["installed"] = installed
+        entry["active"] = active
+        entry["recommended"] = recommended
+        entry["fitGroup"] = fit_group
+        entry["statusTags"] = [
+            tag
+            for tag, enabled in (
+                ("installed", installed),
+                ("active", active),
+                ("recommended", recommended),
+                ("fit", fit_group in {"recommended", "canRun"}),
+                ("verified", str(model.get("curationLevel", "")).lower() == "verified"),
+            )
+            if enabled
+        ]
+        visible.append(entry)
+
+    return {
+        "recommendedProfile": recommendation["recommendedProfile"],
+        "detectedClass": recommendation["detectedClass"],
+        "reason": recommendation["reason"],
+        "hardware": recommendation["hardware"],
+        "recommendedModel": recommendation["recommendedModel"],
+        "appliedFilters": {
+            "search": search,
+            "family": family,
+            "installedOnly": installed_only,
+            "recommendedOnly": recommended_only,
+            "fitOnly": fit_only,
+            "coderOnly": coder_only,
+            "verifiedOnly": verified_only,
+        },
+        "models": visible,
+    }
+
+
 def build_recommendation(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
     recommended_profile, detected_class, reason = choose_profile(gpu_mib)
     models = normalize_models(defaults)
@@ -362,6 +454,30 @@ def command_resolve_install_model(args: argparse.Namespace) -> int:
         current_model_complete=parse_bool(args.current_model_complete),
         skip_model_download=parse_bool(args.skip_model_download),
         available_complete_model_ids=available_complete_model_ids,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_model_browser(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    installed_model_ids = []
+    if args.installed_model_ids:
+        installed_model_ids = [item for item in str(args.installed_model_ids).split(",") if item]
+    payload = build_model_browser(
+        defaults,
+        args.gpu_mib,
+        args.ram_gib,
+        args.cpu_threads,
+        current_model_id=args.current_model_id,
+        installed_model_ids=installed_model_ids,
+        search=args.search,
+        family=args.family,
+        installed_only=args.installed_only,
+        recommended_only=args.recommended_only,
+        fit_only=args.fit_only,
+        coder_only=args.coder_only,
+        verified_only=args.verified_only,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -826,6 +942,22 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_install_model_parser.add_argument("--skip-model-download", default="false")
     resolve_install_model_parser.add_argument("--available-complete-model-ids", default="")
     resolve_install_model_parser.set_defaults(func=command_resolve_install_model)
+
+    model_browser_parser = subparsers.add_parser("model-browser")
+    model_browser_parser.add_argument("--defaults", required=True)
+    model_browser_parser.add_argument("--gpu-mib", type=int, default=0)
+    model_browser_parser.add_argument("--ram-gib", type=int, default=0)
+    model_browser_parser.add_argument("--cpu-threads", type=int, default=0)
+    model_browser_parser.add_argument("--current-model-id", default="")
+    model_browser_parser.add_argument("--installed-model-ids", default="")
+    model_browser_parser.add_argument("--search", default="")
+    model_browser_parser.add_argument("--family", default="")
+    model_browser_parser.add_argument("--installed-only", action="store_true")
+    model_browser_parser.add_argument("--recommended-only", action="store_true")
+    model_browser_parser.add_argument("--fit-only", action="store_true")
+    model_browser_parser.add_argument("--coder-only", action="store_true")
+    model_browser_parser.add_argument("--verified-only", action="store_true")
+    model_browser_parser.set_defaults(func=command_model_browser)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)

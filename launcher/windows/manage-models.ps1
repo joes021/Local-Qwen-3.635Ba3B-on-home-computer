@@ -8,7 +8,6 @@ param(
 
 $state = Get-InstallState
 $recommendation = Get-RecommendationBundle
-$downloadCandidates = Get-DownloadCandidates
 $catalog = @(Get-ModelCatalog)
 
 if ($UseRecommended) {
@@ -31,24 +30,29 @@ if ($ModelId) {
 
 Write-Host "Trenutno izabran model: $($state.modelId)"
 Write-Host "Preporucen model za ovu masinu: $($recommendation.recommendedModel.id)"
-Write-Host "Hardverska klasa: $($downloadCandidates.detectedClass)"
-Write-Host "Preporucen profil: $($downloadCandidates.recommendedProfile)"
+Write-Host "Hardverska klasa: $($recommendation.detectedClass)"
+Write-Host "Preporucen profil: $($recommendation.recommendedProfile)"
 Write-Host ""
 
+$browser = Get-ModelBrowserPayload -FitOnly
 $groups = [ordered]@{
-    "Preporuceni za ovu masinu" = @($downloadCandidates.groups.recommended)
-    "Moze da radi uz kompromis" = @($downloadCandidates.groups.canRun)
-    "Nije preporuceno za ovu konfiguraciju" = @($downloadCandidates.groups.notRecommended)
+    "Preporuceni za ovu masinu" = @($browser.models | Where-Object { $_.fitGroup -eq "recommended" })
+    "Moze da radi uz kompromis" = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" })
+    "Nije preporuceno za ovu konfiguraciju" = @((Get-ModelBrowserPayload).models | Where-Object { $_.fitGroup -eq "notRecommended" })
 }
 
 foreach ($groupName in $groups.Keys) {
     Write-Host $groupName
     foreach ($item in $groups[$groupName]) {
-        $marker = if ($item.id -eq $state.modelId) { "*" } elseif ($item.id -eq $recommendation.recommendedModel.id) { "+" } else { "-" }
+        $marker = if ($item.active) { "*" } elseif ($item.recommended) { "+" } else { "-" }
+        $status = @()
+        if ($item.installed) { $status += "installed" }
+        if ($item.recommended) { $status += "recommended" }
+        $status += [string]$item.fitGroup
         $line = "{0} {1} | {2} | {3} GiB | GPU {4}/{5} MiB | RAM {6} GiB | Agentic {7}/10 | OpenCode {8}/10" -f `
             $marker, $item.id, $item.family, $item.approxSizeGiB, $item.minimumGpuMiB, $item.recommendedGpuMiB, $item.minimumRamGiB, $item.agenticScore, $item.opencodeFit
         Write-Host $line
-        Write-Host "    $($item.description)"
+        Write-Host "    [$($status -join ', ')] $($item.description)"
     }
     Write-Host ""
 }
