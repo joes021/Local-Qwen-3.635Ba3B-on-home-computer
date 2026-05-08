@@ -809,27 +809,24 @@ function Show-AboutDialog {
 function Start-LlamaBackground {
     param([string]$Profile)
 
-    $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript -Profile $Profile 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-LaunchMessage @($result)
-        throw ($result -join [Environment]::NewLine)
-    }
-
     Write-LaunchMessage @(
         "Pokrecem llama.cpp u pozadini za profil '$Profile'...",
         "Server ce se sam potvrditi cim /health postane dostupan."
     )
     Set-ServiceLifecycleState -State "starting" -Profile $Profile -Reason "Control Center je pokrenuo start u pozadini."
+
+    $escapedConfigure = $configureSettingsScript.Replace("'", "''")
+    $escapedStart = $startServerScript.Replace("'", "''")
+    $escapedProfile = $Profile.Replace("'", "''")
+    $backgroundCommand = "& '$escapedConfigure' -Profile '$escapedProfile' | Out-Null; & '$escapedStart' -Profile '$escapedProfile' -WaitSeconds 90"
     Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
         "-ExecutionPolicy", "Bypass",
-        "-File", $startServerScript,
-        "-Profile", $Profile,
-        "-WaitSeconds", "90"
+        "-WindowStyle", "Hidden",
+        "-Command", $backgroundCommand
     ) -WindowStyle Hidden
 
-    if ($result) {
-        Write-LaunchMessage @($result)
-    }
+    Write-LaunchMessage @("Profil '$Profile' je predat pozadinskom launcheru.")
     Refresh-LaunchStatus
     Refresh-DiagnosticsView
     Refresh-ThroughputView

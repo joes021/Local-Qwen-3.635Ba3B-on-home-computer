@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.1.11
+- Windows Control Center vise ni configure-settings ne pokrece sinhrono na UI thread-u pri start/autostart akcijama, vec ceo profil start predaje pozadinskom launcheru
+- Ovo dodatno smanjuje sansu da prozor deluje zakucano ili neodgovarajuce odmah po otvaranju
+
 v2.1.10
 - Ispravljen Windows Control Center placeholder za Agent tab koji je u 2.1.9 gadjao pogresnu kontrolu i mogao da srusi prozor pri startu
 - Zadrzan lazy-load pristup iz 2.1.9, ali sada bez te regresije
