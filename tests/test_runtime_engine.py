@@ -171,6 +171,13 @@ class RuntimeEngineTests(unittest.TestCase):
             "qwen36-35b-a3b-IQ2_M.gguf",
             "--installed-model-ids",
             "qwen36-35b-a3b-IQ2_M.gguf,qwen2.5-coder-7b-instruct-q5_k_m.gguf",
+            "--installed-model-sizes-json",
+            json.dumps({
+                "qwen36-35b-a3b-IQ2_M.gguf": 11000000000,
+                "qwen2.5-coder-7b-instruct-q5_k_m.gguf": 5600000000,
+            }),
+            "--free-disk-gib",
+            "40",
             "--search",
             "qwen",
         )
@@ -186,6 +193,42 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertFalse(coder["active"])
         self.assertIn("balanced-agentic", qwen36["useCaseBadges"])
         self.assertIn("best-for-coding", coder["useCaseBadges"])
+        self.assertEqual(qwen36["speedEstimateLabel"], "brzo")
+        self.assertAlmostEqual(qwen36["installedSizeGiB"], round(11000000000 / (1024 ** 3), 2))
+        self.assertTrue(qwen36["hasEnoughDisk"])
+        self.assertIn("best-starter-model", qwen36["useCaseBadges"])
+        self.assertIn("best-coding-model", coder["useCaseBadges"])
+
+    def test_model_browser_marks_quality_model_and_disk_needed(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "24576",
+            "--ram-gib",
+            "64",
+            "--cpu-threads",
+            "24",
+            "--current-model-id",
+            "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+            "--installed-model-ids",
+            "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+            "--installed-model-sizes-json",
+            json.dumps({
+                "Qwen3.6-35B-A3B-Q4_K_M.gguf": 10000000000,
+            }),
+            "--free-disk-gib",
+            "5",
+            "--search",
+            "Q4_K_M",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        quality = next(item for item in payload["models"] if item["id"] == "Qwen3.6-35B-A3B-Q4_K_M.gguf")
+        self.assertIn("best-quality-model", quality["useCaseBadges"])
+        self.assertGreater(quality["diskNeededGiB"], 0)
+        self.assertFalse(quality["hasEnoughDisk"])
 
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(

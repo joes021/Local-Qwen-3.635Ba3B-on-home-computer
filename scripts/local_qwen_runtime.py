@@ -290,6 +290,8 @@ def build_model_browser(
     cpu_threads: int | None,
     current_model_id: str | None = None,
     installed_model_ids: list[str] | None = None,
+    installed_model_sizes: dict[str, int] | None = None,
+    free_disk_gib: float | None = None,
     search: str = "",
     family: str = "",
     installed_only: bool = False,
@@ -301,6 +303,9 @@ def build_model_browser(
     recommendation = build_recommendation(defaults, gpu_mib, ram_gib, cpu_threads)
     download_candidates = build_download_candidates(defaults, gpu_mib, ram_gib, cpu_threads)
     installed_set = {str(item) for item in (installed_model_ids or []) if str(item)}
+    installed_model_sizes = {str(key): int(value) for key, value in (installed_model_sizes or {}).items()}
+    if free_disk_gib is not None and free_disk_gib < 0:
+        free_disk_gib = None
     current_model_id = str(current_model_id or "")
     search = str(search or "").strip().lower()
     family = str(family or "").strip().lower()
@@ -342,22 +347,53 @@ def build_model_browser(
         badges: list[str] = []
         quality_tier = str(model.get("qualityTier", "")).lower()
         use_case_lower = use_case.lower()
+        installed_size_bytes = int(installed_model_sizes.get(model_id, 0))
+        approx_size_bytes = int(float(model.get("approxSizeGiB", 0) or 0) * (1024 ** 3))
+        disk_needed_bytes = max(0, approx_size_bytes - installed_size_bytes)
+        disk_needed_gib = round(disk_needed_bytes / (1024 ** 3), 2) if disk_needed_bytes > 0 else 0.0
+
         if "code" in use_case_lower or "coder" in model_family.lower() or "coder" in label.lower():
             badges.append("best-for-coding")
+            badges.append("best-coding-model")
         if quality_tier == "quality":
             badges.append("best-quality")
+            badges.append("best-quality-model")
         if quality_tier == "compact" and int(model.get("recommendedGpuMiB", 0) or 0) <= 8192:
             badges.append("best-for-speed")
         if model.get("primaryRecommendation"):
             badges.append("balanced-agentic")
+            badges.append("best-starter-model")
         if "reason" in use_case_lower:
             badges.append("reasoning")
+
+        if fit_group == "recommended":
+            speed_label = "brzo" if quality_tier == "compact" and (not gpu_mib or gpu_mib <= 8192) else "stabilno"
+        elif fit_group == "canRun":
+            speed_label = "umereno"
+        else:
+            speed_label = "sporo / rizicno"
+
+        speed_reason = (
+            "Dobar fit za ovu masinu i mali kvant."
+            if speed_label == "brzo"
+            else "Treba malo vise prostora ili VRAM-a, ali deluje upotrebljivo."
+            if speed_label == "umereno"
+            else "Ovaj izbor je veci ili tezi od idealnog fit-a za ovu masinu."
+        )
 
         entry["installed"] = installed
         entry["active"] = active
         entry["recommended"] = recommended
         entry["fitGroup"] = fit_group
-        entry["useCaseBadges"] = badges
+        entry["useCaseBadges"] = list(dict.fromkeys(badges))
+        entry["installedSizeBytes"] = installed_size_bytes
+        entry["installedSizeGiB"] = round(installed_size_bytes / (1024 ** 3), 2) if installed_size_bytes > 0 else 0.0
+        entry["diskNeededBytes"] = disk_needed_bytes
+        entry["diskNeededGiB"] = disk_needed_gib
+        entry["freeDiskGiB"] = round(float(free_disk_gib), 2) if free_disk_gib is not None else None
+        entry["hasEnoughDisk"] = True if free_disk_gib is None else bool(float(free_disk_gib) >= disk_needed_gib)
+        entry["speedEstimateLabel"] = speed_label
+        entry["speedEstimateReason"] = speed_reason
         entry["statusTags"] = [
             tag
             for tag, enabled in (
@@ -479,6 +515,12 @@ def command_model_browser(args: argparse.Namespace) -> int:
     installed_model_ids = []
     if args.installed_model_ids:
         installed_model_ids = [item for item in str(args.installed_model_ids).split(",") if item]
+    installed_model_sizes: dict[str, int] = {}
+    if args.installed_model_sizes_json:
+        try:
+            installed_model_sizes = json.loads(args.installed_model_sizes_json)
+        except json.JSONDecodeError:
+            installed_model_sizes = {}
     payload = build_model_browser(
         defaults,
         args.gpu_mib,
@@ -486,6 +528,8 @@ def command_model_browser(args: argparse.Namespace) -> int:
         args.cpu_threads,
         current_model_id=args.current_model_id,
         installed_model_ids=installed_model_ids,
+        installed_model_sizes=installed_model_sizes,
+        free_disk_gib=args.free_disk_gib,
         search=args.search,
         family=args.family,
         installed_only=args.installed_only,
@@ -1146,6 +1190,8 @@ def build_parser() -> argparse.ArgumentParser:
     model_browser_parser.add_argument("--cpu-threads", type=int, default=0)
     model_browser_parser.add_argument("--current-model-id", default="")
     model_browser_parser.add_argument("--installed-model-ids", default="")
+    model_browser_parser.add_argument("--installed-model-sizes-json", default="{}")
+    model_browser_parser.add_argument("--free-disk-gib", type=float, default=-1)
     model_browser_parser.add_argument("--search", default="")
     model_browser_parser.add_argument("--family", default="")
     model_browser_parser.add_argument("--installed-only", action="store_true")

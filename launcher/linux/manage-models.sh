@@ -63,6 +63,31 @@ DEFAULTS_PATH="$(get_defaults_path)"
 ROOT="$(get_local_qwen_root)"
 MODELS_DIR="$ROOT/models"
 
+get_installed_model_sizes_json() {
+  python3 - <<'PY' "$DEFAULTS_PATH" "$MODELS_DIR"
+import json, os, sys
+defaults_path, models_dir = sys.argv[1:3]
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+result = {}
+for item in defaults.get("modelChoices", {}).values():
+    path = os.path.join(models_dir, item.get("filename", ""))
+    if os.path.isfile(path):
+        result[item.get("id")] = os.path.getsize(path)
+print(json.dumps(result))
+PY
+}
+
+get_free_disk_gib() {
+  python3 - <<'PY' "$MODELS_DIR"
+import os, shutil, sys
+path = sys.argv[1]
+os.makedirs(path, exist_ok=True)
+usage = shutil.disk_usage(path)
+print(round(usage.free / (1024 ** 3), 2))
+PY
+}
+
 get_recommended_model_id() {
   local gpu_mib="0" ram_gib="0" cpu_threads="0"
   if command -v nvidia-smi >/dev/null 2>&1; then
@@ -107,6 +132,8 @@ PY
 get_model_browser_for_current_machine() {
   local current_model_id="$1"
   local installed_ids="$2"
+  local installed_sizes_json="$3"
+  local free_disk_gib="$4"
   local gpu_mib="0" ram_gib="0" cpu_threads="0"
   if command -v nvidia-smi >/dev/null 2>&1; then
     gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
@@ -130,7 +157,7 @@ PY
   [[ "$CODER_ONLY" -eq 1 ]] && extra_args+=(--coder-only)
   [[ "$VERIFIED_ONLY" -eq 1 ]] && extra_args+=(--verified-only)
 
-  get_model_browser_json "$gpu_mib" "$ram_gib" "$cpu_threads" "$current_model_id" "$installed_ids" "$SEARCH" "$FAMILY" "${extra_args[@]}"
+  get_model_browser_json "$gpu_mib" "$ram_gib" "$cpu_threads" "$current_model_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib" "$SEARCH" "$FAMILY" "${extra_args[@]}"
 }
 
 select_model() {
@@ -177,9 +204,11 @@ PY
 )"
     recommended_id="$(get_recommended_model_id)"
     installed_ids="$(get_installed_model_ids_csv)"
+    installed_sizes_json="$(get_installed_model_sizes_json)"
+    free_disk_gib="$(get_free_disk_gib)"
     echo "Aktivni model: $current_id"
     echo "Preporuceni model: $recommended_id"
-    get_model_browser_for_current_machine "$current_id" "$installed_ids" | python3 - <<'PY' "$current_id" "$recommended_id"
+    get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib" | python3 - <<'PY' "$current_id" "$recommended_id"
 import json, sys
 current_id, recommended_id = sys.argv[1:3]
 payload = json.load(sys.stdin)
@@ -197,7 +226,8 @@ for item in payload.get("models", []):
     status.append(item.get("fitGroup"))
     if item.get("useCaseBadges"):
         status.append("badge=" + "|".join(item.get("useCaseBadges")))
-    print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
+    print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Speed {item.get('speedEstimateLabel')} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
+    print(f"    Installed: {item.get('installedSizeGiB')} GiB | Need disk: {item.get('diskNeededGiB')} GiB | Free disk: {item.get('freeDiskGiB')} GiB | Enough disk: {'da' if item.get('hasEnoughDisk') else 'ne'}")
     print(f"    {item.get('description')}")
 print()
 print("* = trenutno aktivan model")

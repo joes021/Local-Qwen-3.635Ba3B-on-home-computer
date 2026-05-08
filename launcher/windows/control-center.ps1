@@ -1220,9 +1220,11 @@ function Refresh-ModelSelectionInfo {
 
         $modelInfoBox.Text = @(
             "Status: $statusText"
-            "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10"
+            "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10 | Speed: $($selectedModel.speedEstimateLabel)"
+            "Installed: $($selectedModel.installedSizeGiB) GiB | Need disk: $($selectedModel.diskNeededGiB) GiB | Free disk: $($selectedModel.freeDiskGiB) GiB | Enough disk: $(if ($selectedModel.hasEnoughDisk) { 'da' } else { 'ne' })"
             "GPU prag: $($selectedModel.minimumGpuMiB) MiB | Preporuceni GPU: $($selectedModel.recommendedGpuMiB) MiB | RAM: $($selectedModel.minimumRamGiB) GiB"
             "Opis: $($selectedModel.description)"
+            "Badge: $($(if ($selectedModel.useCaseBadges -and @($selectedModel.useCaseBadges).Count -gt 0) { @($selectedModel.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))"
             "$(if ($fitReasons) { 'Fit: ' + $fitReasons } else { '' })"
         ) -join [Environment]::NewLine
     } catch {
@@ -1342,6 +1344,8 @@ function Show-ModelBrowserDialog {
     $grid.Columns.Add("family", "Family") | Out-Null
     $grid.Columns.Add("fit", "Fit") | Out-Null
     $grid.Columns.Add("size", "Velicina") | Out-Null
+    $grid.Columns.Add("speed", "Brzina") | Out-Null
+    $grid.Columns.Add("disk", "Disk") | Out-Null
     $grid.Columns.Add("agentic", "Agentic") | Out-Null
     $grid.Columns.Add("opencode", "OpenCode") | Out-Null
     $grid.Columns["status"].FillWeight = 110
@@ -1349,6 +1353,8 @@ function Show-ModelBrowserDialog {
     $grid.Columns["family"].FillWeight = 95
     $grid.Columns["fit"].FillWeight = 95
     $grid.Columns["size"].FillWeight = 70
+    $grid.Columns["speed"].FillWeight = 75
+    $grid.Columns["disk"].FillWeight = 85
     $grid.Columns["agentic"].FillWeight = 70
     $grid.Columns["opencode"].FillWeight = 70
     $browserForm.Controls.Add($grid)
@@ -1414,6 +1420,8 @@ function Show-ModelBrowserDialog {
             "Family: $($selected.family) | Use case: $($selected.useCase)",
             "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
             "Velicina: $($selected.approxSizeGiB) GiB | GPU: $($selected.minimumGpuMiB)/$($selected.recommendedGpuMiB) MiB | RAM: $($selected.minimumRamGiB) GiB",
+            "Installed: $($selected.installedSizeGiB) GiB | Need disk: $($selected.diskNeededGiB) GiB | Free disk: $($selected.freeDiskGiB) GiB | Enough disk: $(if ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
+            "Procena brzine: $($selected.speedEstimateLabel) | $($selected.speedEstimateReason)",
             "Agentic: $($selected.agenticScore)/10 | OpenCode: $($selected.opencodeFit)/10 | Curation: $($selected.curationLevel)",
             "Opis: $($selected.description)"
         ) -join [Environment]::NewLine
@@ -1450,6 +1458,8 @@ function Show-ModelBrowserDialog {
                     [string]$item.family,
                     [string]$item.fitGroup,
                     ("{0} GiB" -f $item.approxSizeGiB),
+                    [string]$item.speedEstimateLabel,
+                    ("need {0}G" -f $item.diskNeededGiB),
                     ("{0}/10" -f $item.agenticScore),
                     ("{0}/10" -f $item.opencodeFit)
                 )

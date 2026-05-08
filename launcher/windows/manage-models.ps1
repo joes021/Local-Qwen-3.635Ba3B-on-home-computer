@@ -52,9 +52,10 @@ foreach ($groupName in $groups.Keys) {
         if ($item.useCaseBadges -and @($item.useCaseBadges).Count -gt 0) {
             $status += "badge=" + ((@($item.useCaseBadges)) -join "|")
         }
-        $line = "{0} {1} | {2} | {3} GiB | GPU {4}/{5} MiB | RAM {6} GiB | Agentic {7}/10 | OpenCode {8}/10" -f `
-            $marker, $item.id, $item.family, $item.approxSizeGiB, $item.minimumGpuMiB, $item.recommendedGpuMiB, $item.minimumRamGiB, $item.agenticScore, $item.opencodeFit
+        $line = "{0} {1} | {2} | {3} GiB | Speed {4} | GPU {5}/{6} MiB | RAM {7} GiB | Agentic {8}/10 | OpenCode {9}/10" -f `
+            $marker, $item.id, $item.family, $item.approxSizeGiB, $item.speedEstimateLabel, $item.minimumGpuMiB, $item.recommendedGpuMiB, $item.minimumRamGiB, $item.agenticScore, $item.opencodeFit
         Write-Host $line
+        Write-Host "    Installed: $($item.installedSizeGiB) GiB | Need disk: $($item.diskNeededGiB) GiB | Free disk: $($item.freeDiskGiB) GiB | Enough disk: $(if ($item.hasEnoughDisk) { 'da' } else { 'ne' })"
         Write-Host "    [$($status -join ', ')] $($item.description)"
     }
     Write-Host ""

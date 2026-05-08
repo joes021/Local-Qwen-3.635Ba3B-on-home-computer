@@ -703,6 +703,34 @@ function Get-InstalledModelIds {
     return @($installed)
 }
 
+function Get-InstalledModelSizeMap {
+    $defaults = Get-Defaults
+    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    $sizes = [ordered]@{}
+
+    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
+        $choice = $property.Value
+        $candidatePath = Join-Path $modelsDir ([string]$choice.filename)
+        if (Test-Path $candidatePath) {
+            $sizes[[string]$choice.id] = [int64](Get-Item $candidatePath).Length
+        }
+    }
+
+    return $sizes
+}
+
+function Get-ModelsDriveFreeGiB {
+    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    Ensure-Directory $modelsDir
+    try {
+        $rootPath = [System.IO.Path]::GetPathRoot($modelsDir)
+        $drive = [System.IO.DriveInfo]::new($rootPath)
+        return [math]::Round(($drive.AvailableFreeSpace / 1GB), 2)
+    } catch {
+        return $null
+    }
+}
+
 function Get-FilteredModelCatalog {
     param(
         [switch]$VerifiedOnly,
@@ -750,6 +778,7 @@ function Get-ModelBrowserPayload {
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
     $state = Get-InstallState
+    $freeDiskGiB = Get-ModelsDriveFreeGiB
     $arguments = @(
         "model-browser",
         "--defaults", $defaultsPath,
@@ -758,6 +787,8 @@ function Get-ModelBrowserPayload {
         "--cpu-threads", ([string]$cpuThreads),
         "--current-model-id", ([string]$state.modelId),
         "--installed-model-ids", ([string]((Get-InstalledModelIds) -join ",")),
+        "--installed-model-sizes-json", ((Get-InstalledModelSizeMap | ConvertTo-Json -Compress)),
+        "--free-disk-gib", ([string]$(if ($null -ne $freeDiskGiB) { $freeDiskGiB } else { -1 })),
         "--search", $Search,
         "--family", $Family
     )

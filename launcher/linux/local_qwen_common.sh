@@ -223,9 +223,11 @@ get_model_browser_json() {
   local cpu_threads="${3:-0}"
   local current_model_id="${4:-}"
   local installed_model_ids="${5:-}"
-  local search="${6:-}"
-  local family="${7:-}"
-  shift 7 || true
+  local installed_model_sizes_json="${6:-{}}"
+  local free_disk_gib="${7:--1}"
+  local search="${8:-}"
+  local family="${9:-}"
+  shift 9 || true
   run_runtime_engine_json model-browser \
     --defaults "$(get_defaults_path)" \
     --gpu-mib "$gpu_mib" \
@@ -233,6 +235,8 @@ get_model_browser_json() {
     --cpu-threads "$cpu_threads" \
     --current-model-id "$current_model_id" \
     --installed-model-ids "$installed_model_ids" \
+    --installed-model-sizes-json "$installed_model_sizes_json" \
+    --free-disk-gib "$free_disk_gib" \
     --search "$search" \
     --family "$family" \
     "$@"

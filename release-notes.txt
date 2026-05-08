@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.5.0
+- Model browser 2.0 sada prikazuje installed size, potreban dodatni disk prostor, slobodan disk i procenu da li model staje na trenutni storage
+- Dodata je procena brzine za ovu masinu i nove jasne oznake kao sto su best-starter-model, best-coding-model i best-quality-model
+- Windows i Linux model browser prikazi sada koriste isti bogatiji payload, pa obe platforme imaju isti disk i speed pregled
+
 v2.4.3
 - Health Center sada prikazuje procenu ozbiljnosti kvara sa severity nivoom i score vrednoscu
 - Dodat guided repair koji sam bira primarnu akciju prema trenutnom kvaru, ukljucujuci i WDAC / App Control warning scenario
