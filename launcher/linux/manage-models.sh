@@ -195,6 +195,8 @@ for item in payload.get("models", []):
     if item.get("recommended"):
         status.append("recommended")
     status.append(item.get("fitGroup"))
+    if item.get("useCaseBadges"):
+        status.append("badge=" + "|".join(item.get("useCaseBadges")))
     print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
     print(f"    {item.get('description')}")
 print()

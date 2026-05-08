@@ -1253,6 +1253,7 @@ function Show-ModelBrowserDialog {
             "Status: $($statusText -join ' | ')",
             "Model: $($selected.id)",
             "Family: $($selected.family) | Use case: $($selected.useCase)",
+            "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
             "Velicina: $($selected.approxSizeGiB) GiB | GPU: $($selected.minimumGpuMiB)/$($selected.recommendedGpuMiB) MiB | RAM: $($selected.minimumRamGiB) GiB",
             "Agentic: $($selected.agenticScore)/10 | OpenCode: $($selected.opencodeFit)/10 | Curation: $($selected.curationLevel)",
             "Opis: $($selected.description)"
@@ -1278,6 +1279,7 @@ function Show-ModelBrowserDialog {
                 if ($item.active) { $status += "AKTIVAN" }
                 if ($item.installed) { $status += "INSTALLED" }
                 if ($item.recommended) { $status += "PREPORUKA" }
+                if ($item.useCaseBadges -and @($item.useCaseBadges).Count -gt 0) { $status += ((@($item.useCaseBadges) | Select-Object -First 1) -join '') }
                 $status += switch ($item.fitGroup) {
                     "recommended" { "FIT" }
                     "canRun" { "KOMPROMIS" }

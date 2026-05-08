@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.4.1
+- Model browser sada prikazuje jasne use-case oznake kao sto su best-for-coding, best-for-speed, best-quality i balanced-agentic
+- Windows model browser prikazuje badge oznaku i u listi i u detaljnom panelu, pa se na prvi pogled vidi za sta je model najbolji
+- Linux manage-models prikaz sada takodje ispisuje iste badge oznake iz shared payload-a
+
 v2.4.0
 - Dodat pravi model browser u Windows Control Center-u: pretraga, family filter, statusi installed/active/recommended i akcije za aktivaciju i download
 - Shared runtime sada daje model-browser payload, pa Windows i Linux vide isti katalog sa statusima i fit signalima

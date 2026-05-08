@@ -339,10 +339,25 @@ def build_model_browser(
             continue
 
         entry = dict(model)
+        badges: list[str] = []
+        quality_tier = str(model.get("qualityTier", "")).lower()
+        use_case_lower = use_case.lower()
+        if "code" in use_case_lower or "coder" in model_family.lower() or "coder" in label.lower():
+            badges.append("best-for-coding")
+        if quality_tier == "quality":
+            badges.append("best-quality")
+        if quality_tier == "compact" and int(model.get("recommendedGpuMiB", 0) or 0) <= 8192:
+            badges.append("best-for-speed")
+        if model.get("primaryRecommendation"):
+            badges.append("balanced-agentic")
+        if "reason" in use_case_lower:
+            badges.append("reasoning")
+
         entry["installed"] = installed
         entry["active"] = active
         entry["recommended"] = recommended
         entry["fitGroup"] = fit_group
+        entry["useCaseBadges"] = badges
         entry["statusTags"] = [
             tag
             for tag, enabled in (

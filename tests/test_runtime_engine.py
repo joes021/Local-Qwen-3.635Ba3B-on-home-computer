@@ -184,6 +184,8 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(qwen36["fitGroup"], "recommended")
         self.assertTrue(coder["installed"])
         self.assertFalse(coder["active"])
+        self.assertIn("balanced-agentic", qwen36["useCaseBadges"])
+        self.assertIn("best-for-coding", coder["useCaseBadges"])
 
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(

@@ -49,6 +49,9 @@ foreach ($groupName in $groups.Keys) {
         if ($item.installed) { $status += "installed" }
         if ($item.recommended) { $status += "recommended" }
         $status += [string]$item.fitGroup
+        if ($item.useCaseBadges -and @($item.useCaseBadges).Count -gt 0) {
+            $status += "badge=" + ((@($item.useCaseBadges)) -join "|")
+        }
         $line = "{0} {1} | {2} | {3} GiB | GPU {4}/{5} MiB | RAM {6} GiB | Agentic {7}/10 | OpenCode {8}/10" -f `
             $marker, $item.id, $item.family, $item.approxSizeGiB, $item.minimumGpuMiB, $item.recommendedGpuMiB, $item.minimumRamGiB, $item.agenticScore, $item.opencodeFit
         Write-Host $line
