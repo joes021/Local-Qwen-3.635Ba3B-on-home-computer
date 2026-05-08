@@ -690,6 +690,37 @@ function Get-DownloadCandidates {
     )
 }
 
+function Get-FilteredModelCatalog {
+    param(
+        [switch]$VerifiedOnly,
+        [switch]$CoderOnly,
+        [switch]$FitOnly
+    )
+
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    $arguments = @(
+        "filter-models",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads)
+    )
+    if ($VerifiedOnly) {
+        $arguments += "--verified-only"
+    }
+    if ($CoderOnly) {
+        $arguments += "--coder-only"
+    }
+    if ($FitOnly) {
+        $arguments += "--fit-only"
+    }
+
+    return Invoke-RuntimeEngineJson -Arguments $arguments
+}
+
 function Get-LatestReleaseInfo {
     $currentVersion = Get-AppVersion
     return Invoke-RuntimeEngineJson -Arguments @(

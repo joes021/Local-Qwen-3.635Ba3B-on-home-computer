@@ -88,6 +88,26 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIn("gemma-3-4b-it-Q4_K_M.gguf", can_run_ids | recommended_ids)
         self.assertIn("Qwen3.6-35B-A3B-Q4_K_M.gguf", not_recommended_ids)
 
+    def test_filter_models_returns_verified_coder_models_that_fit_machine(self):
+        code, stdout, stderr = run_runtime_command(
+            "filter-models",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--verified-only",
+            "--coder-only",
+            "--fit-only",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        visible_ids = [item["id"] for item in payload["models"]]
+        self.assertEqual(visible_ids, ["qwen2.5-coder-7b-instruct-q5_k_m.gguf"])
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

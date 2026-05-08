@@ -8,6 +8,7 @@ $state = Get-InstallState
 $script:LatestReleaseCache = $null
 $script:LatestReleaseCacheAt = $null
 $script:ModelUiLoaded = $false
+$script:VisibleModelList = @()
 
 $configureSettingsScript = Join-Path $PSScriptRoot "configure-settings.ps1"
 $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
@@ -961,34 +962,73 @@ function Ensure-ModelUiState {
     $recommendationBundle = Get-RecommendationBundle
     $script:ModelUiLoaded = $true
 
-    if ($modelCombo) {
-        $modelCombo.Items.Clear()
-        foreach ($item in $modelCatalog) {
-            [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB")
-        }
+    Apply-ModelFilters
+}
 
-        $initialModelIndex = 0
-        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
-            if ($modelCatalog[$i].id -eq $currentModelMeta.id) {
+function Apply-ModelFilters {
+    if (-not $script:ModelUiLoaded -or -not $modelCombo) {
+        return
+    }
+
+    $selectedModelId = $null
+    if ($modelCombo.SelectedIndex -ge 0 -and $modelCombo.SelectedIndex -lt $script:VisibleModelList.Count) {
+        $selectedModelId = [string]$script:VisibleModelList[$modelCombo.SelectedIndex].id
+    } elseif ($currentModelMeta) {
+        $selectedModelId = [string]$currentModelMeta.id
+    }
+
+    $filteredPayload = Get-FilteredModelCatalog `
+        -VerifiedOnly:([bool]($verifiedOnlyCheck -and $verifiedOnlyCheck.Checked)) `
+        -CoderOnly:([bool]($coderOnlyCheck -and $coderOnlyCheck.Checked)) `
+        -FitOnly:([bool]($fitOnlyCheck -and $fitOnlyCheck.Checked))
+
+    $script:VisibleModelList = @($filteredPayload.models)
+    $modelCombo.Items.Clear()
+    foreach ($item in $script:VisibleModelList) {
+        [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB")
+    }
+
+    if ($modelCombo.Items.Count -eq 0) {
+        $modelCombo.SelectedIndex = -1
+        return
+    }
+
+    $initialModelIndex = -1
+    if ($selectedModelId) {
+        for ($i = 0; $i -lt $script:VisibleModelList.Count; $i++) {
+            if ($script:VisibleModelList[$i].id -eq $selectedModelId) {
                 $initialModelIndex = $i
                 break
             }
         }
-
-        if ($modelCombo.Items.Count -gt 0) {
-            $modelCombo.SelectedIndex = $initialModelIndex
+    }
+    if ($initialModelIndex -lt 0 -and $recommendationBundle -and $recommendationBundle.recommendedModel) {
+        for ($i = 0; $i -lt $script:VisibleModelList.Count; $i++) {
+            if ($script:VisibleModelList[$i].id -eq $recommendationBundle.recommendedModel.id) {
+                $initialModelIndex = $i
+                break
+            }
         }
     }
+    if ($initialModelIndex -lt 0) {
+        $initialModelIndex = 0
+    }
+
+    $modelCombo.SelectedIndex = $initialModelIndex
 }
 
 function Refresh-ModelSelectionInfo {
     try {
         Ensure-ModelUiState
-        if (-not $modelCombo -or $modelCombo.SelectedIndex -lt 0) {
+        if (-not $modelCombo) {
+            return
+        }
+        if ($script:VisibleModelList.Count -eq 0 -or $modelCombo.SelectedIndex -lt 0 -or $modelCombo.SelectedIndex -ge $script:VisibleModelList.Count) {
+            $modelInfoBox.Text = "Nijedan model ne odgovara aktivnim filterima."
             return
         }
 
-        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
         $downloadCandidates = Get-DownloadCandidates
         $selectedFit = $null
         $selectedGroup = "nepoznato"
@@ -1212,9 +1252,27 @@ foreach ($item in $modelCatalog) {
 }
 $settingsPanel.Controls.Add($modelCombo)
 
+$verifiedOnlyCheck = New-Object System.Windows.Forms.CheckBox
+$verifiedOnlyCheck.Text = "Samo verified"
+$verifiedOnlyCheck.Location = New-Object System.Drawing.Point(18, 82)
+$verifiedOnlyCheck.Size = New-Object System.Drawing.Size(120, 24)
+$settingsPanel.Controls.Add($verifiedOnlyCheck)
+
+$coderOnlyCheck = New-Object System.Windows.Forms.CheckBox
+$coderOnlyCheck.Text = "Samo coder modeli"
+$coderOnlyCheck.Location = New-Object System.Drawing.Point(150, 82)
+$coderOnlyCheck.Size = New-Object System.Drawing.Size(150, 24)
+$settingsPanel.Controls.Add($coderOnlyCheck)
+
+$fitOnlyCheck = New-Object System.Windows.Forms.CheckBox
+$fitOnlyCheck.Text = "Samo za ovu masinu"
+$fitOnlyCheck.Location = New-Object System.Drawing.Point(312, 82)
+$fitOnlyCheck.Size = New-Object System.Drawing.Size(155, 24)
+$settingsPanel.Controls.Add($fitOnlyCheck)
+
 $downloadModelButton = New-Object System.Windows.Forms.Button
 $downloadModelButton.Text = "Preuzmi izabrani model"
-$downloadModelButton.Location = New-Object System.Drawing.Point(400, 78)
+$downloadModelButton.Location = New-Object System.Drawing.Point(400, 106)
 $downloadModelButton.Size = New-Object System.Drawing.Size(185, 32)
 $settingsPanel.Controls.Add($downloadModelButton)
 
@@ -1222,8 +1280,17 @@ $modelCombo.Add_SelectedIndexChanged({
     Refresh-ModelSelectionInfo
 })
 
+$filterHandler = {
+    Apply-ModelFilters
+    Refresh-ModelSelectionInfo
+}.GetNewClosure()
+
+$verifiedOnlyCheck.Add_CheckedChanged($filterHandler)
+$coderOnlyCheck.Add_CheckedChanged($filterHandler)
+$fitOnlyCheck.Add_CheckedChanged($filterHandler)
+
 $modelInfoBox = New-Object System.Windows.Forms.TextBox
-$modelInfoBox.Location = New-Object System.Drawing.Point(18, 122)
+$modelInfoBox.Location = New-Object System.Drawing.Point(18, 146)
 $modelInfoBox.Size = New-Object System.Drawing.Size(567, 108)
 $modelInfoBox.Multiline = $true
 $modelInfoBox.ScrollBars = "Vertical"
@@ -1231,23 +1298,23 @@ $modelInfoBox.ReadOnly = $true
 $modelInfoBox.BackColor = [System.Drawing.Color]::White
 $settingsPanel.Controls.Add($modelInfoBox)
 
-$contextRow = Add-ContextRow -Parent $settingsPanel -Y 244 -SelectedValue ([int]$settings.llama.contextSize)
-$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 332 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
-$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 420 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
-$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 508 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
-$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 596 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
-$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 684 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
+$contextRow = Add-ContextRow -Parent $settingsPanel -Y 268 -SelectedValue ([int]$settings.llama.contextSize)
+$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 356 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
+$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 444 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
+$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 532 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
+$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 620 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
+$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 708 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
 
 $settingsStatus = New-Object System.Windows.Forms.Label
 $settingsStatus.Text = "Promene vaze za buduca pokretanja."
-$settingsStatus.Location = New-Object System.Drawing.Point(18, 774)
+$settingsStatus.Location = New-Object System.Drawing.Point(18, 798)
 $settingsStatus.Size = New-Object System.Drawing.Size(300, 24)
 $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $settingsPanel.Controls.Add($settingsStatus)
 
 $saveSettingsButton = New-Object System.Windows.Forms.Button
 $saveSettingsButton.Text = "Sacuvaj podesavanja"
-$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 768)
+$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 792)
 $saveSettingsButton.Size = New-Object System.Drawing.Size(155, 34)
 $saveSettingsButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $saveSettingsButton.ForeColor = [System.Drawing.Color]::White
@@ -1256,7 +1323,7 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 768)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 792)
 $resetSettingsButton.Size = New-Object System.Drawing.Size(132, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
 
@@ -1441,8 +1508,8 @@ $resetSettingsButton.Add_Click({
     $generalRow.Numeric.Value = 100
     $exploreRow.Numeric.Value = 60
     if ($recommendationBundle) {
-        for ($i = 0; $i -lt $modelCatalog.Count; $i++) {
-            if ($modelCatalog[$i].id -eq $recommendationBundle.recommendedModel.id) {
+        for ($i = 0; $i -lt $script:VisibleModelList.Count; $i++) {
+            if ($script:VisibleModelList[$i].id -eq $recommendationBundle.recommendedModel.id) {
                 $modelCombo.SelectedIndex = $i
                 break
             }
@@ -1456,7 +1523,10 @@ $saveSettingsButton.Add_Click({
     try {
         Ensure-ModelUiState
         $contextValue = $contextRow.Presets[$contextRow.Track.Value]
-        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        if ($modelCombo.SelectedIndex -lt 0 -or $modelCombo.SelectedIndex -ge $script:VisibleModelList.Count) {
+            throw "Nijedan model nije dostupan za aktivne filtere."
+        }
+        $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
         if ($selectedModel) {
             & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
         }
@@ -1487,7 +1557,10 @@ $saveSettingsButton.Add_Click({
 $downloadModelButton.Add_Click({
     try {
         Ensure-ModelUiState
-        $selectedModel = $modelCatalog[$modelCombo.SelectedIndex]
+        if ($modelCombo.SelectedIndex -lt 0 -or $modelCombo.SelectedIndex -ge $script:VisibleModelList.Count) {
+            throw "Nijedan model nije dostupan za aktivne filtere."
+        }
+        $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
         Invoke-BackgroundShellScript -Name "Model download" -ScriptPath $manageModelsScript -ArgumentList @("-ModelId", ([string]$selectedModel.id), "-Download") -OnSuccess {
             $settingsStatus.Text = "Model je osvezen: $($selectedModel.id)"
             $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)

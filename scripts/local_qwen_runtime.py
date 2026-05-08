@@ -190,6 +190,51 @@ def build_download_candidates(defaults: dict, gpu_mib: int | None, ram_gib: int 
     }
 
 
+def filter_models(
+    defaults: dict,
+    gpu_mib: int | None,
+    ram_gib: int | None,
+    cpu_threads: int | None,
+    verified_only: bool = False,
+    coder_only: bool = False,
+    fit_only: bool = False,
+) -> dict:
+    catalog = normalize_models(defaults)
+    download_candidates = build_download_candidates(defaults, gpu_mib, ram_gib, cpu_threads)
+    fit_ids: set[str] = set()
+    for group_name in ("recommended", "canRun"):
+        for item in download_candidates["groups"].get(group_name, []):
+            fit_ids.add(str(item.get("id")))
+
+    visible_models: list[dict] = []
+    for model in catalog:
+        if verified_only and str(model.get("curationLevel", "")).lower() != "verified":
+            continue
+        if coder_only:
+            family = str(model.get("family", "")).lower()
+            use_case = str(model.get("useCase", "")).lower()
+            label = str(model.get("label", "")).lower()
+            if "coder" not in family and "code" not in use_case and "coder" not in label:
+                continue
+        if fit_only and str(model.get("id")) not in fit_ids:
+            continue
+        visible_models.append(model)
+
+    return {
+        "recommendedProfile": download_candidates["recommendedProfile"],
+        "detectedClass": download_candidates["detectedClass"],
+        "reason": download_candidates["reason"],
+        "hardware": download_candidates["hardware"],
+        "recommendedModel": download_candidates["recommendedModel"],
+        "appliedFilters": {
+            "verifiedOnly": verified_only,
+            "coderOnly": coder_only,
+            "fitOnly": fit_only,
+        },
+        "models": visible_models,
+    }
+
+
 def build_recommendation(defaults: dict, gpu_mib: int | None, ram_gib: int | None, cpu_threads: int | None) -> dict:
     recommended_profile, detected_class, reason = choose_profile(gpu_mib)
     models = normalize_models(defaults)
@@ -236,6 +281,21 @@ def command_recommend(args: argparse.Namespace) -> int:
 def command_download_candidates(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     payload = build_download_candidates(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def command_filter_models(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    payload = filter_models(
+        defaults,
+        args.gpu_mib,
+        args.ram_gib,
+        args.cpu_threads,
+        verified_only=args.verified_only,
+        coder_only=args.coder_only,
+        fit_only=args.fit_only,
+    )
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -678,6 +738,16 @@ def build_parser() -> argparse.ArgumentParser:
     download_candidates.add_argument("--ram-gib", type=int, default=0)
     download_candidates.add_argument("--cpu-threads", type=int, default=0)
     download_candidates.set_defaults(func=command_download_candidates)
+
+    filter_models_parser = subparsers.add_parser("filter-models")
+    filter_models_parser.add_argument("--defaults", required=True)
+    filter_models_parser.add_argument("--gpu-mib", type=int, default=0)
+    filter_models_parser.add_argument("--ram-gib", type=int, default=0)
+    filter_models_parser.add_argument("--cpu-threads", type=int, default=0)
+    filter_models_parser.add_argument("--verified-only", action="store_true")
+    filter_models_parser.add_argument("--coder-only", action="store_true")
+    filter_models_parser.add_argument("--fit-only", action="store_true")
+    filter_models_parser.set_defaults(func=command_filter_models)
 
     latest = subparsers.add_parser("latest-release")
     latest.add_argument("--repo", required=True)

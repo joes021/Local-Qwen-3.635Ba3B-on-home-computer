@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.3.1
+- Windows Control Center sada ima eksplicitne filtere za katalog modela: Samo verified, Samo coder modeli i Samo za ovu masinu
+- Filteri koriste shared runtime helper, pa izbor modela, info box, cuvanje i download svi gledaju istu filtriranu listu
+- Dodata je i shared filter-models komanda uz test koji proverava da verified coder filter za 6 GB klasu vraca pravi preporuceni izbor
+
 v2.3.0
 - Prosiren kurirani llama.cpp model katalog za agentic/OpenCode rad: sada ukljucuje Qwen, Qwen Coder, Gemma, Gemma 3n, Llama i DeepSeek Distill fallback varijante
 - Dodat shared download-candidates engine koji modele deli na preporucene, moze da radi uz kompromis i nije preporuceno za ovu konfiguraciju
