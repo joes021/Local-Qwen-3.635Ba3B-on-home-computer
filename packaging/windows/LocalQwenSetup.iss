@@ -64,6 +64,16 @@ const
   RequiredDiskCaption = 'Expected disk usage after a default install: about 20-25 GB.';
   RecommendedDiskCaption = 'Recommended free disk space before install: at least 35 GB.';
 
+function GetDefaultInstallRoot(): string;
+var
+  UserProfile: string;
+begin
+  UserProfile := GetEnv('USERPROFILE');
+  if UserProfile = '' then
+    UserProfile := ExpandConstant('{sd}\Users\Default');
+  Result := AddBackslash(UserProfile) + 'LocalQwenHome';
+end;
+
 procedure InitializeWizard();
 begin
   InstallRootPage := CreateInputDirPage(
@@ -76,7 +86,7 @@ begin
   );
 
   InstallRootPage.Add('');
-  InstallRootPage.Values[0] := ExpandConstant('{userprofile}\LocalQwenHome');
+  InstallRootPage.Values[0] := GetDefaultInstallRoot();
 
   DiskInfoLabel := TNewStaticText.Create(InstallRootPage.Surface);
   DiskInfoLabel.Parent := InstallRootPage.Surface;

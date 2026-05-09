@@ -22,6 +22,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("CreateInputDirPage", content)
         self.assertIn("GetSelectedInstallRoot", content)
         self.assertIn("RequiredDiskCaption", content)
+        self.assertIn("GetDefaultInstallRoot", content)
+        self.assertNotIn("{userprofile}", content.lower())
 
     def test_bootstrap_script_announces_install_plan_and_clean_finish(self):
         content = BOOTSTRAP_PATH.read_text(encoding="utf-8").lower()

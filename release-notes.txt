@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.5
+- Windows installer vise ne koristi nepodrzanu Inno konstantu `{userprofile}` za default install putanju; umesto toga cita `USERPROFILE` iz okruzenja sa sigurnim fallback-om, pa setup vise ne puca na startu sa `runtime error ... unknown constant userprofile`
+- Dodat je packaging test koji eksplicitno proverava da se `{userprofile}` vise ne pojavi u Windows installer skripti
+
 v2.9.4
 - Windows `Pokretanje` tab sada prikazuje glavna servisna dugmad mnogo vise u vrhu prozora, pa `Repair install`, `Test prompt`, `Test throughput`, `Model manager`, `Check updates` i `Install update` vise ne ostaju sakriveni ispod telemetry blokova
 - Dodat je poseban `Test throughput` taster koji koristi isti benchmark tok kao `Test prompt`, ali je imenovan eksplicitno za merenje input/output tokena po sekundi
