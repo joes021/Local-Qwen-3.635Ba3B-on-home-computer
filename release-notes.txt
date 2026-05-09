@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.3
+- Windows `Control Center` vise ne preklapa tekstualna polja u tabu `Pokretanje`; `Request activity`, throughput istorija, hardverski plan i status output sada imaju razdvojene vertikalne zone
+- `Pokretanje` tab sada ima veci `AutoScroll` opseg, pa duzi tekstovi i dodatni live telemetry blokovi ne guraju naredna polja jedno preko drugog
+
 v2.9.2
 - Windows installer sada na pocetku prikazuje procenu potrebnog prostora: tipicna default instalacija trosi oko 20-25 GB, a preporuceni slobodan prostor pre starta je najmanje 35 GB
 - Windows installer sada ima poseban `Browse` izbor za stvarni `LocalQwenHome` install root, pa korisnik moze da bira drugi disk ili folder za runtime, modele i launchere

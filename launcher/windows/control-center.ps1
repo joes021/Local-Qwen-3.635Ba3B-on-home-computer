@@ -460,6 +460,7 @@ $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $launchTab.AutoScroll = $true
+$launchTab.AutoScrollMinSize = New-Object System.Drawing.Size(0, 920)
 $tabs.TabPages.Add($launchTab)
 
 $settingsTab = New-Object System.Windows.Forms.TabPage
@@ -507,7 +508,7 @@ $profileNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $launchTab.Controls.Add($profileNote)
 
 $hardwareBox = New-Object System.Windows.Forms.TextBox
-$hardwareBox.Location = New-Object System.Drawing.Point(18, 356)
+$hardwareBox.Location = New-Object System.Drawing.Point(18, 620)
 $hardwareBox.Size = New-Object System.Drawing.Size(648, 110)
 $hardwareBox.Multiline = $true
 $hardwareBox.ScrollBars = "Vertical"
@@ -655,7 +656,7 @@ $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server prim
 $usagePanel.Controls.Add($usageRecentBox)
 
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 496)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 520)
 $throughputBox.Size = New-Object System.Drawing.Size(648, 82)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
@@ -665,7 +666,7 @@ $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji no
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 592)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 746)
 $launchOutput.Size = New-Object System.Drawing.Size(648, 112)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
