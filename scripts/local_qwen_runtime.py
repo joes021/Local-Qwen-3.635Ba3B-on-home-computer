@@ -1189,6 +1189,113 @@ def command_health_center(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_repair_plan(
+    has_server: bool,
+    has_model: bool,
+    has_runtime: bool,
+    has_opencode_config: bool,
+    has_install_report: bool,
+    lifecycle_state: str,
+    current_model_id: str,
+    profile: str,
+    warnings: list[str],
+) -> dict:
+    health = build_health_center(
+        has_server=has_server,
+        has_model=has_model,
+        has_runtime=has_runtime,
+        has_opencode_config=has_opencode_config,
+        has_install_report=has_install_report,
+        lifecycle_state=lifecycle_state,
+        current_model_id=current_model_id,
+        profile=profile,
+        warnings=warnings,
+    )
+    actions_by_id = {item["id"]: item for item in health.get("recommendedActions", [])}
+    steps: list[dict] = []
+    seen: set[str] = set()
+
+    def add_step(action_id: str, fallback_title: str, fallback_reason: str) -> None:
+        if not action_id or action_id in seen or action_id in {"none", "repair-all"}:
+            return
+        seen.add(action_id)
+        action = actions_by_id.get(action_id, {})
+        steps.append(
+            {
+                "id": action_id,
+                "title": action.get("title", fallback_title),
+                "reason": action.get("reason", fallback_reason),
+            }
+        )
+
+    wdac_warning = any(
+        ("wdac" in str(warning.get("title", "")).lower()) or ("app control" in str(warning.get("title", "")).lower())
+        for warning in health.get("warnings", [])
+    )
+    if wdac_warning:
+        add_step(
+            "repair-app-control",
+            "Repair App Control",
+            "Windows policy warning ukazuje da App Control / WDAC moze blokirati llama-server.exe.",
+        )
+
+    for check in health.get("checks", []):
+        if not check.get("ok"):
+            add_step(
+                str(check.get("repairAction", "")),
+                f"Repair {check.get('title', 'component')}",
+                str(check.get("description", "")),
+            )
+
+    if not steps and health.get("service", {}).get("effectiveState") != "active":
+        add_step(
+            "start-server",
+            "Pokreni server",
+            "Komponente izgledaju zdravo, ali server jos nije potvrdio health.",
+        )
+
+    if steps:
+        next_step = f"Prvo uradi '{steps[0]['title']}', pa zatim osvezi health i proveri da li su sledeci koraci jos potrebni."
+    else:
+        next_step = "Nema dodatnih repair koraka. Sistem deluje zdravo."
+
+    return {
+        "overallState": health.get("overallState"),
+        "severityLevel": health.get("severityLevel"),
+        "severityLabel": health.get("severityLabel"),
+        "severityScore": health.get("severityScore"),
+        "title": health.get("title"),
+        "summary": health.get("summary"),
+        "steps": steps,
+        "stepCount": len(steps),
+        "repairAllRecommended": any(item.get("id") == "repair-all" for item in health.get("recommendedActions", [])),
+        "nextStep": next_step,
+        "health": health,
+    }
+
+
+def command_repair_plan(args: argparse.Namespace) -> int:
+    warnings = []
+    if args.warnings_json:
+        try:
+            warnings = json.loads(args.warnings_json)
+        except json.JSONDecodeError:
+            warnings = [args.warnings_json]
+    payload = build_repair_plan(
+        has_server=parse_bool(args.has_server),
+        has_model=parse_bool(args.has_model),
+        has_runtime=parse_bool(args.has_runtime),
+        has_opencode_config=parse_bool(args.has_opencode_config),
+        has_install_report=parse_bool(args.has_install_report),
+        lifecycle_state=args.lifecycle_state,
+        current_model_id=args.model_id,
+        profile=args.profile,
+        warnings=warnings,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def summarize_service_status(has_health: bool, lifecycle_state: str) -> dict:
     if has_health:
         return {
@@ -1594,6 +1701,18 @@ def build_parser() -> argparse.ArgumentParser:
     health_center.add_argument("--profile", required=True)
     health_center.add_argument("--warnings-json", default="[]")
     health_center.set_defaults(func=command_health_center)
+
+    repair_plan = subparsers.add_parser("repair-plan")
+    repair_plan.add_argument("--has-server", required=True)
+    repair_plan.add_argument("--has-model", required=True)
+    repair_plan.add_argument("--has-runtime", required=True)
+    repair_plan.add_argument("--has-opencode-config", required=True)
+    repair_plan.add_argument("--has-install-report", required=True)
+    repair_plan.add_argument("--lifecycle-state", required=True)
+    repair_plan.add_argument("--model-id", required=True)
+    repair_plan.add_argument("--profile", required=True)
+    repair_plan.add_argument("--warnings-json", default="[]")
+    repair_plan.set_defaults(func=command_repair_plan)
 
     service_status = subparsers.add_parser("service-status")
     service_status.add_argument("--has-health", required=True)

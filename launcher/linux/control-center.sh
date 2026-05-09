@@ -350,6 +350,32 @@ for item in payload.get("recommendedActions", []):
 PY
 }
 
+show_last_repair_summary() {
+  python3 - <<'PY' "$(get_repair_summary_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+print("Last repair summary")
+if payload is None:
+    print("- Jos nema repair summary fajla.")
+else:
+    print(f"- Outcome: {payload.get('outcome')}")
+    print(f"- Repaired at: {payload.get('repairedAt')}")
+    counts = payload.get("counts", {})
+    print(f"- Found: {counts.get('found', 0)} | Fixed: {counts.get('fixed', 0)} | Manual: {counts.get('manual', 0)}")
+    fixed = payload.get("fixed", [])
+    manual = payload.get("manual", [])
+    if fixed:
+        print("- Fixed items:")
+        for item in fixed:
+            print(f"  * {item}")
+    if manual:
+        print("- Manual items:")
+        for item in manual:
+            print(f"  * {item}")
+    print(f"- Next step: {payload.get('nextStep')}")
+PY
+}
+
 run_guided_health_action() {
   local action_id
   action_id="$(python3 - <<'PY' "$(get_health_center_json)"
@@ -376,6 +402,7 @@ while true; do
   show_quick_panel
   show_status
   show_health_center
+  show_last_repair_summary
   show_settings
   show_hardware
   show_agent_audit

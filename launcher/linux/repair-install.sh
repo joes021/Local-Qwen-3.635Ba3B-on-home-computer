@@ -13,6 +13,31 @@ FOUND_ITEMS=()
 FIXED_ITEMS=()
 MANUAL_ITEMS=()
 NOTE_ITEMS=()
+ATTEMPTED_ACTIONS=()
+
+add_unique_item() {
+  local array_name="$1"
+  local value="$2"
+  local existing
+  eval "existing=(\"\${${array_name}[@]-}\")"
+  for item in "${existing[@]}"; do
+    [ "$item" = "$value" ] && return 0
+  done
+  eval "${array_name}+=(\"\$value\")"
+}
+
+was_attempted() {
+  local action_id="$1"
+  for item in "${ATTEMPTED_ACTIONS[@]-}"; do
+    [ "$item" = "$action_id" ] && return 0
+  done
+  return 1
+}
+
+mark_attempted() {
+  local action_id="$1"
+  ATTEMPTED_ACTIONS+=("$action_id")
+}
 
 mkdir -p "$ROOT/logs" "$ROOT/state" "$ROOT/assets/icons" "$ROOT/config/profiles" "$ROOT/docs"
 
@@ -21,37 +46,71 @@ if [ ! -f "$ROOT/launchers/control-center.sh" ]; then
   exit 1
 fi
 
-MODEL_PATH="$(python3 - <<'PY' "$STATE_PATH"
+for round in 1 2 3 4 5 6; do
+  plan_json="$(get_repair_plan_json)"
+  next_action="$(python3 - <<'PY' "$plan_json" "${ATTEMPTED_ACTIONS[@]-}"
 import json, sys
-with open(sys.argv[1], 'r', encoding='utf-8') as f:
-    print(json.load(f)['modelFile'])
+payload = json.loads(sys.argv[1])
+attempted = set(sys.argv[2:])
+for step in payload.get("steps", []):
+    if step.get("id") not in attempted:
+        print(json.dumps(step))
+        raise SystemExit(0)
+print("")
+PY
+)"
+  if [ -z "$next_action" ]; then
+    break
+  fi
+
+  action_id="$(python3 - <<'PY' "$next_action"
+import json, sys
+print(json.loads(sys.argv[1])["id"])
+PY
+)"
+  action_title="$(python3 - <<'PY' "$next_action"
+import json, sys
+print(json.loads(sys.argv[1])["title"])
+PY
+)"
+  action_reason="$(python3 - <<'PY' "$next_action"
+import json, sys
+print(json.loads(sys.argv[1])["reason"])
 PY
 )"
 
-if [ ! -f "$MODEL_PATH" ] || ! model_file_looks_complete "$MODEL_PATH"; then
-  FOUND_ITEMS+=("Aktivni model je nedostajao ili je bio nepotpun.")
-  INSTALL_ROOT="$ROOT" SKIP_RUNTIME_BUILD=1 bash "$ROOT/install/linux/install.sh"
-  FIXED_ITEMS+=("Linux installer repair tok je ponovo pokrenuo install za model/runtime sloj.")
-  python3 "$(get_runtime_engine_path)" repair-summary \
-    --outcome completed \
-    --found-json "$(python3 - <<'PY' "${FOUND_ITEMS[@]}"
-import json, sys
-print(json.dumps(sys.argv[1:]))
-PY
-)" \
-    --fixed-json "$(python3 - <<'PY' "${FIXED_ITEMS[@]}"
-import json, sys
-print(json.dumps(sys.argv[1:]))
-PY
-)" \
-    --manual-json "[]" \
-    --notes-json "[]" > "$REPAIR_SUMMARY_PATH"
-  exit 0
-fi
+  mark_attempted "$action_id"
+  add_unique_item FOUND_ITEMS "Planirana repair akcija: $action_title"
+  add_unique_item NOTE_ITEMS "Repair round $round: $action_title"
 
-FOUND_ITEMS+=("OpenCode config je proveravan kroz repair tok.")
+  case "$action_id" in
+    repair-runtime)
+      "$SCRIPT_DIR/repair-runtime.sh"
+      add_unique_item FIXED_ITEMS "Runtime repair je pokrenut."
+      ;;
+    repair-model)
+      "$SCRIPT_DIR/repair-model.sh"
+      add_unique_item FIXED_ITEMS "Model repair je pokrenut."
+      ;;
+    repair-config)
+      "$SCRIPT_DIR/repair-config.sh"
+      add_unique_item FIXED_ITEMS "Config repair je pokrenut."
+      ;;
+    repair-app-control)
+      add_unique_item MANUAL_ITEMS "App Control / WDAC warning je Windows-specifcan: $action_reason"
+      ;;
+    start-server)
+      add_unique_item NOTE_ITEMS "Repair plan sada predlaze start-server umesto dodatnog repair-a."
+      ;;
+    *)
+      add_unique_item MANUAL_ITEMS "Nepoznata guided repair akcija: $action_id"
+      ;;
+  esac
+done
+
+add_unique_item FOUND_ITEMS "OpenCode config je proveravan kroz repair tok."
 "$SCRIPT_DIR/configure-settings.sh"
-FIXED_ITEMS+=("OpenCode config je osvezen.")
+add_unique_item FIXED_ITEMS "OpenCode config je osvezen."
 
 python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$REPORT_PATH" "$ROOT"
 import json, os, sys
@@ -79,24 +138,46 @@ with open(report_path, "w", encoding="utf-8") as f:
     json.dump(report, f, indent=2)
 PY
 
+final_plan_json="$(get_repair_plan_json)"
+python3 - <<'PY' "$final_plan_json" > "$ROOT/state/remaining-repair-steps.json"
+import json, sys
+payload = json.loads(sys.argv[1])
+json.dump(payload, sys.stdout, indent=2)
+PY
+
+while IFS= read -r remaining_line; do
+  [ -n "$remaining_line" ] && add_unique_item MANUAL_ITEMS "$remaining_line"
+done < <(
+  python3 - <<'PY' "$final_plan_json"
+import json, sys
+payload = json.loads(sys.argv[1])
+for step in payload.get("steps", []):
+    print(f"I dalje ceka korak: {step.get('title')} - {step.get('reason')}")
+PY
+)
+
+if [ "${#MANUAL_ITEMS[@]}" -eq 0 ] && [ "${#FIXED_ITEMS[@]}" -eq 0 ]; then
+  add_unique_item NOTE_ITEMS "Repair nije morao da menja kriticne fajlove; sistem je vec delovao zdravo."
+fi
+
 python3 "$(get_runtime_engine_path)" repair-summary \
-  --outcome completed \
-  --found-json "$(python3 - <<'PY' "${FOUND_ITEMS[@]}"
+  --outcome "$(if [ "${#MANUAL_ITEMS[@]}" -gt 0 ]; then echo partial; else echo completed; fi)" \
+  --found-json "$(python3 - <<'PY' "${FOUND_ITEMS[@]-}"
 import json, sys
 print(json.dumps(sys.argv[1:]))
 PY
 )" \
-  --fixed-json "$(python3 - <<'PY' "${FIXED_ITEMS[@]}"
+  --fixed-json "$(python3 - <<'PY' "${FIXED_ITEMS[@]-}"
 import json, sys
 print(json.dumps(sys.argv[1:]))
 PY
 )" \
-  --manual-json "$(python3 - <<'PY' "${MANUAL_ITEMS[@]}"
+  --manual-json "$(python3 - <<'PY' "${MANUAL_ITEMS[@]-}"
 import json, sys
 print(json.dumps(sys.argv[1:]))
 PY
 )" \
-  --notes-json "$(python3 - <<'PY' "${NOTE_ITEMS[@]}"
+  --notes-json "$(python3 - <<'PY' "${NOTE_ITEMS[@]-}"
 import json, sys
 print(json.dumps(sys.argv[1:]))
 PY

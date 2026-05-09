@@ -975,6 +975,50 @@ function Get-HealthCenterData {
     )
 }
 
+function Get-RepairPlanData {
+    $state = Get-InstallState
+    $health = Test-LlamaHealth
+    $hasModel = $false
+    try {
+        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+    } catch {
+        $hasModel = $false
+    }
+
+    $runtimeOk = $false
+    try {
+        $runtimeOk = Test-Path (Get-LlamaServerExe)
+    } catch {
+        $runtimeOk = $false
+    }
+
+    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $warnings = @()
+    if (Test-Path $reportPath) {
+        try {
+            $report = Get-Content -Raw $reportPath | ConvertFrom-Json
+            if ($report.PSObject.Properties["warnings"] -and $report.warnings) {
+                $warnings = @($report.warnings)
+            }
+        } catch {
+            $warnings = @()
+        }
+    }
+
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "repair-plan",
+        "--has-server", ([string]$health).ToLower(),
+        "--has-model", ([string]$hasModel).ToLower(),
+        "--has-runtime", ([string]$runtimeOk).ToLower(),
+        "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
+        "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
+        "--lifecycle-state", ([string](Get-ServiceLifecycleState).state),
+        "--model-id", ([string]$state.modelId),
+        "--profile", ([string](Get-Settings).profile),
+        "--warnings-json", (($warnings | ConvertTo-Json -Depth 10 -Compress))
+    )
+}
+
 function Get-NextActionRecommendation {
     $state = Get-InstallState
     $hasServer = Test-LlamaHealth

@@ -1,5 +1,15 @@
 Local Qwen Home Computer - recent fixes
 
+v2.7.3
+- Cist public release koji poravnava commit, tag i build artefakte za pametniji guided `Repair all` tok, tako da installer i GitHub tag sada pokazuju na istu sadrzinu
+- Windows i Linux sada dele isti shared `repair-plan` workflow, isti sequencing i isti vidljivi `Last repair summary` rezultat kroz release koji je stvarno vezan za odgovarajuci commit
+
+v2.7.2
+- `Repair all` sada koristi shared `repair-plan` payload i radi korak-po-korak uz ponovnu procenu posle svake popravke, umesto da unapred linearno pretpostavi sta sve mora da se uradi
+- Windows `repair-install.ps1` sada cuva i koje su planirane repair akcije, koje su stvarno izvedene, a koje su i dalje ostale kao rucni ili sledeci korak nakon finalnog health refresh-a
+- Linux `repair-install.sh` je uskladjen sa istom pametnijom guided repair logikom, pa obe platforme sada dele isti repair sequencing model
+- Linux `control-center.sh` sada prikazuje `Last repair summary` sa outcome, counts, fixed items, manual items i `next step`, umesto da repair rezultat ostane sakriven samo u JSON fajlu
+
 v2.7.1
 - `Repair all 2.0` sada zapisuje pravi strukturisani repair summary sa poljima `found`, `fixed`, `manual`, `notes`, `counts` i `next step`, umesto da ostane samo na slobodnom tekstu
 - Windows `repair-install.ps1` sada eksplicitno belezi sta je nasao, sta je stvarno popravio i sta eventualno trazi rucni korak, pa Health tab moze da prikaze poslednji repair rezultat

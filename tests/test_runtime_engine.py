@@ -354,6 +354,61 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["manual"], 1)
         self.assertIn("rucni korak", payload["nextStep"].lower())
 
+    def test_repair_plan_prioritizes_app_control_before_runtime(self):
+        code, stdout, stderr = run_runtime_command(
+            "repair-plan",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "false",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--lifecycle-state",
+            "inactive",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+            "--warnings-json",
+            json.dumps(["Application Control / WDAC blokira llama-server.exe"]),
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertGreaterEqual(payload["stepCount"], 2)
+        self.assertEqual(payload["steps"][0]["id"], "repair-app-control")
+        self.assertEqual(payload["steps"][1]["id"], "repair-runtime")
+
+    def test_repair_plan_prefers_start_server_when_stack_is_healthy_but_inactive(self):
+        code, stdout, stderr = run_runtime_command(
+            "repair-plan",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--lifecycle-state",
+            "inactive",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+            "--warnings-json",
+            "[]",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["stepCount"], 1)
+        self.assertEqual(payload["steps"][0]["id"], "start-server")
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",
