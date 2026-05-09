@@ -773,6 +773,49 @@ def command_model_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_repair_summary(args: argparse.Namespace) -> int:
+    def parse_json_list(raw: str) -> list[str]:
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                return [str(item) for item in data if str(item).strip()]
+        except json.JSONDecodeError:
+            pass
+        return [str(raw)]
+
+    found = parse_json_list(args.found_json)
+    fixed = parse_json_list(args.fixed_json)
+    manual = parse_json_list(args.manual_json)
+    notes = parse_json_list(args.notes_json)
+    outcome = str(args.outcome or "completed")
+
+    if manual:
+        next_step = "Pregledaj stavke koje traze rucni korak i potvrdi ih pre sledeceg starta."
+    elif fixed:
+        next_step = "Pokreni verify ili start server da potvrdis da je repair zaista zatvorio problem."
+    else:
+        next_step = "Nema dodatnih repair akcija. Sistem deluje stabilno."
+
+    payload = {
+        "repairedAt": datetime.now(timezone.utc).isoformat(),
+        "outcome": outcome,
+        "found": found,
+        "fixed": fixed,
+        "manual": manual,
+        "notes": notes,
+        "counts": {
+            "found": len(found),
+            "fixed": len(fixed),
+            "manual": len(manual),
+        },
+        "nextStep": next_step,
+    }
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def command_settings_presets(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     payload = build_settings_presets(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
@@ -1484,6 +1527,14 @@ def build_parser() -> argparse.ArgumentParser:
     model_compare_parser.add_argument("--cpu-threads", type=int, default=0)
     model_compare_parser.add_argument("--model-ids", required=True)
     model_compare_parser.set_defaults(func=command_model_compare)
+
+    repair_summary_parser = subparsers.add_parser("repair-summary")
+    repair_summary_parser.add_argument("--outcome", default="completed")
+    repair_summary_parser.add_argument("--found-json", default="[]")
+    repair_summary_parser.add_argument("--fixed-json", default="[]")
+    repair_summary_parser.add_argument("--manual-json", default="[]")
+    repair_summary_parser.add_argument("--notes-json", default="[]")
+    repair_summary_parser.set_defaults(func=command_repair_summary)
 
     settings_presets_parser = subparsers.add_parser("settings-presets")
     settings_presets_parser.add_argument("--defaults", required=True)

@@ -332,6 +332,28 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["bestForCoding"], "qwen2.5-coder-7b-instruct-q5_k_m.gguf")
         self.assertIn(payload["summary"]["bestForSpeed"], {item["id"] for item in payload["models"]})
 
+    def test_repair_summary_reports_found_fixed_and_manual_counts(self):
+        code, stdout, stderr = run_runtime_command(
+            "repair-summary",
+            "--outcome",
+            "partial",
+            "--found-json",
+            json.dumps(["runtime missing", "model incomplete"]),
+            "--fixed-json",
+            json.dumps(["runtime restored"]),
+            "--manual-json",
+            json.dumps(["confirm WDAC policy"]),
+            "--notes-json",
+            json.dumps(["repair all test"]),
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["outcome"], "partial")
+        self.assertEqual(payload["counts"]["found"], 2)
+        self.assertEqual(payload["counts"]["fixed"], 1)
+        self.assertEqual(payload["counts"]["manual"], 1)
+        self.assertIn("rucni korak", payload["nextStep"].lower())
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",

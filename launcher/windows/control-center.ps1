@@ -916,6 +916,7 @@ function Refresh-OnboardingView {
 
 function Refresh-HealthCenterView {
     $payload = Get-HealthCenterData
+    $repairSummary = Get-RepairSummaryData
 
     $healthSummaryLabel.Text = "Stanje: $($payload.title) | Ozbiljnost: $($payload.severityLabel) ($($payload.severityScore)) | Profil: $($payload.profile) | Model: $($payload.modelId)"
     $healthSummaryLabel.ForeColor = switch ([string]$payload.overallState) {
@@ -930,7 +931,8 @@ function Refresh-HealthCenterView {
         "Service: $($payload.service.title)",
         "Service reason: $($payload.service.reason)",
         "Primary action: $($payload.primaryAction.title)",
-        "Recommended actions: $(if ($payload.recommendedActions) { (@($payload.recommendedActions) | ForEach-Object { $_.title }) -join ', ' } else { 'nema' })"
+        "Recommended actions: $(if ($payload.recommendedActions) { (@($payload.recommendedActions) | ForEach-Object { $_.title }) -join ', ' } else { 'nema' })",
+        "Last repair: $(if ($repairSummary) { $repairSummary.repairedAt } else { 'nema repair summary-a' })"
     )
     $healthMeta.Text = $metaLines -join [Environment]::NewLine
 
@@ -952,6 +954,25 @@ function Refresh-HealthCenterView {
     $lines.Add("Recommended actions") | Out-Null
     foreach ($item in @($payload.recommendedActions)) {
         $lines.Add("- $($item.title): $($item.reason)") | Out-Null
+    }
+    if ($repairSummary) {
+        $lines.Add("") | Out-Null
+        $lines.Add("Last repair summary") | Out-Null
+        $lines.Add("Outcome: $($repairSummary.outcome)") | Out-Null
+        $lines.Add("Found: $($repairSummary.counts.found) | Fixed: $($repairSummary.counts.fixed) | Manual: $($repairSummary.counts.manual)") | Out-Null
+        if (@($repairSummary.fixed).Count -gt 0) {
+            $lines.Add("Fixed items") | Out-Null
+            foreach ($item in @($repairSummary.fixed)) {
+                $lines.Add("- $item") | Out-Null
+            }
+        }
+        if (@($repairSummary.manual).Count -gt 0) {
+            $lines.Add("Manual items") | Out-Null
+            foreach ($item in @($repairSummary.manual)) {
+                $lines.Add("- $item") | Out-Null
+            }
+        }
+        $lines.Add("Next step: $($repairSummary.nextStep)") | Out-Null
     }
     $healthContent.Text = $lines -join [Environment]::NewLine
     $guidedRepairButton.Text = if ($payload.primaryAction -and $payload.primaryAction.title) { "Guided: $($payload.primaryAction.title)" } else { "Guided repair" }

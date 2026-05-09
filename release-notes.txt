@@ -1,5 +1,11 @@
 Local Qwen Home Computer - recent fixes
 
+v2.7.1
+- `Repair all 2.0` sada zapisuje pravi strukturisani repair summary sa poljima `found`, `fixed`, `manual`, `notes`, `counts` i `next step`, umesto da ostane samo na slobodnom tekstu
+- Windows `repair-install.ps1` sada eksplicitno belezi sta je nasao, sta je stvarno popravio i sta eventualno trazi rucni korak, pa Health tab moze da prikaze poslednji repair rezultat
+- Windows Health Center sada prikazuje i `Last repair summary`, ukljucujuci outcome, counts, fixed items, manual items i preporuceni sledeci korak
+- Linux `repair-install.sh` sada pise isti shared repair summary payload u `state/repair-summary.json`, tako da obe platforme imaju isti repair semantics
+
 v2.7.0
 - Windows installer staged tok je sada zakljucan kao pravi packaging tok: vidljivi koraci `1/10` do `10/10`, jasan `Installation complete`, automatsko zatvaranje na uspehu i otvoren prozor na failure scenariju
 - Installer summary na kraju sada jasno pokazuje install root, launcher root, desktop folder, stanje precica, model path i install report lokaciju umesto sirovog polu-zavrsnog izlaza

@@ -270,6 +270,23 @@ function Get-DiagnosticsDirectory {
     return $path
 }
 
+function Get-RepairSummaryPath {
+    $root = Get-LocalQwenRoot
+    return Join-Path $root "state\repair-summary.json"
+}
+
+function Get-RepairSummaryData {
+    $path = Get-RepairSummaryPath
+    if (Test-Path $path) {
+        try {
+            return Get-Content -Raw $path | ConvertFrom-Json
+        } catch {
+            return $null
+        }
+    }
+    return $null
+}
+
 function Get-TokenMetricsHistoryPath {
     $root = Get-LocalQwenRoot
     return Join-Path $root "state\token-metrics-history.json"
