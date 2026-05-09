@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.2
+- Windows installer sada na pocetku prikazuje procenu potrebnog prostora: tipicna default instalacija trosi oko 20-25 GB, a preporuceni slobodan prostor pre starta je najmanje 35 GB
+- Windows installer sada ima poseban `Browse` izbor za stvarni `LocalQwenHome` install root, pa korisnik moze da bira drugi disk ili folder za runtime, modele i launchere
+- Inno setup sada prosledjuje izabrani `InstallRoot` direktno u staged PowerShell install tok, a smoke test je potvrio da prilagodjena putanja zaista zavrsava u `install-state.json`, launcherima i desktop precicama
+
 v2.9.1
 - Windows setup bootstrap vise ne zavisi od `powershell.exe` iz `PATH`, nego koristi eksplicitnu sistemsku putanju do Windows PowerShell-a, pa instalacija vise ne puca sa `exit code 9009` na masinama sa netipicnim `PATH`-om
 - Windows launcher wrapper-i i skriveni `.vbs` starteri sada koriste istu pouzdanu PowerShell putanju, tako da `Control Center`, repair i helper launcheri vise ne zavise od shell okruzenja korisnika

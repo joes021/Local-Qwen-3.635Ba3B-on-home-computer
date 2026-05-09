@@ -19,6 +19,9 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         )
         self.assertNotIn("runhidden", run_line.lower())
         self.assertIn("waituntilterminated", run_line.lower())
+        self.assertIn("CreateInputDirPage", content)
+        self.assertIn("GetSelectedInstallRoot", content)
+        self.assertIn("RequiredDiskCaption", content)
 
     def test_bootstrap_script_announces_install_plan_and_clean_finish(self):
         content = BOOTSTRAP_PATH.read_text(encoding="utf-8").lower()
@@ -27,6 +30,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("will close automatically", content)
         self.assertIn("%systemroot%\\system32\\windowspowershell\\v1.0\\powershell.exe", content)
         self.assertNotIn("\npowershell.exe -noprofile", content)
+        self.assertIn("%*", content)
 
     def test_install_script_contains_explicit_stage_progress_markers(self):
         content = INSTALL_PS1_PATH.read_text(encoding="utf-8")

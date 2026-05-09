@@ -22,6 +22,8 @@ Expected public asset set for every tag:
 
 The current Windows installer now handles:
 
+- pre-install disk usage guidance for the default setup footprint
+- a `Browse` selector for the real `LocalQwenHome` workspace location
 - install root
 - state directory
 - latest upstream `llama.cpp` CUDA Windows release download

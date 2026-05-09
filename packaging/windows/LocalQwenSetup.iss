@@ -53,4 +53,46 @@ Source: "..\..\config\profiles\*"; DestDir: "{app}\config\profiles"; Flags: igno
 Name: "{autodesktop}\Local Qwen Installer"; Filename: "{app}\setup-bootstrap.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icons\control-center.ico"
 
 [Run]
-Filename: "{cmd}"; Parameters: "/c ""{app}\setup-bootstrap.cmd"""; WorkingDir: "{app}"; Flags: waituntilterminated
+Filename: "{cmd}"; Parameters: "/c ""{app}\setup-bootstrap.cmd"" -InstallRoot ""{code:GetSelectedInstallRoot}"""; WorkingDir: "{app}"; Flags: waituntilterminated
+
+[Code]
+var
+  InstallRootPage: TInputDirWizardPage;
+  DiskInfoLabel: TNewStaticText;
+
+const
+  RequiredDiskCaption = 'Expected disk usage after a default install: about 20-25 GB.';
+  RecommendedDiskCaption = 'Recommended free disk space before install: at least 35 GB.';
+
+procedure InitializeWizard();
+begin
+  InstallRootPage := CreateInputDirPage(
+    wpWelcome,
+    'Choose LocalQwenHome install folder',
+    'Select where the Local Qwen workspace should be installed',
+    'Choose the folder where Local Qwen Home Computer should place models, runtime, settings and launchers. You can change this later only by reinstalling or moving the workspace manually.',
+    False,
+    ''
+  );
+
+  InstallRootPage.Add('');
+  InstallRootPage.Values[0] := ExpandConstant('{userprofile}\LocalQwenHome');
+
+  DiskInfoLabel := TNewStaticText.Create(InstallRootPage.Surface);
+  DiskInfoLabel.Parent := InstallRootPage.Surface;
+  DiskInfoLabel.Left := ScaleX(0);
+  DiskInfoLabel.Top := InstallRootPage.Edits[0].Top + InstallRootPage.Edits[0].Height + ScaleY(12);
+  DiskInfoLabel.Width := InstallRootPage.SurfaceWidth;
+  DiskInfoLabel.Height := ScaleY(54);
+  DiskInfoLabel.AutoSize := False;
+  DiskInfoLabel.WordWrap := True;
+  DiskInfoLabel.Caption :=
+    RequiredDiskCaption + #13#10 +
+    RecommendedDiskCaption + #13#10 +
+    'Use Browse if you want to place LocalQwenHome on another disk or folder.';
+end;
+
+function GetSelectedInstallRoot(Param: string): string;
+begin
+  Result := InstallRootPage.Values[0];
+end;

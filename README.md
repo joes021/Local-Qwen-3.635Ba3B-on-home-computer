@@ -150,6 +150,10 @@ When you run the Linux `.run` installer, it goes roughly in this order:
 
 3. Run the installer.
 
+The Windows installer now shows two practical things before the staged install starts:
+- estimated disk usage for a default install
+- a `Browse` field for the real `LocalQwenHome` location, so you can put models/runtime on another disk or folder
+
 If a previous Windows install stopped halfway, rerunning the latest Windows `Setup.exe` is the supported repair path. The installer now restores the local launcher/config layout early and can continue from a partial `LocalQwenHome` state instead of requiring manual file copies.
 
 ### Ubuntu 24.04

@@ -30,7 +30,7 @@ if not exist "%POWERSHELL_EXE%" (
     exit /b 1
 )
 
-"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%" %*
 set "EXITCODE=%ERRORLEVEL%"
 
 if not "%EXITCODE%"=="0" (
