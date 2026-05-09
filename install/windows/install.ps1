@@ -15,6 +15,7 @@ $script:CurrentStageName = "Startup"
 $script:TotalInstallStages = 10
 $script:InstallWarnings = New-Object System.Collections.Generic.List[string]
 $script:TurboQuantDependenciesReady = $true
+$script:WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $defaultsPath = Join-Path $repoRoot "config\profiles\defaults.json"
@@ -84,6 +85,13 @@ function Invoke-InstallStage {
 function Ensure-Dir {
     param([string]$Path)
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
+}
+
+function Get-WindowsPowerShellExe {
+    if (-not (Test-Path $script:WindowsPowerShellExe)) {
+        throw "Windows PowerShell nije pronadjen na ocekivanoj putanji: $($script:WindowsPowerShellExe)"
+    }
+    return $script:WindowsPowerShellExe
 }
 
 function Test-WingetPackageInstalled {
@@ -683,7 +691,7 @@ if not exist "%PS_SCRIPT%" (
   exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
 set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" (
   echo.
@@ -711,11 +719,12 @@ function Write-HiddenVbsLauncher {
     $escapedScriptName = $PsScriptName.Replace('"', '""')
     $escapedExtraArguments = $ExtraArguments.Replace('"', '""')
     $content = @"
-Dim shell, scriptDir, psScript, command
+Dim shell, scriptDir, psScript, command, powerShellExe
 Set shell = CreateObject("WScript.Shell")
 scriptDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 psScript = scriptDir & "\$escapedScriptName"
-command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
+powerShellExe = shell.ExpandEnvironmentStrings("%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe")
+command = """" & powerShellExe & """ -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
 shell.Run command, 0, False
 "@
 
@@ -994,7 +1003,7 @@ try {
             -StatePath $statePath `
             -Defaults $defaults
 
-        & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
+        & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
         if ($LASTEXITCODE -ne 0) {
             $script:InstallWarnings.Add("OpenCode konfiguracija nije uspesno upisana tokom install toka. Pokreni configure-settings.ps1 ili Verify Local Qwen Install nakon instalacije.") | Out-Null
         }
@@ -1002,7 +1011,7 @@ try {
 
     Invoke-InstallStage -Number 10 -Name "Optional TurboQuant build and final verification" -Action {
         if (-not $SkipTurboQuantBuild -and $script:TurboQuantDependenciesReady) {
-            & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
+            & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
             if ($LASTEXITCODE -ne 0) {
                 $script:InstallWarnings.Add("TurboQuant build nije uspeo. Instalacija ostaje upotrebljiva kroz upstream llama.cpp fallback.") | Out-Null
             }

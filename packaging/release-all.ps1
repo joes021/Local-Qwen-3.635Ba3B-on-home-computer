@@ -13,6 +13,7 @@ $windowsBuildScript = Join-Path $repoRoot "packaging\windows\build-setup.ps1"
 $releaseNotesPath = Join-Path $repoRoot "release-notes.txt"
 $distWindows = Join-Path $repoRoot "dist\windows"
 $distLinux = Join-Path $repoRoot "dist\linux"
+$tempReleaseDir = Join-Path $repoRoot "dist\release-meta"
 
 if (-not (Test-Path $versionPath)) {
     throw "version.json nije pronadjen."
@@ -31,6 +32,23 @@ $windowsArtifact = Join-Path $distWindows "$($versionData.windowsSetupBaseName)-
 $windowsLatest = Join-Path $distWindows "$($versionData.windowsSetupBaseName)-latest.exe"
 $linuxArtifact = Join-Path $distLinux "$($versionData.windowsSetupBaseName)-$Version.run"
 $linuxLatest = Join-Path $distLinux "$($versionData.windowsSetupBaseName)-latest.run"
+$fullFixLogAsset = Join-Path $tempReleaseDir "Local-Qwen-Full-Fix-Log-v$Version.txt"
+$releaseSummaryPath = Join-Path $tempReleaseDir "release-summary-v$Version.md"
+
+function Get-ReleaseSection {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Version
+    )
+
+    $content = Get-Content -Raw $Path
+    $pattern = "(?ms)^v$([regex]::Escape($Version))\s*\r?\n(?<body>.*?)(?=^\s*v\d+\.\d+\.\d+\s*$|\z)"
+    $match = [regex]::Match($content, $pattern)
+    if (-not $match.Success) {
+        throw "Fix log sekcija za v$Version nije pronadjena u $Path"
+    }
+    return ("v{0}`r`n{1}" -f $Version, $match.Groups["body"].Value.Trim())
+}
 
 if (-not $SkipBuild) {
     & powershell -ExecutionPolicy Bypass -File $windowsBuildScript -Version $Version
@@ -59,6 +77,19 @@ if (!(Test-Path $linuxArtifact)) {
 Copy-Item $windowsArtifact $windowsLatest -Force
 Copy-Item $linuxArtifact $linuxLatest -Force
 
+New-Item -ItemType Directory -Force -Path $tempReleaseDir | Out-Null
+$releaseSection = Get-ReleaseSection -Path $releaseNotesPath -Version $Version
+Set-Content -Path $fullFixLogAsset -Value $releaseSection -Encoding UTF8
+$releaseSummary = @(
+    "v$Version",
+    "",
+    "- Windows installer: Local-Qwen-Setup-$Version.exe",
+    "- Linux installer: Local-Qwen-Setup-$Version.run",
+    "- Stable aliases: Local-Qwen-Setup-latest.exe and Local-Qwen-Setup-latest.run",
+    "- Full fix log is attached below in Assets as Local-Qwen-Full-Fix-Log-v$Version.txt"
+) -join "`r`n"
+Set-Content -Path $releaseSummaryPath -Value $releaseSummary -Encoding UTF8
+
 if (-not $SkipGitPush) {
     & git -C $repoRoot push origin main
     if ($LASTEXITCODE -ne 0) {
@@ -82,8 +113,9 @@ if (-not $SkipReleasePublish) {
         $windowsLatest `
         $linuxArtifact `
         $linuxLatest `
+        $fullFixLogAsset `
         --title "v$Version" `
-        --notes-file $releaseNotesPath
+        --notes-file $releaseSummaryPath
 
     if ($LASTEXITCODE -ne 0) {
         throw "gh release create nije uspeo."

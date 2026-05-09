@@ -31,7 +31,7 @@ function Invoke-RepairStep {
         "repair-app-control" {
             if (Test-Path $repairAppControlScript) {
                 try {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $repairAppControlScript | ForEach-Object {
+                    & (Get-WindowsPowerShellExe) -NoProfile -ExecutionPolicy Bypass -File $repairAppControlScript | ForEach-Object {
                         if ($_){ Add-UniqueListItem -List $messages -Value ([string]$_) }
                     }
                     Add-UniqueListItem -List $fixed -Value "App Control / WDAC repair je pokrenut."

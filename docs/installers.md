@@ -119,6 +119,8 @@ Release packaging now exists in two forms:
 If a tag like `vX.Y.Z` is pushed, the workflow publishes `Local-Qwen-Setup-X.Y.Z.exe` to the GitHub release.
 It should also publish the stable alias `Local-Qwen-Setup-latest.exe` so README and setup links can always target the newest Windows installer without hardcoded version edits.
 
+GitHub release note layout is controlled by GitHub, so this project now uses a short on-page release summary and publishes the detailed fix log as a separate release asset named `Local-Qwen-Full-Fix-Log-vX.Y.Z.txt`.
+
 ## Linux
 
 The current Linux installer is still below Windows parity, but it is no longer just a placeholder.

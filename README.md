@@ -303,6 +303,7 @@ Current public releases:
 - [Latest Release Page](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest)
 - [Stable latest Windows setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.exe)
 - [Stable latest Ubuntu setup](https://github.com/joes021/Local-Qwen-3.635Ba3B-on-home-computer/releases/latest/download/Local-Qwen-Setup-latest.run)
+- each GitHub release now keeps the on-page text short and attaches the detailed fix log as a separate `Assets` file named `Local-Qwen-Full-Fix-Log-vX.Y.Z.txt`
 
 Release integrity rule:
 

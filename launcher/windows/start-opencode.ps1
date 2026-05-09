@@ -16,7 +16,7 @@ if (-not (Test-LlamaHealth)) {
     if ($Profile) {
         $args += @("-Profile", $Profile)
     }
-    Start-Process -FilePath "powershell.exe" -ArgumentList $args -WindowStyle Hidden
+    Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList $args -WindowStyle Hidden
 
     $deadline = (Get-Date).AddSeconds(90)
     do {
@@ -28,7 +28,7 @@ if (-not (Test-LlamaHealth)) {
     throw "llama.cpp server nije dostupan."
 }
 
-Start-Process -FilePath "powershell.exe" -ArgumentList @(
+Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
     "-NoExit",
     "-Command",
     "opencode"

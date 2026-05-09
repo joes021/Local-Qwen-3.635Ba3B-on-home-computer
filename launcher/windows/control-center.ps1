@@ -215,7 +215,7 @@ function Invoke-BackgroundShellScript {
 
     $job = Start-Job -ScriptBlock {
         param($Path, $Args)
-        $lines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Path @Args 2>&1
+        $lines = & (Get-WindowsPowerShellExe) -NoProfile -ExecutionPolicy Bypass -File $Path @Args 2>&1
         $code = $LASTEXITCODE
         [pscustomobject]@{
             ExitCode = $code
@@ -1470,9 +1470,9 @@ function Save-SettingsFromForm {
     }
     $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
     if ($selectedModel) {
-        & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
+        & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
     }
-    $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript `
+    $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $configureSettingsScript `
         -Profile $script:PendingSettingsProfile `
         -ContextSize $contextValue `
         -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
@@ -1878,7 +1878,7 @@ function Show-ModelBrowserDialog {
         }
         $selected = $grid.SelectedRows[0].Tag
         try {
-            $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selected.id) 2>&1
+            $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selected.id) 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw ($result -join [Environment]::NewLine)
             }
@@ -1907,7 +1907,7 @@ function Show-ModelBrowserDialog {
 
     $useRecommendedButton.Add_Click({
         try {
-            $result = & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -UseRecommended 2>&1
+            $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $manageModelsScript -UseRecommended 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw ($result -join [Environment]::NewLine)
             }
@@ -2011,7 +2011,7 @@ function Start-LlamaBackground {
     $escapedStart = $startServerScript.Replace("'", "''")
     $escapedProfile = $Profile.Replace("'", "''")
     $backgroundCommand = "& '$escapedConfigure' -Profile '$escapedProfile' | Out-Null; & '$escapedStart' -Profile '$escapedProfile' -WaitSeconds 90"
-    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+    Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
         "-WindowStyle", "Hidden",
@@ -2568,7 +2568,7 @@ function Refresh-AgentAudit {
 $saveAgentButton.Add_Click({
     try {
         $values = Get-AgentValues
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $launchAgentScript `
+        $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $launchAgentScript `
             -SecurityMode $values.SecurityMode `
             -CapabilityMode $values.CapabilityMode `
             -WorkingFolder $values.WorkingFolder `
@@ -2593,7 +2593,7 @@ $saveAgentButton.Add_Click({
 $launchAgentButton.Add_Click({
     try {
         $values = Get-AgentValues
-        Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
             "-ExecutionPolicy", "Bypass",
             "-File", $launchAgentScript,
             "-SecurityMode", $values.SecurityMode,
@@ -2644,13 +2644,13 @@ $startLlama.Add_Click({
 })
 
 $stopServer.Add_Click({
-    $result = & powershell.exe -ExecutionPolicy Bypass -File $stopServerScript 2>&1
+    $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $stopServerScript 2>&1
     Write-LaunchMessage @($result)
     Refresh-LaunchStatus
 })
 
 $openOpenCode.Add_Click({
-    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+    Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
         "-ExecutionPolicy", "Bypass",
         "-File", $startOpenCodeScript,
         "-Profile", ([string](Get-Settings).profile)
@@ -2684,7 +2684,7 @@ $runNextActionButton.Add_Click({
         $nextAction = Get-NextActionRecommendation
         switch ($nextAction.actionId) {
             "repair-install" {
-                $result = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
+                $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
                 Write-LaunchMessage @($result)
             }
             "start-server" {
@@ -2692,11 +2692,11 @@ $runNextActionButton.Add_Click({
                 Start-LlamaBackground -Profile $profile
             }
             "write-opencode-config" {
-                $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript -Profile ([string](Get-Settings).profile) 2>&1
+                $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $configureSettingsScript -Profile ([string](Get-Settings).profile) 2>&1
                 Write-LaunchMessage @($result)
             }
             "open-opencode" {
-                Start-Process -FilePath "powershell.exe" -ArgumentList @(
+                Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
                     "-ExecutionPolicy", "Bypass",
                     "-File", $startOpenCodeScript,
                     "-Profile", ([string](Get-Settings).profile)

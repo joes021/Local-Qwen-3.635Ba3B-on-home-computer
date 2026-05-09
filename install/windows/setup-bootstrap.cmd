@@ -3,6 +3,7 @@ setlocal
 title Local Qwen Home Computer Setup
 set "SCRIPT_DIR=%~dp0"
 set "INSTALL_SCRIPT=%SCRIPT_DIR%install\windows\install.ps1"
+set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 echo ===============================================
 echo Local Qwen Home Computer - Windows Setup
@@ -22,7 +23,14 @@ if not exist "%INSTALL_SCRIPT%" (
     exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%"
+if not exist "%POWERSHELL_EXE%" (
+    echo Windows PowerShell was not found at: %POWERSHELL_EXE%
+    echo.
+    pause
+    exit /b 1
+)
+
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%"
 set "EXITCODE=%ERRORLEVEL%"
 
 if not "%EXITCODE%"=="0" (

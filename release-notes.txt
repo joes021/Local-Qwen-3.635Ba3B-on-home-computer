@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.1
+- Windows setup bootstrap vise ne zavisi od `powershell.exe` iz `PATH`, nego koristi eksplicitnu sistemsku putanju do Windows PowerShell-a, pa instalacija vise ne puca sa `exit code 9009` na masinama sa netipicnim `PATH`-om
+- Windows launcher wrapper-i i skriveni `.vbs` starteri sada koriste istu pouzdanu PowerShell putanju, tako da `Control Center`, repair i helper launcheri vise ne zavise od shell okruzenja korisnika
+- Windows `repair-install`, `start-opencode`, `launch-agent`, `test-prompt` i `control-center` tokovi su poravnati na isti PowerShell lookup, da se isti problem ne vrati posle instalacije ili update-a
+
 v2.9.0
 - Dodat je pravi `Uninstall Local Qwen` tok na Windows strani, sa izborom da se obrisu samo precice, da se aplikacija ukloni ali modeli sacuvaju, ili da se obrise sve ukljucujuci modele (default)
 - Windows installer sada pravi i `Uninstall Local Qwen` desktop precicu, pa uninstall ne zavisi od rucnog trazenja skripti ili foldera

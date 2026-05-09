@@ -1,5 +1,13 @@
 $ErrorActionPreference = "Stop"
 
+function Get-WindowsPowerShellExe {
+    $path = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $path)) {
+        throw "Windows PowerShell nije pronadjen na ocekivanoj putanji: $path"
+    }
+    return $path
+}
+
 function Get-LocalQwenRoot {
     $oneLevelUp = Join-Path $PSScriptRoot ".."
     $twoLevelsUp = Join-Path $PSScriptRoot "..\.."
@@ -1496,7 +1504,7 @@ if not exist "%PS_SCRIPT%" (
   exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" $ExtraArguments
 set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" (
   echo.
@@ -1523,11 +1531,12 @@ function New-HiddenVbsLauncher {
     $escapedScriptName = $PsScriptName.Replace('"', '""')
     $escapedExtraArguments = $ExtraArguments.Replace('"', '""')
     $content = @"
-Dim shell, scriptDir, psScript, command
+Dim shell, scriptDir, psScript, command, powerShellExe
 Set shell = CreateObject("WScript.Shell")
 scriptDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 psScript = scriptDir & "\$escapedScriptName"
-command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
+powerShellExe = shell.ExpandEnvironmentStrings("%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe")
+command = """" & powerShellExe & """ -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """ $escapedExtraArguments"
 shell.Run command, 0, False
 "@
 

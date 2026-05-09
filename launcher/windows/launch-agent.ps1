@@ -34,7 +34,7 @@ function Ensure-LlamaServer {
         $args += @("-Profile", $SelectedProfile)
     }
 
-    Start-Process -FilePath "powershell.exe" -ArgumentList $args -WindowStyle Hidden
+    Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList $args -WindowStyle Hidden
 
     $deadline = (Get-Date).AddSeconds(90)
     do {
@@ -215,7 +215,7 @@ $escapedConfigDir = $sessionRoot.Replace("'", "''")
 $escapedTitle = $windowTitle.Replace("'", "''")
 $command = "`$env:OPENCODE_CONFIG_DIR='$escapedConfigDir'; `$Host.UI.RawUI.WindowTitle='$escapedTitle'; opencode"
 
-Start-Process -FilePath "powershell.exe" -WorkingDirectory $resolvedFolder -ArgumentList @(
+Start-Process -FilePath (Get-WindowsPowerShellExe) -WorkingDirectory $resolvedFolder -ArgumentList @(
     "-NoExit",
     "-Command",
     $command

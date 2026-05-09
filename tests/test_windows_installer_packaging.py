@@ -6,6 +6,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 ISS_PATH = REPO_ROOT / "packaging" / "windows" / "LocalQwenSetup.iss"
 BOOTSTRAP_PATH = REPO_ROOT / "install" / "windows" / "setup-bootstrap.cmd"
 INSTALL_PS1_PATH = REPO_ROOT / "install" / "windows" / "install.ps1"
+RELEASE_ALL_PATH = REPO_ROOT / "packaging" / "release-all.ps1"
 
 
 class WindowsInstallerPackagingTests(unittest.TestCase):
@@ -24,6 +25,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("this installer will", content)
         self.assertIn("installation complete", content)
         self.assertIn("will close automatically", content)
+        self.assertIn("%systemroot%\\system32\\windowspowershell\\v1.0\\powershell.exe", content)
+        self.assertNotIn("\npowershell.exe -noprofile", content)
 
     def test_install_script_contains_explicit_stage_progress_markers(self):
         content = INSTALL_PS1_PATH.read_text(encoding="utf-8")
@@ -43,6 +46,12 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("uninstall.ps1", install_content)
         self.assertIn("Uninstall Local Qwen.lnk", install_content)
         self.assertIn("Uninstallable=yes", iss_content)
+
+    def test_release_script_attaches_full_fix_log_asset_and_short_summary(self):
+        content = RELEASE_ALL_PATH.read_text(encoding="utf-8")
+        self.assertIn("Local-Qwen-Full-Fix-Log-v$Version.txt", content)
+        self.assertIn("--notes-file $releaseSummaryPath", content)
+        self.assertIn("Full fix log is attached below in Assets", content)
 
 
 if __name__ == "__main__":
