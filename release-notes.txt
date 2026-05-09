@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.1
+- Dodat `stability signal` u shared telemetry payload, sa nivoima `stabilno`, `promenljivo`, `rizicno` i kratkim razlogom izvedenim iz skorasnjih zahteva
+- Windows `Request activity` sada prikazuje i stabilnost sa score-om i obojenim statusom, pa je odmah jasno da li promet deluje zdrav ili sumnjiv
+- Linux `Quick status` sada prikazuje isti stability signal iz shared payload-a, tako da obe platforme isto citaju kvalitet skorasnjeg usage pattern-a
+
 v2.8.0
 - `Live usage panel 2.0` sada prikazuje bogatiji operativni dashboard: broj zahteva, prosecan odgovor, poslednji izvor, aktivni model, aktivni profil i stanje servera
 - Shared token metrics payload sada izbacuje i `lastSource` i `recentActivities`, pa Windows i Linux mogu da prikazu poslednjih nekoliko aktivnosti iz istog telemetry izvora

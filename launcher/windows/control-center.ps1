@@ -606,9 +606,16 @@ $usageServerLabel.Size = New-Object System.Drawing.Size(196, 20)
 $usageServerLabel.Text = "Server: --"
 $usagePanel.Controls.Add($usageServerLabel)
 
+$usageStabilityLabel = New-Object System.Windows.Forms.Label
+$usageStabilityLabel.Location = New-Object System.Drawing.Point(18, 72)
+$usageStabilityLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageStabilityLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$usageStabilityLabel.Text = "Stabilnost: nema podataka"
+$usagePanel.Controls.Add($usageStabilityLabel)
+
 $usageRecentBox = New-Object System.Windows.Forms.TextBox
-$usageRecentBox.Location = New-Object System.Drawing.Point(18, 76)
-$usageRecentBox.Size = New-Object System.Drawing.Size(610, 48)
+$usageRecentBox.Location = New-Object System.Drawing.Point(18, 96)
+$usageRecentBox.Size = New-Object System.Drawing.Size(610, 28)
 $usageRecentBox.Multiline = $true
 $usageRecentBox.ReadOnly = $true
 $usageRecentBox.ScrollBars = "Vertical"
@@ -1191,6 +1198,8 @@ function Refresh-ThroughputView {
         $usageCountLabel.Text = "Zahtevi: 0"
         $usageLastMsLabel.Text = "Avg odgovor: --"
         $usageSourceLabel.Text = "Izvor: jos nema merenja"
+        $usageStabilityLabel.Text = "Stabilnost: nema podataka"
+        $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
         $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
@@ -1220,6 +1229,13 @@ function Refresh-ThroughputView {
     $usageCountLabel.Text = "Zahtevi: $($tokenMetrics.requestCount)"
     $usageLastMsLabel.Text = "Avg odgovor: $($tokenMetrics.activity.averageTotalMs) ms"
     $usageSourceLabel.Text = "Izvor: $($tokenMetrics.activity.lastSource) | Label: $($tokenMetrics.lastLabel)"
+    $usageStabilityLabel.Text = "Stabilnost: $($tokenMetrics.activity.stability.label) ($($tokenMetrics.activity.stability.score)) | $($tokenMetrics.activity.stability.reason)"
+    $usageStabilityLabel.ForeColor = switch ([string]$tokenMetrics.activity.stability.level) {
+        "stable" { [System.Drawing.Color]::FromArgb(20, 120, 50) }
+        "variable" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
+        "risky" { [System.Drawing.Color]::FromArgb(180, 45, 45) }
+        default { [System.Drawing.Color]::FromArgb(70, 70, 70) }
+    }
 
     $recentLines = @()
     foreach ($item in @($tokenMetrics.activity.recentActivities)) {

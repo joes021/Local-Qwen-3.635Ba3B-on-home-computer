@@ -785,6 +785,82 @@ class RuntimeEngineTests(unittest.TestCase):
                 ["manual-request", "opencode-chat", "test-prompt"],
             )
 
+    def test_token_metrics_stability_marks_fast_history_as_stable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+
+            for index in range(4):
+                response_path = temp_path / f"fast-{index}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": 1200 + index * 50,
+                            "usage": {
+                                "prompt_tokens": 80,
+                                "completion_tokens": 40,
+                            },
+                            "timings": {
+                                "prompt_ms": 700,
+                                "predicted_ms": 500 + index * 50,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    "opencode-fast",
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            self.assertEqual(payload["activity"]["stability"]["level"], "stable")
+            self.assertGreaterEqual(payload["activity"]["stability"]["score"], 80)
+
+    def test_token_metrics_stability_marks_slow_history_as_risky(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+
+            for index in range(4):
+                response_path = temp_path / f"slow-{index}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": 9000 + index * 2000,
+                            "usage": {
+                                "prompt_tokens": 40,
+                                "completion_tokens": 20,
+                            },
+                            "timings": {
+                                "prompt_ms": 3000 + index * 500,
+                                "predicted_ms": 6000 + index * 1500,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    "manual-slow",
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            self.assertEqual(payload["activity"]["stability"]["level"], "risky")
+            self.assertLessEqual(payload["activity"]["stability"]["score"], 39)
+
 
 if __name__ == "__main__":
     unittest.main()

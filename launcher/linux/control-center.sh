@@ -45,6 +45,9 @@ if current:
     print(f"- Last source: {throughput.get('activity', {}).get('lastSource', 'n/a')} | Last label: {throughput.get('lastLabel', 'n/a')}")
 else:
     print("- Throughput: nema podataka")
+stability = throughput.get("activity", {}).get("stability", {})
+if stability:
+    print(f"- Stabilnost: {stability.get('label', 'n/a')} ({stability.get('score', 0)}) | {stability.get('reason', '')}")
 recent = throughput.get("activity", {}).get("recentActivities", [])
 if recent:
     print("- Poslednje aktivnosti:")

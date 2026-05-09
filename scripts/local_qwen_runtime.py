@@ -1474,6 +1474,12 @@ def summarize_history_payload(history: list[dict]) -> dict:
     avg_total_ms = 0.0
     source_counts = {"testPrompt": 0, "opencode": 0, "other": 0}
     recent_activities: list[dict] = []
+    stability = {
+        "level": "no-data",
+        "label": "nema podataka",
+        "score": 0,
+        "reason": "Jos nema dovoljno zahteva za procenu stabilnosti.",
+    }
 
     def detect_source(label: str) -> str:
         normalized = str(label or "").lower()
@@ -1503,6 +1509,46 @@ def summarize_history_payload(history: list[dict]) -> dict:
                     "status": "ok",
                 }
             )
+        if len(history) >= 2:
+            slow_count = sum(1 for item in history if float(item.get("totalMs", 0.0) or 0.0) >= 8000)
+            fast_count = sum(1 for item in history if float(item.get("totalMs", 0.0) or 0.0) <= 2500)
+            total_tps_values = [float(item.get("totalTokensPerSecond", 0.0) or 0.0) for item in history]
+            spread = (max(total_tps_values) - min(total_tps_values)) if total_tps_values else 0.0
+            score = 100
+            score -= min(60, slow_count * 18)
+            score -= min(25, int(spread * 2))
+            if fast_count >= max(2, len(history) // 2):
+                score += 8
+            score = max(0, min(100, score))
+
+            if score >= 80:
+                stability = {
+                    "level": "stable",
+                    "label": "stabilno",
+                    "score": score,
+                    "reason": "Skorasnji zahtevi deluju ujednaceno i bez velikih usporenja.",
+                }
+            elif score >= 40:
+                stability = {
+                    "level": "variable",
+                    "label": "promenljivo",
+                    "score": score,
+                    "reason": "Postoje oscilacije u vremenu odgovora ili throughput-u.",
+                }
+            else:
+                stability = {
+                    "level": "risky",
+                    "label": "rizicno",
+                    "score": score,
+                    "reason": "Skorasnji zahtevi deluju sporo ili vrlo neujednaceno.",
+                }
+        else:
+            stability = {
+                "level": "warming",
+                "label": "zagrevа se",
+                "score": 50,
+                "reason": "Treba jos nekoliko zahteva da bi procena stabilnosti bila pouzdanija.",
+            }
 
     return {
         "current": current,
@@ -1516,6 +1562,7 @@ def summarize_history_payload(history: list[dict]) -> dict:
             "sources": source_counts,
             "lastSource": detect_source(current.get("label")) if current else None,
             "recentActivities": recent_activities,
+            "stability": stability,
         },
         "averages": {
             "promptTokensPerSecond": round(avg_prompt_tps, 2),
