@@ -68,6 +68,7 @@ Windows installer UX note:
 - failure path keeps the window open and tells the user which stage failed
 - desktop shortcuts are now verified immediately after creation, and missing `.lnk` files are reported in `install-report.json`
 - final installer summary now also reports install root, launcher root, desktop shortcut state, selected model path and install report path so the user knows exactly what finished and where it landed
+- `ninja`, `cmake`, CUDA and VS Build Tools are now treated as optional TurboQuant prerequisites instead of hard blockers; if they cannot be installed, the installer keeps going and clearly states that TurboQuant will be skipped while upstream `llama.cpp` remains usable
 
 Windows smoke simulation:
 
@@ -84,6 +85,10 @@ Repair note:
 - if a Windows install stops after creating `LocalQwenHome`, rerunning the newest `Setup.exe` is now the intended recovery path
 - the installer writes launcher/config/state scaffolding early so retry can continue without manual file copies
 - the desktop folder now also includes `Repair Windows App Control` for the common Smart App Control block case
+- the desktop folder now also includes `Uninstall Local Qwen`, which offers:
+  - shortcuts only
+  - remove app files but keep models
+  - remove everything including models (default)
 - the Windows Control Center is intended to be the same across machines, instead of a reduced laptop-only variant
 
 Still being finalized:

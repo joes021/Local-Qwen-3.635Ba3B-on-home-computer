@@ -31,6 +31,19 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("function Invoke-InstallStage", content)
         self.assertIn("[{0}/{1}]", content)
 
+    def test_install_script_treats_ninja_as_optional_for_turboquant(self):
+        content = INSTALL_PS1_PATH.read_text(encoding="utf-8")
+        self.assertIn("function Ensure-OptionalCommand", content)
+        self.assertIn("Ninja-build.Ninja", content)
+        self.assertIn("TurboQuant build bice preskocen", content)
+
+    def test_packaging_and_shortcuts_include_uninstall_entrypoints(self):
+        install_content = INSTALL_PS1_PATH.read_text(encoding="utf-8")
+        iss_content = ISS_PATH.read_text(encoding="utf-8")
+        self.assertIn("uninstall.ps1", install_content)
+        self.assertIn("Uninstall Local Qwen.lnk", install_content)
+        self.assertIn("Uninstallable=yes", iss_content)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,7 +32,7 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
-Uninstallable=no
+Uninstallable=yes
 CreateAppDir=yes
 
 [Languages]

@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.0
+- Dodat je pravi `Uninstall Local Qwen` tok na Windows strani, sa izborom da se obrisu samo precice, da se aplikacija ukloni ali modeli sacuvaju, ili da se obrise sve ukljucujuci modele (default)
+- Windows installer sada pravi i `Uninstall Local Qwen` desktop precicu, pa uninstall ne zavisi od rucnog trazenja skripti ili foldera
+- `ninja`, `cmake`, CUDA i VS Build Tools vise nisu hard blocker za osnovnu Windows instalaciju; ako nedostaju i ne mogu da se instaliraju, installer jasno prijavljuje da ce TurboQuant biti preskocen, ali lokalni `llama.cpp` fallback ostaje upotrebljiv
+
 v2.8.5
 - `WDAC / App Control` warning se sada automatski tretira kao istorijski ako je `llama-server` vec aktivan i health endpoint vraca `ok`, pa healthy masine vise ne dobijaju lazni aktivni alarm
 - Windows i Linux `verify-install` sada prikazuju sanitizovan `install report`, tako da zastareli WDAC warning ne prekriva stvarno zdravo stanje sistema

@@ -14,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $script:CurrentStageName = "Startup"
 $script:TotalInstallStages = 10
 $script:InstallWarnings = New-Object System.Collections.Generic.List[string]
+$script:TurboQuantDependenciesReady = $true
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $defaultsPath = Join-Path $repoRoot "config\profiles\defaults.json"
@@ -194,6 +195,36 @@ function Ensure-Command {
     }
 }
 
+function Ensure-OptionalCommand {
+    param(
+        [string]$Name,
+        [string]$WingetId,
+        [string]$ReasonIfMissing
+    )
+
+    if (Get-Command $Name -ErrorAction SilentlyContinue) {
+        return $true
+    }
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        $script:InstallWarnings.Add("$ReasonIfMissing Komanda '$Name' nije pronadjena, a winget nije dostupan.") | Out-Null
+        return $false
+    }
+
+    Write-Host "Instaliram opcioni alat $Name preko winget..." -ForegroundColor Cyan
+    & winget install --id $WingetId --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        if ((Get-Command $Name -ErrorAction SilentlyContinue) -or (Test-WingetPackageInstalled -WingetId $WingetId)) {
+            Write-Host "$Name je vec instaliran ili je dostupan nakon winget pokusaja." -ForegroundColor Yellow
+            return $true
+        }
+        $script:InstallWarnings.Add("$ReasonIfMissing Nije uspela automatska instalacija za '$Name'.") | Out-Null
+        return $false
+    }
+
+    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
 function Ensure-PythonRuntime {
     $python = Get-PythonLauncher
     if ($python) {
@@ -350,6 +381,55 @@ function Ensure-CudaToolkit {
     Invoke-Native winget install --id Nvidia.CUDA --silent --accept-package-agreements --accept-source-agreements
 }
 
+function Ensure-OptionalVsBuildTools {
+    $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $vcvars) {
+        return $true
+    }
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        $script:InstallWarnings.Add("TurboQuant build bice preskocen. Visual Studio Build Tools nisu pronadjeni, a winget nije dostupan.") | Out-Null
+        return $false
+    }
+
+    Write-Host "Instaliram opcione Visual Studio Build Tools 2022..." -ForegroundColor Cyan
+    & winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+    if ($LASTEXITCODE -ne 0 -and -not (Test-Path $vcvars)) {
+        $script:InstallWarnings.Add("TurboQuant build bice preskocen. Visual Studio Build Tools nisu mogli automatski da se instaliraju.") | Out-Null
+        return $false
+    }
+
+    return (Test-Path $vcvars)
+}
+
+function Ensure-OptionalCudaToolkit {
+    if (Get-Command nvcc -ErrorAction SilentlyContinue) {
+        return $true
+    }
+
+    $cudaDir = Get-ChildItem "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cudaDir) {
+        return $true
+    }
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        $script:InstallWarnings.Add("TurboQuant build bice preskocen. CUDA toolkit nije pronadjen, a winget nije dostupan.") | Out-Null
+        return $false
+    }
+
+    Write-Host "Instaliram opcioni NVIDIA CUDA Toolkit..." -ForegroundColor Cyan
+    & winget install --id Nvidia.CUDA --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        $cudaDir = Get-ChildItem "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $cudaDir) {
+            $script:InstallWarnings.Add("TurboQuant build bice preskocen. CUDA toolkit nije mogao automatski da se instalira.") | Out-Null
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Copy-FolderContent {
     param(
         [string]$Source,
@@ -504,7 +584,8 @@ function Write-InstallReport {
         "Local Qwen Control Center.lnk",
         "OpenCode - Local Qwen.lnk",
         "Verify Local Qwen Install.lnk",
-        "Repair Windows App Control.lnk"
+        "Repair Windows App Control.lnk",
+        "Uninstall Local Qwen.lnk"
     )
     $missingShortcuts = @($desktopShortcutNames | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })
 
@@ -657,6 +738,7 @@ function Write-DesktopShortcuts {
     $openCodeCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "repair-app-control.cmd" -PsScriptName "repair-app-control.ps1"
+    $uninstallCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "uninstall-local-qwen.cmd" -PsScriptName "uninstall.ps1"
 
     New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk") `
@@ -690,11 +772,20 @@ function Write-DesktopShortcuts {
         -IconLocation "$controlCenterIcon,0" `
         -Description "Inspect or repair Smart App Control / App Control issues"
 
+    New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "Uninstall Local Qwen.lnk") `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$uninstallCmd`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$controlCenterIcon,0" `
+        -Description "Uninstall Local Qwen with choice to keep models"
+
     $expectedShortcuts = @(
         "Local Qwen Control Center.lnk",
         "OpenCode - Local Qwen.lnk",
         "Verify Local Qwen Install.lnk",
-        "Repair Windows App Control.lnk"
+        "Repair Windows App Control.lnk",
+        "Uninstall Local Qwen.lnk"
     )
     $missing = @($expectedShortcuts | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })
     if ($missing.Count -gt 0) {
@@ -729,10 +820,19 @@ try {
         Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
         Ensure-Command -Name "npm" -WingetId "OpenJS.NodeJS.LTS"
         [void](Ensure-PythonRuntime)
-        Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
-        Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
-        Ensure-VsBuildTools
-        Ensure-CudaToolkit
+        $script:TurboQuantDependenciesReady = $true
+        if (-not (Ensure-OptionalCommand -Name "cmake" -WingetId "Kitware.CMake" -ReasonIfMissing "TurboQuant build bice preskocen.")) {
+            $script:TurboQuantDependenciesReady = $false
+        }
+        if (-not (Ensure-OptionalCommand -Name "ninja" -WingetId "Ninja-build.Ninja" -ReasonIfMissing "TurboQuant build bice preskocen.")) {
+            $script:TurboQuantDependenciesReady = $false
+        }
+        if (-not (Ensure-OptionalVsBuildTools)) {
+            $script:TurboQuantDependenciesReady = $false
+        }
+        if (-not (Ensure-OptionalCudaToolkit)) {
+            $script:TurboQuantDependenciesReady = $false
+        }
     }
 
     Invoke-InstallStage -Number 3 -Name "Copy launchers, scripts, config and icons" -Action {
@@ -901,11 +1001,13 @@ try {
     }
 
     Invoke-InstallStage -Number 10 -Name "Optional TurboQuant build and final verification" -Action {
-        if (-not $SkipTurboQuantBuild) {
+        if (-not $SkipTurboQuantBuild -and $script:TurboQuantDependenciesReady) {
             & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
             if ($LASTEXITCODE -ne 0) {
                 $script:InstallWarnings.Add("TurboQuant build nije uspeo. Instalacija ostaje upotrebljiva kroz upstream llama.cpp fallback.") | Out-Null
             }
+        } elseif (-not $script:TurboQuantDependenciesReady) {
+            Write-Host "Skipping TurboQuant build because optional build dependencies are not ready." -ForegroundColor Yellow
         } else {
             Write-Host "Skipping TurboQuant build because -SkipTurboQuantBuild was requested." -ForegroundColor Yellow
         }

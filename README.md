@@ -191,6 +191,7 @@ Main things you can start:
 - `OpenCode - Local Qwen`
 - `Verify Local Qwen Install`
 - `Repair Windows App Control`
+- `Uninstall Local Qwen`
 
 The Windows `Local Qwen Control Center` now includes:
 
@@ -317,6 +318,7 @@ Release integrity rule:
 The current Windows setup includes:
 
 - dependency bootstrap through `winget`
+- optional TurboQuant dependency fallback when `ninja`, `cmake`, CUDA or VS Build Tools are unavailable
 - `Visual Studio Build Tools 2022`
 - `CUDA Toolkit`
 - latest upstream `llama.cpp` CUDA Windows binary download
