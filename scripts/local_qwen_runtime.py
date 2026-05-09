@@ -1473,6 +1473,11 @@ def summarize_history_payload(history: list[dict]) -> dict:
     avg_total_tps = 0.0
     avg_total_ms = 0.0
     source_counts = {"testPrompt": 0, "opencode": 0, "other": 0}
+    source_breakdown = {
+        "testPrompt": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
+        "opencode": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
+        "other": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
+    }
     recent_activities: list[dict] = []
     stability = {
         "level": "no-data",
@@ -1509,6 +1514,9 @@ def summarize_history_payload(history: list[dict]) -> dict:
         for item in history:
             source = detect_source(str(item.get("label", "")))
             source_counts[source] += 1
+            source_breakdown[source]["count"] += 1
+            source_breakdown[source]["lastLabel"] = item.get("label")
+            source_breakdown[source]["lastMeasuredAt"] = item.get("measuredAt")
         for item in reversed(history[-5:]):
             source = detect_source(str(item.get("label", "")))
             recent_activities.append(
@@ -1626,6 +1634,7 @@ def summarize_history_payload(history: list[dict]) -> dict:
         "activity": {
             "averageTotalMs": round(avg_total_ms, 2),
             "sources": source_counts,
+            "sourceBreakdown": source_breakdown,
             "lastSource": detect_source(current.get("label")) if current else None,
             "recentActivities": recent_activities,
             "stability": stability,

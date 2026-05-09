@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.3
+- Dodat `source drilldown` u shared usage telemetry, tako da payload sada posebno prati `testPrompt`, `opencode` i `other` sa brojem zahteva i poslednjim label-om po izvoru
+- Windows `Request activity` sada prikazuje poseban red `Izvori`, pa se odmah vidi koliko prometa dolazi iz test prompt-a, OpenCode-a i ostalih lokalnih zahteva
+- Linux `Quick status` sada prikazuje isti `Source drilldown` rezime iz shared payload-a, bez razlike izmedju platformi
+
 v2.8.2
 - Dodat `mini trend` signal za usage panel: throughput sada moze da pokazuje `raste`, `pada` ili `stabilan`, a latency `brzi`, `sporiji` ili `stabilan`
 - Windows `Request activity` sada prikazuje poseban trend red, pa se odmah vidi da li lokalni servis ubrzava ili usporava kroz poslednje zahteve

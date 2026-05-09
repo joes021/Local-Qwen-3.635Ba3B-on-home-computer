@@ -43,6 +43,16 @@ if current:
     print(f"- Throughput: {current.get('totalTokensPerSecond', 0)} tok/s (last)")
     print(f"- Requests: {throughput.get('requestCount', 0)} | Avg odgovor: {throughput.get('activity', {}).get('averageTotalMs', 0)} ms")
     print(f"- Last source: {throughput.get('activity', {}).get('lastSource', 'n/a')} | Last label: {throughput.get('lastLabel', 'n/a')}")
+    source_breakdown = throughput.get("activity", {}).get("sourceBreakdown", {})
+    test_breakdown = source_breakdown.get("testPrompt", {})
+    opencode_breakdown = source_breakdown.get("opencode", {})
+    other_breakdown = source_breakdown.get("other", {})
+    print(
+        "- Source drilldown: "
+        f"test {test_breakdown.get('count', 0)} [{test_breakdown.get('lastLabel') or 'n/a'}] | "
+        f"opencode {opencode_breakdown.get('count', 0)} [{opencode_breakdown.get('lastLabel') or 'n/a'}] | "
+        f"other {other_breakdown.get('count', 0)} [{other_breakdown.get('lastLabel') or 'n/a'}]"
+    )
 else:
     print("- Throughput: nema podataka")
 stability = throughput.get("activity", {}).get("stability", {})

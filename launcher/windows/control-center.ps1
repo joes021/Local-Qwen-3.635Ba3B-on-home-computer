@@ -562,7 +562,7 @@ $liveThroughputPanel.Controls.Add($liveSignalLabel)
 $usagePanel = New-Object System.Windows.Forms.GroupBox
 $usagePanel.Text = "Request activity"
 $usagePanel.Location = New-Object System.Drawing.Point(18, 278)
-$usagePanel.Size = New-Object System.Drawing.Size(648, 136)
+$usagePanel.Size = New-Object System.Drawing.Size(648, 156)
 $usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
 $launchTab.Controls.Add($usagePanel)
@@ -619,8 +619,14 @@ $usageTrendLabel.Size = New-Object System.Drawing.Size(610, 20)
 $usageTrendLabel.Text = "Trend: throughput = | latency ="
 $usagePanel.Controls.Add($usageTrendLabel)
 
+$usageSourceBreakdownLabel = New-Object System.Windows.Forms.Label
+$usageSourceBreakdownLabel.Location = New-Object System.Drawing.Point(18, 112)
+$usageSourceBreakdownLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageSourceBreakdownLabel.Text = "Izvori: test 0 | opencode 0 | other 0"
+$usagePanel.Controls.Add($usageSourceBreakdownLabel)
+
 $usageRecentBox = New-Object System.Windows.Forms.TextBox
-$usageRecentBox.Location = New-Object System.Drawing.Point(18, 114)
+$usageRecentBox.Location = New-Object System.Drawing.Point(18, 134)
 $usageRecentBox.Size = New-Object System.Drawing.Size(610, 28)
 $usageRecentBox.Multiline = $true
 $usageRecentBox.ReadOnly = $true
@@ -1204,6 +1210,7 @@ function Refresh-ThroughputView {
         $usageCountLabel.Text = "Zahtevi: 0"
         $usageLastMsLabel.Text = "Avg odgovor: --"
         $usageSourceLabel.Text = "Izvor: jos nema merenja"
+        $usageSourceBreakdownLabel.Text = "Izvori: test 0 | opencode 0 | other 0"
         $usageStabilityLabel.Text = "Stabilnost: nema podataka"
         $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         $usageTrendLabel.Text = "Trend: throughput = | latency ="
@@ -1236,6 +1243,8 @@ function Refresh-ThroughputView {
     $usageCountLabel.Text = "Zahtevi: $($tokenMetrics.requestCount)"
     $usageLastMsLabel.Text = "Avg odgovor: $($tokenMetrics.activity.averageTotalMs) ms"
     $usageSourceLabel.Text = "Izvor: $($tokenMetrics.activity.lastSource) | Label: $($tokenMetrics.lastLabel)"
+    $sourceBreakdown = $tokenMetrics.activity.sourceBreakdown
+    $usageSourceBreakdownLabel.Text = "Izvori: test $($sourceBreakdown.testPrompt.count) [$($sourceBreakdown.testPrompt.lastLabel)] | opencode $($sourceBreakdown.opencode.count) [$($sourceBreakdown.opencode.lastLabel)] | other $($sourceBreakdown.other.count) [$($sourceBreakdown.other.lastLabel)]"
     $usageStabilityLabel.Text = "Stabilnost: $($tokenMetrics.activity.stability.label) ($($tokenMetrics.activity.stability.score)) | $($tokenMetrics.activity.stability.reason)"
     $usageStabilityLabel.ForeColor = switch ([string]$tokenMetrics.activity.stability.level) {
         "stable" { [System.Drawing.Color]::FromArgb(20, 120, 50) }

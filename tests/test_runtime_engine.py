@@ -784,6 +784,10 @@ class RuntimeEngineTests(unittest.TestCase):
                 [item["label"] for item in payload["activity"]["recentActivities"]],
                 ["manual-request", "opencode-chat", "test-prompt"],
             )
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["testPrompt"]["count"], 1)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["opencode"]["count"], 1)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["count"], 1)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["lastLabel"], "manual-request")
 
     def test_token_metrics_stability_marks_fast_history_as_stable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
