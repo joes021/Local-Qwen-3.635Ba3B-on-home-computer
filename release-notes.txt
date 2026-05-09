@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.4
+- `Source drilldown 2.0` sada po izvoru (`testPrompt`, `opencode`, `other`) prikazuje i prosecno vreme odgovora i prosecni throughput, ne samo broj zahteva i poslednji label
+- Windows `Request activity` je prosiren detaljnijim izvor-pregledom po linijama, tako da se odmah vidi koji izvor je sporiji ili brzi
+- Dodat je `Install update` tok: Windows `Control Center` sada ima posebno dugme za pokretanje latest update installera, a Linux control center ima novu opciju `Install update`
+
 v2.8.3
 - Dodat `source drilldown` u shared usage telemetry, tako da payload sada posebno prati `testPrompt`, `opencode` i `other` sa brojem zahteva i poslednjim label-om po izvoru
 - Windows `Request activity` sada prikazuje poseban red `Izvori`, pa se odmah vidi koliko prometa dolazi iz test prompt-a, OpenCode-a i ostalih lokalnih zahteva

@@ -53,6 +53,15 @@ if current:
         f"opencode {opencode_breakdown.get('count', 0)} [{opencode_breakdown.get('lastLabel') or 'n/a'}] | "
         f"other {other_breakdown.get('count', 0)} [{other_breakdown.get('lastLabel') or 'n/a'}]"
     )
+    print(
+        f"  * TEST: avg {test_breakdown.get('averageTotalMs', 0)} ms | avg {test_breakdown.get('averageTotalTokensPerSecond', 0)} tok/s"
+    )
+    print(
+        f"  * OPENCODE: avg {opencode_breakdown.get('averageTotalMs', 0)} ms | avg {opencode_breakdown.get('averageTotalTokensPerSecond', 0)} tok/s"
+    )
+    print(
+        f"  * OTHER: avg {other_breakdown.get('averageTotalMs', 0)} ms | avg {other_breakdown.get('averageTotalTokensPerSecond', 0)} tok/s"
+    )
 else:
     print("- Throughput: nema podataka")
 stability = throughput.get("activity", {}).get("stability", {})
@@ -449,14 +458,15 @@ while true; do
   echo "12) Model manager"
   echo "13) Export diagnostics"
   echo "14) Check updates"
-  echo "15) Agent audit"
-  echo "16) Run next action"
-  echo "17) Refresh diagnostics only"
-  echo "18) Repair model"
-  echo "19) Repair runtime"
-  echo "20) Repair config"
-  echo "21) Guided repair"
-  echo "22) Exit"
+  echo "15) Install update"
+  echo "16) Agent audit"
+  echo "17) Run next action"
+  echo "18) Refresh diagnostics only"
+  echo "19) Repair model"
+  echo "20) Repair runtime"
+  echo "21) Repair config"
+  echo "22) Guided repair"
+  echo "23) Exit"
   read -r -p "Izbor: " choice
 
   case "$choice" in
@@ -474,8 +484,9 @@ while true; do
     12) "$SCRIPT_DIR/manage-models.sh" ;;
     13) "$SCRIPT_DIR/export-diagnostics.sh" ;;
     14) "$SCRIPT_DIR/check-updates.sh" ;;
-    15) "$SCRIPT_DIR/agent-audit.sh" ;;
-    16)
+    15) "$SCRIPT_DIR/install-update.sh" ;;
+    16) "$SCRIPT_DIR/agent-audit.sh" ;;
+    17)
       next_action="$(get_next_action_id)"
       case "$next_action" in
         repair-install) "$SCRIPT_DIR/repair-install.sh" ;;
@@ -485,12 +496,12 @@ while true; do
         *) echo "Nepoznat next action: $next_action" ;;
       esac
       ;;
-    17) show_diagnostics ;;
-    18) "$SCRIPT_DIR/repair-model.sh" ;;
-    19) "$SCRIPT_DIR/repair-runtime.sh" ;;
-    20) "$SCRIPT_DIR/repair-config.sh" ;;
-    21) run_guided_health_action ;;
-    22) exit 0 ;;
+    18) show_diagnostics ;;
+    19) "$SCRIPT_DIR/repair-model.sh" ;;
+    20) "$SCRIPT_DIR/repair-runtime.sh" ;;
+    21) "$SCRIPT_DIR/repair-config.sh" ;;
+    22) run_guided_health_action ;;
+    23) exit 0 ;;
     *) echo "Nepoznat izbor." ;;
   esac
 done

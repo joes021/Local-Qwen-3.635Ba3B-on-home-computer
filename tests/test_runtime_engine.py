@@ -788,6 +788,12 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["activity"]["sourceBreakdown"]["opencode"]["count"], 1)
             self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["count"], 1)
             self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["lastLabel"], "manual-request")
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["testPrompt"]["averageTotalMs"], 1500.0)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["opencode"]["averageTotalMs"], 1500.0)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["averageTotalMs"], 1500.0)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["testPrompt"]["averageTotalTokensPerSecond"], 10.0)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["opencode"]["averageTotalTokensPerSecond"], 20.0)
+            self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["averageTotalTokensPerSecond"], 30.0)
 
     def test_token_metrics_stability_marks_fast_history_as_stable(self):
         with tempfile.TemporaryDirectory() as temp_dir:

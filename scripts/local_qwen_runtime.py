@@ -1474,9 +1474,33 @@ def summarize_history_payload(history: list[dict]) -> dict:
     avg_total_ms = 0.0
     source_counts = {"testPrompt": 0, "opencode": 0, "other": 0}
     source_breakdown = {
-        "testPrompt": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
-        "opencode": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
-        "other": {"count": 0, "lastLabel": None, "lastMeasuredAt": None},
+        "testPrompt": {
+            "count": 0,
+            "lastLabel": None,
+            "lastMeasuredAt": None,
+            "averageTotalMs": 0.0,
+            "averageTotalTokensPerSecond": 0.0,
+            "lastTotalMs": 0.0,
+            "lastTotalTokensPerSecond": 0.0,
+        },
+        "opencode": {
+            "count": 0,
+            "lastLabel": None,
+            "lastMeasuredAt": None,
+            "averageTotalMs": 0.0,
+            "averageTotalTokensPerSecond": 0.0,
+            "lastTotalMs": 0.0,
+            "lastTotalTokensPerSecond": 0.0,
+        },
+        "other": {
+            "count": 0,
+            "lastLabel": None,
+            "lastMeasuredAt": None,
+            "averageTotalMs": 0.0,
+            "averageTotalTokensPerSecond": 0.0,
+            "lastTotalMs": 0.0,
+            "lastTotalTokensPerSecond": 0.0,
+        },
     }
     recent_activities: list[dict] = []
     stability = {
@@ -1517,6 +1541,18 @@ def summarize_history_payload(history: list[dict]) -> dict:
             source_breakdown[source]["count"] += 1
             source_breakdown[source]["lastLabel"] = item.get("label")
             source_breakdown[source]["lastMeasuredAt"] = item.get("measuredAt")
+            source_breakdown[source]["lastTotalMs"] = round(float(item.get("totalMs", 0.0) or 0.0), 2)
+            source_breakdown[source]["lastTotalTokensPerSecond"] = round(
+                float(item.get("totalTokensPerSecond", 0.0) or 0.0), 2
+            )
+            source_breakdown[source]["averageTotalMs"] += float(item.get("totalMs", 0.0) or 0.0)
+            source_breakdown[source]["averageTotalTokensPerSecond"] += float(item.get("totalTokensPerSecond", 0.0) or 0.0)
+        for entry in source_breakdown.values():
+            if entry["count"] > 0:
+                entry["averageTotalMs"] = round(entry["averageTotalMs"] / entry["count"], 2)
+                entry["averageTotalTokensPerSecond"] = round(
+                    entry["averageTotalTokensPerSecond"] / entry["count"], 2
+                )
         for item in reversed(history[-5:]):
             source = detect_source(str(item.get("label", "")))
             recent_activities.append(

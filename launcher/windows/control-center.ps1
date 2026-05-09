@@ -27,6 +27,7 @@ $startOpenCodeScript = Join-Path $PSScriptRoot "start-opencode.ps1"
 $launchAgentScript = Join-Path $PSScriptRoot "launch-agent.ps1"
 $manageModelsScript = Join-Path $PSScriptRoot "manage-models.ps1"
 $checkUpdatesScript = Join-Path $PSScriptRoot "check-updates.ps1"
+$installUpdateScript = Join-Path $PSScriptRoot "install-update.ps1"
 $exportDiagnosticsScript = Join-Path $PSScriptRoot "export-diagnostics.ps1"
 $repairInstallScript = Join-Path $PSScriptRoot "repair-install.ps1"
 $repairModelScript = Join-Path $PSScriptRoot "repair-model.ps1"
@@ -562,7 +563,7 @@ $liveThroughputPanel.Controls.Add($liveSignalLabel)
 $usagePanel = New-Object System.Windows.Forms.GroupBox
 $usagePanel.Text = "Request activity"
 $usagePanel.Location = New-Object System.Drawing.Point(18, 278)
-$usagePanel.Size = New-Object System.Drawing.Size(648, 156)
+$usagePanel.Size = New-Object System.Drawing.Size(648, 230)
 $usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
 $launchTab.Controls.Add($usagePanel)
@@ -625,9 +626,27 @@ $usageSourceBreakdownLabel.Size = New-Object System.Drawing.Size(610, 20)
 $usageSourceBreakdownLabel.Text = "Izvori: test 0 | opencode 0 | other 0"
 $usagePanel.Controls.Add($usageSourceBreakdownLabel)
 
+$usageSourceDetailTestLabel = New-Object System.Windows.Forms.Label
+$usageSourceDetailTestLabel.Location = New-Object System.Drawing.Point(18, 132)
+$usageSourceDetailTestLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailTestLabel.Text = "TEST: zahtevi 0 | avg -- ms | avg -- tok/s"
+$usagePanel.Controls.Add($usageSourceDetailTestLabel)
+
+$usageSourceDetailOpencodeLabel = New-Object System.Windows.Forms.Label
+$usageSourceDetailOpencodeLabel.Location = New-Object System.Drawing.Point(18, 150)
+$usageSourceDetailOpencodeLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailOpencodeLabel.Text = "OPENCODE: zahtevi 0 | avg -- ms | avg -- tok/s"
+$usagePanel.Controls.Add($usageSourceDetailOpencodeLabel)
+
+$usageSourceDetailOtherLabel = New-Object System.Windows.Forms.Label
+$usageSourceDetailOtherLabel.Location = New-Object System.Drawing.Point(18, 168)
+$usageSourceDetailOtherLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailOtherLabel.Text = "OTHER: zahtevi 0 | avg -- ms | avg -- tok/s"
+$usagePanel.Controls.Add($usageSourceDetailOtherLabel)
+
 $usageRecentBox = New-Object System.Windows.Forms.TextBox
-$usageRecentBox.Location = New-Object System.Drawing.Point(18, 134)
-$usageRecentBox.Size = New-Object System.Drawing.Size(610, 28)
+$usageRecentBox.Location = New-Object System.Drawing.Point(18, 186)
+$usageRecentBox.Size = New-Object System.Drawing.Size(610, 36)
 $usageRecentBox.Multiline = $true
 $usageRecentBox.ReadOnly = $true
 $usageRecentBox.ScrollBars = "Vertical"
@@ -636,7 +655,7 @@ $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server prim
 $usagePanel.Controls.Add($usageRecentBox)
 
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 422)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 496)
 $throughputBox.Size = New-Object System.Drawing.Size(648, 82)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
@@ -646,7 +665,7 @@ $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji no
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 518)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 592)
 $launchOutput.Size = New-Object System.Drawing.Size(648, 112)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
@@ -1211,6 +1230,9 @@ function Refresh-ThroughputView {
         $usageLastMsLabel.Text = "Avg odgovor: --"
         $usageSourceLabel.Text = "Izvor: jos nema merenja"
         $usageSourceBreakdownLabel.Text = "Izvori: test 0 | opencode 0 | other 0"
+        $usageSourceDetailTestLabel.Text = "TEST: zahtevi 0 | avg -- ms | avg -- tok/s"
+        $usageSourceDetailOpencodeLabel.Text = "OPENCODE: zahtevi 0 | avg -- ms | avg -- tok/s"
+        $usageSourceDetailOtherLabel.Text = "OTHER: zahtevi 0 | avg -- ms | avg -- tok/s"
         $usageStabilityLabel.Text = "Stabilnost: nema podataka"
         $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         $usageTrendLabel.Text = "Trend: throughput = | latency ="
@@ -1245,6 +1267,9 @@ function Refresh-ThroughputView {
     $usageSourceLabel.Text = "Izvor: $($tokenMetrics.activity.lastSource) | Label: $($tokenMetrics.lastLabel)"
     $sourceBreakdown = $tokenMetrics.activity.sourceBreakdown
     $usageSourceBreakdownLabel.Text = "Izvori: test $($sourceBreakdown.testPrompt.count) [$($sourceBreakdown.testPrompt.lastLabel)] | opencode $($sourceBreakdown.opencode.count) [$($sourceBreakdown.opencode.lastLabel)] | other $($sourceBreakdown.other.count) [$($sourceBreakdown.other.lastLabel)]"
+    $usageSourceDetailTestLabel.Text = "TEST: zahtevi $($sourceBreakdown.testPrompt.count) | avg $($sourceBreakdown.testPrompt.averageTotalMs) ms | avg $($sourceBreakdown.testPrompt.averageTotalTokensPerSecond) tok/s"
+    $usageSourceDetailOpencodeLabel.Text = "OPENCODE: zahtevi $($sourceBreakdown.opencode.count) | avg $($sourceBreakdown.opencode.averageTotalMs) ms | avg $($sourceBreakdown.opencode.averageTotalTokensPerSecond) tok/s"
+    $usageSourceDetailOtherLabel.Text = "OTHER: zahtevi $($sourceBreakdown.other.count) | avg $($sourceBreakdown.other.averageTotalMs) ms | avg $($sourceBreakdown.other.averageTotalTokensPerSecond) tok/s"
     $usageStabilityLabel.Text = "Stabilnost: $($tokenMetrics.activity.stability.label) ($($tokenMetrics.activity.stability.score)) | $($tokenMetrics.activity.stability.reason)"
     $usageStabilityLabel.ForeColor = switch ([string]$tokenMetrics.activity.stability.level) {
         "stable" { [System.Drawing.Color]::FromArgb(20, 120, 50) }
@@ -2064,33 +2089,39 @@ $quickRefreshButton.Add_Click({
 
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
-$repairInstallButton.Location = New-Object System.Drawing.Point(18, 594)
+$repairInstallButton.Location = New-Object System.Drawing.Point(18, 716)
 $repairInstallButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($repairInstallButton)
 
 $testPromptButton = New-Object System.Windows.Forms.Button
 $testPromptButton.Text = "Test prompt"
-$testPromptButton.Location = New-Object System.Drawing.Point(152, 594)
+$testPromptButton.Location = New-Object System.Drawing.Point(152, 716)
 $testPromptButton.Size = New-Object System.Drawing.Size(110, 32)
 $launchTab.Controls.Add($testPromptButton)
 
 $modelManagerButton = New-Object System.Windows.Forms.Button
 $modelManagerButton.Text = "Model manager"
-$modelManagerButton.Location = New-Object System.Drawing.Point(272, 594)
+$modelManagerButton.Location = New-Object System.Drawing.Point(272, 716)
 $modelManagerButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($modelManagerButton)
 
 $diagnosticsButton = New-Object System.Windows.Forms.Button
 $diagnosticsButton.Text = "Diagnostics"
-$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 594)
+$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 716)
 $diagnosticsButton.Size = New-Object System.Drawing.Size(120, 32)
 $launchTab.Controls.Add($diagnosticsButton)
 
 $updatesButton = New-Object System.Windows.Forms.Button
 $updatesButton.Text = "Check updates"
-$updatesButton.Location = New-Object System.Drawing.Point(536, 594)
-$updatesButton.Size = New-Object System.Drawing.Size(130, 32)
+$updatesButton.Location = New-Object System.Drawing.Point(18, 754)
+$updatesButton.Size = New-Object System.Drawing.Size(150, 32)
 $launchTab.Controls.Add($updatesButton)
+
+$installUpdateButton = New-Object System.Windows.Forms.Button
+$installUpdateButton.Text = "Install update"
+$installUpdateButton.Location = New-Object System.Drawing.Point(178, 754)
+$installUpdateButton.Size = New-Object System.Drawing.Size(150, 32)
+$launchTab.Controls.Add($installUpdateButton)
 
 $modelLabel = New-Object System.Windows.Forms.Label
 $modelLabel.Text = "Model varijanta"
@@ -2780,6 +2811,13 @@ $exportDiagnosticsButton.Add_Click({
 $updatesButton.Add_Click({
     try {
         Invoke-BackgroundShellScript -Name "Check updates" -ScriptPath $checkUpdatesScript
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$installUpdateButton.Add_Click({
+    try {
+        Invoke-BackgroundShellScript -Name "Install update" -ScriptPath $installUpdateScript
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
