@@ -22,7 +22,7 @@ DisableProgramGroupPage=yes
 DisableReadyMemo=yes
 DisableReadyPage=no
 DisableWelcomePage=no
-DisableFinishedPage=no
+DisableFinishedPage=yes
 OutputDir=..\..\dist\windows
 OutputBaseFilename={#MySetupBaseName}-{#MyAppVersion}
 SetupIconFile=..\..\assets\icons\control-center.ico
@@ -53,4 +53,4 @@ Source: "..\..\config\profiles\*"; DestDir: "{app}\config\profiles"; Flags: igno
 Name: "{autodesktop}\Local Qwen Installer"; Filename: "{app}\setup-bootstrap.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icons\control-center.ico"
 
 [Run]
-Filename: "{cmd}"; Parameters: "/c ""{app}\setup-bootstrap.cmd"""; WorkingDir: "{app}"; Flags: waituntilterminated runhidden
+Filename: "{cmd}"; Parameters: "/c ""{app}\setup-bootstrap.cmd"""; WorkingDir: "{app}"; Flags: waituntilterminated

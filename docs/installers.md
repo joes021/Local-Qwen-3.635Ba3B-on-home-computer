@@ -61,6 +61,24 @@ Recommended mental model for Windows install order:
 9. Build `TurboQuant`
 10. Create desktop shortcuts
 
+Windows installer UX note:
+
+- the visible bootstrap window now shows a staged `1/10` through `10/10` flow so the user can tell what is happening and how far the install progressed
+- success path now prints `Installation complete` and closes automatically instead of sitting on a confusing `finishing` screen
+- failure path keeps the window open and tells the user which stage failed
+- desktop shortcuts are now verified immediately after creation, and missing `.lnk` files are reported in `install-report.json`
+- final installer summary now also reports install root, launcher root, desktop shortcut state, selected model path and install report path so the user knows exactly what finished and where it landed
+
+Windows smoke simulation:
+
+- the installer now supports a fast local simulation mode for packaging checks:
+  - `powershell -ExecutionPolicy Bypass -File .\install\windows\install.ps1 -InstallRoot <temp-root>\LocalQwenHome -DesktopFolder <temp-root>\Desktop -SkipDependencies -SkipRepoClone -SkipOpenCodeInstall -SkipLlamaDownload -SkipTurboQuantBuild -SkipModelDownload`
+- this mode is meant to verify:
+  - staged progress output
+  - install state writing
+  - desktop shortcut creation
+  - clean exit behavior
+
 Repair note:
 
 - if a Windows install stops after creating `LocalQwenHome`, rerunning the newest `Setup.exe` is now the intended recovery path

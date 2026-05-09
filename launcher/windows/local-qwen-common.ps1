@@ -737,6 +737,25 @@ function Get-SettingsPresetPreview {
     )
 }
 
+function Get-ModelComparePayload {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ModelIds
+    )
+
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $gpuMiB = Get-DetectedGpuMemoryMiB
+    $ramGiB = Get-SystemMemoryGiB
+    $cpuThreads = [Environment]::ProcessorCount
+    return Invoke-RuntimeEngineJson -Arguments @(
+        "model-compare",
+        "--defaults", $defaultsPath,
+        "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
+        "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
+        "--cpu-threads", ([string]$cpuThreads),
+        "--model-ids", ([string]($ModelIds -join ","))
+    )
+}
+
 function Get-InstalledModelIds {
     $catalog = @(Get-ModelCatalog)
     $installed = New-Object System.Collections.Generic.List[string]

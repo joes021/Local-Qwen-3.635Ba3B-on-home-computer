@@ -40,6 +40,7 @@ print(f"- OpenCode: {'config ok' if os.path.isfile(opencode_config) else 'nema c
 print(f"- Model: {state.get('modelId', 'n/a')}")
 if current:
     print(f"- Throughput: {current.get('totalTokensPerSecond', 0)} tok/s (last)")
+    print(f"- Requests: {throughput.get('requestCount', 0)} | Last label: {throughput.get('lastLabel', 'n/a')}")
 else:
     print("- Throughput: nema podataka")
 print(f"- Profil: {settings.get('profile', 'balanced')}")
@@ -222,6 +223,7 @@ if not current:
 else:
     print(f"- Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalTokensPerSecond', 0)} tok/s | total {current.get('totalMs', 0)} ms")
     print(f"- Prosek: prompt {payload.get('averages', {}).get('promptTokensPerSecond', 0)} tok/s | output {payload.get('averages', {}).get('completionTokensPerSecond', 0)} tok/s | total {payload.get('averages', {}).get('totalTokensPerSecond', 0)} tok/s")
+    print(f"- Aktivnost: zahtevi {payload.get('requestCount', 0)} | avg odgovor {payload.get('activity', {}).get('averageTotalMs', 0)} ms | test {payload.get('activity', {}).get('sources', {}).get('testPrompt', 0)} | opencode {payload.get('activity', {}).get('sources', {}).get('opencode', 0)} | ostalo {payload.get('activity', {}).get('sources', {}).get('other', 0)}")
     history = payload.get("history", [])
     for item in history:
         print(f"- {item.get('measuredAt')}: in {item.get('promptTokensPerSecond', 0)} tok/s | out {item.get('completionTokensPerSecond', 0)} tok/s | total {item.get('totalTokensPerSecond', 0)} tok/s")

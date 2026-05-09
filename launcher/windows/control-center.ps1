@@ -558,9 +558,50 @@ $liveSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
 $liveThroughputPanel.Controls.Add($liveSignalLabel)
 
+$usagePanel = New-Object System.Windows.Forms.GroupBox
+$usagePanel.Text = "Request activity"
+$usagePanel.Location = New-Object System.Drawing.Point(18, 278)
+$usagePanel.Size = New-Object System.Drawing.Size(648, 92)
+$usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
+$usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
+$launchTab.Controls.Add($usagePanel)
+
+$usageCountLabel = New-Object System.Windows.Forms.Label
+$usageCountLabel.Location = New-Object System.Drawing.Point(18, 24)
+$usageCountLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageCountLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$usageCountLabel.Text = "Zahtevi: 0"
+$usagePanel.Controls.Add($usageCountLabel)
+
+$usageLastMsLabel = New-Object System.Windows.Forms.Label
+$usageLastMsLabel.Location = New-Object System.Drawing.Point(224, 24)
+$usageLastMsLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageLastMsLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$usageLastMsLabel.Text = "Poslednji odgovor: --"
+$usagePanel.Controls.Add($usageLastMsLabel)
+
+$usageSourceLabel = New-Object System.Windows.Forms.Label
+$usageSourceLabel.Location = New-Object System.Drawing.Point(430, 24)
+$usageSourceLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageSourceLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+$usageSourceLabel.Text = "Izvor: --"
+$usagePanel.Controls.Add($usageSourceLabel)
+
+$usageModelLabel = New-Object System.Windows.Forms.Label
+$usageModelLabel.Location = New-Object System.Drawing.Point(18, 50)
+$usageModelLabel.Size = New-Object System.Drawing.Size(296, 20)
+$usageModelLabel.Text = "Aktivni model: --"
+$usagePanel.Controls.Add($usageModelLabel)
+
+$usageProfileLabel = New-Object System.Windows.Forms.Label
+$usageProfileLabel.Location = New-Object System.Drawing.Point(320, 50)
+$usageProfileLabel.Size = New-Object System.Drawing.Size(296, 20)
+$usageProfileLabel.Text = "Aktivni profil: --"
+$usagePanel.Controls.Add($usageProfileLabel)
+
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 278)
-$throughputBox.Size = New-Object System.Drawing.Size(648, 70)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 378)
+$throughputBox.Size = New-Object System.Drawing.Size(648, 82)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
 $throughputBox.ReadOnly = $true
@@ -1096,6 +1137,8 @@ function Get-LatestReleaseInfoCached {
 
 function Refresh-ThroughputView {
     $tokenMetrics = Get-TokenMetricsSummary
+    $usageModelLabel.Text = "Aktivni model: $([string](Get-InstallState).modelId)"
+    $usageProfileLabel.Text = "Aktivni profil: $([string](Get-Settings).profile)"
     if (-not $tokenMetrics.current) {
         $livePromptLabel.Text = "Input: -- tok/s"
         $liveOutputLabel.Text = "Output: -- tok/s"
@@ -1105,6 +1148,9 @@ function Refresh-ThroughputView {
         $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
         $quickThroughputLabel.Text = "Throughput: --"
         $quickSignalLabel.Text = "Signal: nema podataka"
+        $usageCountLabel.Text = "Zahtevi: 0"
+        $usageLastMsLabel.Text = "Poslednji odgovor: --"
+        $usageSourceLabel.Text = "Izvor: jos nema merenja"
         $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
@@ -1130,6 +1176,9 @@ function Refresh-ThroughputView {
     $liveSignalLabel.Text = "Signal: poslednji zahtev $ageText | merenja: $($tokenMetrics.historyCount)"
     $quickThroughputLabel.Text = "Throughput: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
     $quickSignalLabel.Text = "Signal: $ageText"
+    $usageCountLabel.Text = "Zahtevi: $($tokenMetrics.requestCount)"
+    $usageLastMsLabel.Text = "Poslednji odgovor: $($tokenMetrics.current.totalMs) ms"
+    $usageSourceLabel.Text = "Izvor: $($tokenMetrics.lastLabel)"
 
     $historyLines = @()
     foreach ($item in @($tokenMetrics.history)) {
@@ -1139,6 +1188,7 @@ function Refresh-ThroughputView {
     $throughputBox.Text = @(
         "Poslednje merenje: prompt $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokensPerSecond) tok/s | total $($tokenMetrics.current.totalTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
         "Prosek istorije: prompt $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output $($tokenMetrics.averages.completionTokensPerSecond) tok/s | total $($tokenMetrics.averages.totalTokensPerSecond) tok/s",
+        "Aktivnost: avg odgovor $($tokenMetrics.activity.averageTotalMs) ms | test prompt $($tokenMetrics.activity.sources.testPrompt) | OpenCode $($tokenMetrics.activity.sources.opencode) | ostalo $($tokenMetrics.activity.sources.other)",
         "Istorija: $($historyLines -join '   ;   ')"
     ) -join [Environment]::NewLine
 }
@@ -1301,6 +1351,45 @@ function Apply-SettingsPresetToForm {
     } else {
         Write-LaunchMessage @("Quick preset '$($preset.title)' je pripremljen. Model izbor ostaje kakav je trenutno vidljiv pod aktivnim filterima.")
     }
+}
+
+function Save-SettingsFromForm {
+    Ensure-ModelUiState
+    $contextValue = $contextRow.Presets[$contextRow.Track.Value]
+    if ($modelCombo.SelectedIndex -lt 0 -or $modelCombo.SelectedIndex -ge $script:VisibleModelList.Count) {
+        throw "Nijedan model nije dostupan za aktivne filtere."
+    }
+    $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
+    if ($selectedModel) {
+        & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
+    }
+    $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript `
+        -Profile $script:PendingSettingsProfile `
+        -ContextSize $contextValue `
+        -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
+        -BuildSteps ([int]$buildRow.Numeric.Value) `
+        -PlanSteps ([int]$planRow.Numeric.Value) `
+        -GeneralSteps ([int]$generalRow.Numeric.Value) `
+        -ExploreSteps ([int]$exploreRow.Numeric.Value) 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw ($result -join [Environment]::NewLine)
+    }
+
+    Update-SavedSettingsSnapshot `
+        -Profile $script:PendingSettingsProfile `
+        -ContextSize $contextValue `
+        -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
+        -BuildSteps ([int]$buildRow.Numeric.Value) `
+        -PlanSteps ([int]$planRow.Numeric.Value) `
+        -GeneralSteps ([int]$generalRow.Numeric.Value) `
+        -ExploreSteps ([int]$exploreRow.Numeric.Value)
+    Update-SettingsPresetCompareText -PresetId $(if ($script:SelectedSettingsPreset) { [string]$script:SelectedSettingsPreset.id } else { $null })
+    $settingsStatus.Text = "Sacuvano za buduca pokretanja."
+    $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+    Write-LaunchMessage @($result)
+    Refresh-LaunchStatus
+    return $true
 }
 
 function Apply-ModelFilters {
@@ -1565,6 +1654,12 @@ function Show-ModelBrowserDialog {
     $useRecommendedButton.Size = New-Object System.Drawing.Size(266, 34)
     $browserForm.Controls.Add($useRecommendedButton)
 
+    $compareButton = New-Object System.Windows.Forms.Button
+    $compareButton.Text = "Uporedi izabrani"
+    $compareButton.Location = New-Object System.Drawing.Point(820, 566)
+    $compareButton.Size = New-Object System.Drawing.Size(266, 34)
+    $browserForm.Controls.Add($compareButton)
+
     $closeBrowserButton = New-Object System.Windows.Forms.Button
     $closeBrowserButton.Text = "Zatvori"
     $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 608)
@@ -1714,6 +1809,33 @@ function Show-ModelBrowserDialog {
         } catch {
             Write-LaunchMessage @($_.Exception.Message)
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+        }
+    }.GetNewClosure())
+
+    $compareButton.Add_Click({
+        if ($grid.SelectedRows.Count -eq 0 -or -not $grid.SelectedRows[0].Tag) {
+            return
+        }
+        try {
+            $selected = $grid.SelectedRows[0].Tag
+            $recommendedId = if ($recommendationBundle -and $recommendationBundle.recommendedModel) { [string]$recommendationBundle.recommendedModel.id } else { $null }
+            $activeId = [string](Get-InstallState).modelId
+            $ids = @($selected.id, $activeId, $recommendedId) | Where-Object { $_ } | Select-Object -Unique
+            $compare = Get-ModelComparePayload -ModelIds $ids
+            $lines = New-Object System.Collections.Generic.List[string]
+            $lines.Add("Model compare") | Out-Null
+            $lines.Add("Best speed: $($compare.summary.bestForSpeed)") | Out-Null
+            $lines.Add("Best coding: $($compare.summary.bestForCoding)") | Out-Null
+            $lines.Add("Best quality: $($compare.summary.bestForQuality)") | Out-Null
+            $lines.Add("") | Out-Null
+            foreach ($item in @($compare.models)) {
+                $lines.Add("$($item.id)") | Out-Null
+                $lines.Add("  Family: $($item.family) | Speed: $($item.speedEstimateLabel) | Agentic: $($item.agenticScore)/10 | OpenCode: $($item.opencodeFit)/10") | Out-Null
+                $lines.Add("  Size: $($item.approxSizeGiB) GiB | Fit: $($item.fitGroup) | Badge: $((@($item.useCaseBadges) -join ', '))") | Out-Null
+            }
+            $detailBox.Text = $lines -join [Environment]::NewLine
+        } catch {
+            $detailBox.Text = $_.Exception.Message
         }
     }.GetNewClosure())
 
@@ -1983,6 +2105,12 @@ $bestCurrentButton.Location = New-Object System.Drawing.Point(424, 54)
 $bestCurrentButton.Size = New-Object System.Drawing.Size(126, 30)
 $presetGroup.Controls.Add($bestCurrentButton)
 
+$applyAndStartPresetButton = New-Object System.Windows.Forms.Button
+$applyAndStartPresetButton.Text = "Primeni + start"
+$applyAndStartPresetButton.Location = New-Object System.Drawing.Point(394, 18)
+$applyAndStartPresetButton.Size = New-Object System.Drawing.Size(156, 28)
+$presetGroup.Controls.Add($applyAndStartPresetButton)
+
 $presetInfoBox = New-Object System.Windows.Forms.TextBox
 $presetInfoBox.Location = New-Object System.Drawing.Point(16, 92)
 $presetInfoBox.Size = New-Object System.Drawing.Size(534, 66)
@@ -2249,43 +2377,25 @@ $resetSettingsButton.Add_Click({
 
 $saveSettingsButton.Add_Click({
     try {
-        Ensure-ModelUiState
-        $contextValue = $contextRow.Presets[$contextRow.Track.Value]
-        if ($modelCombo.SelectedIndex -lt 0 -or $modelCombo.SelectedIndex -ge $script:VisibleModelList.Count) {
-            throw "Nijedan model nije dostupan za aktivne filtere."
-        }
-        $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
-        if ($selectedModel) {
-            & powershell.exe -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selectedModel.id) 2>&1 | Out-Null
-        }
-        $result = & powershell.exe -ExecutionPolicy Bypass -File $configureSettingsScript `
-            -Profile $script:PendingSettingsProfile `
-            -ContextSize $contextValue `
-            -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
-            -BuildSteps ([int]$buildRow.Numeric.Value) `
-            -PlanSteps ([int]$planRow.Numeric.Value) `
-            -GeneralSteps ([int]$generalRow.Numeric.Value) `
-            -ExploreSteps ([int]$exploreRow.Numeric.Value) 2>&1
-
-        if ($LASTEXITCODE -ne 0) {
-            throw ($result -join [Environment]::NewLine)
-        }
-
-        Update-SavedSettingsSnapshot `
-            -Profile $script:PendingSettingsProfile `
-            -ContextSize $contextValue `
-            -MaxOutputTokens ([int]$outputRow.Numeric.Value) `
-            -BuildSteps ([int]$buildRow.Numeric.Value) `
-            -PlanSteps ([int]$planRow.Numeric.Value) `
-            -GeneralSteps ([int]$generalRow.Numeric.Value) `
-            -ExploreSteps ([int]$exploreRow.Numeric.Value)
-        Update-SettingsPresetCompareText -PresetId $(if ($script:SelectedSettingsPreset) { [string]$script:SelectedSettingsPreset.id } else { $null })
-        $settingsStatus.Text = "Sacuvano za buduca pokretanja."
-        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
-        Write-LaunchMessage @($result)
-        Refresh-LaunchStatus
+        [void](Save-SettingsFromForm)
     } catch {
         $settingsStatus.Text = "Greska pri cuvanju."
+        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        Write-LaunchMessage @($_.Exception.Message)
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+    }
+})
+
+$applyAndStartPresetButton.Add_Click({
+    try {
+        if (-not $script:SelectedSettingsPreset) {
+            Apply-SettingsPresetToForm -PresetId "best-current-setup"
+        }
+        [void](Save-SettingsFromForm)
+        Start-LlamaBackground -Profile $script:PendingSettingsProfile
+        Write-LaunchMessage @("Preset je primenjen i server se podize u pozadini.")
+    } catch {
+        $settingsStatus.Text = "Greska pri primeni preset-a."
         $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
         Write-LaunchMessage @($_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null

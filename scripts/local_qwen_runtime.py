@@ -735,6 +735,44 @@ def command_model_browser(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_model_compare(args: argparse.Namespace) -> int:
+    defaults = load_defaults(args.defaults)
+    browser = build_model_browser(
+        defaults,
+        args.gpu_mib,
+        args.ram_gib,
+        args.cpu_threads,
+        current_model_id="",
+        installed_model_ids=[],
+        installed_model_sizes={},
+        free_disk_gib=-1,
+    )
+    available = {str(item["id"]): item for item in browser["models"]}
+    model_ids = [item for item in str(args.model_ids).split(",") if item]
+    compared = [available[item_id] for item_id in model_ids if item_id in available]
+
+    def first_by_badge(badge: str):
+        for item in compared:
+            if badge in item.get("useCaseBadges", []):
+                return item
+        return None
+
+    best_speed = first_by_badge("best-for-speed") or max(compared, key=lambda item: (item.get("opencodeFit", 0), -item.get("approxSizeGiB", 0)), default=None)
+    best_coding = first_by_badge("best-for-coding") or max(compared, key=lambda item: (item.get("agenticScore", 0), item.get("opencodeFit", 0)), default=None)
+    best_quality = first_by_badge("best-quality-model") or max(compared, key=lambda item: (item.get("approxSizeGiB", 0), item.get("agenticScore", 0)), default=None)
+
+    payload = {
+        "models": compared,
+        "summary": {
+            "bestForSpeed": best_speed["id"] if best_speed else None,
+            "bestForCoding": best_coding["id"] if best_coding else None,
+            "bestForQuality": best_quality["id"] if best_quality else None,
+        },
+    }
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def command_settings_presets(args: argparse.Namespace) -> int:
     defaults = load_defaults(args.defaults)
     payload = build_settings_presets(defaults, args.gpu_mib, args.ram_gib, args.cpu_threads)
@@ -1283,15 +1321,33 @@ def summarize_history_payload(history: list[dict]) -> dict:
     avg_prompt_tps = 0.0
     avg_completion_tps = 0.0
     avg_total_tps = 0.0
+    avg_total_ms = 0.0
+    source_counts = {"testPrompt": 0, "opencode": 0, "other": 0}
     if history:
         avg_prompt_tps = sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history)
         avg_completion_tps = sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history)
         avg_total_tps = sum(item.get("totalTokensPerSecond", 0.0) for item in history) / len(history)
+        avg_total_ms = sum(item.get("totalMs", 0.0) for item in history) / len(history)
+        for item in history:
+            label = str(item.get("label", "")).lower()
+            if "test" in label:
+                source_counts["testPrompt"] += 1
+            elif "opencode" in label:
+                source_counts["opencode"] += 1
+            else:
+                source_counts["other"] += 1
 
     return {
         "current": current,
         "history": history,
         "historyCount": len(history),
+        "requestCount": len(history),
+        "lastMeasuredAt": current.get("measuredAt") if current else None,
+        "lastLabel": current.get("label") if current else None,
+        "activity": {
+            "averageTotalMs": round(avg_total_ms, 2),
+            "sources": source_counts,
+        },
         "averages": {
             "promptTokensPerSecond": round(avg_prompt_tps, 2),
             "completionTokensPerSecond": round(avg_completion_tps, 2),
@@ -1420,6 +1476,14 @@ def build_parser() -> argparse.ArgumentParser:
     model_browser_parser.add_argument("--coder-only", action="store_true")
     model_browser_parser.add_argument("--verified-only", action="store_true")
     model_browser_parser.set_defaults(func=command_model_browser)
+
+    model_compare_parser = subparsers.add_parser("model-compare")
+    model_compare_parser.add_argument("--defaults", required=True)
+    model_compare_parser.add_argument("--gpu-mib", type=int, default=0)
+    model_compare_parser.add_argument("--ram-gib", type=int, default=0)
+    model_compare_parser.add_argument("--cpu-threads", type=int, default=0)
+    model_compare_parser.add_argument("--model-ids", required=True)
+    model_compare_parser.set_defaults(func=command_model_compare)
 
     settings_presets_parser = subparsers.add_parser("settings-presets")
     settings_presets_parser.add_argument("--defaults", required=True)

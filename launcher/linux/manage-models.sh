@@ -234,6 +234,44 @@ print("* = trenutno aktivan model")
 print("+ = preporucen model za ovaj hardver")
 PY
     ;;
+  compare)
+    [ -n "$MODEL_ID" ] || { echo "Prosledi model id za compare."; exit 1; }
+    gpu_mib="0"
+    if command -v nvidia-smi >/dev/null 2>&1; then
+      gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+    fi
+    ram_gib="$(python3 - <<'PY'
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            print(round(int(line.split()[1]) / 1024 / 1024))
+            break
+    else:
+        print(0)
+PY
+)"
+    current_id="$(python3 - <<'PY' "$STATE_PATH"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    print(json.load(f).get("modelId", ""))
+PY
+)"
+    recommended_id="$(get_recommended_model_id)"
+    ids="$MODEL_ID,$current_id,$recommended_id"
+    python3 "$(get_runtime_engine_path)" model-compare --defaults "$DEFAULTS_PATH" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)" --model-ids "$ids" | python3 - <<'PY'
+import json, sys
+payload = json.load(sys.stdin)
+print("Model compare")
+print(f"- Best speed: {payload.get('summary', {}).get('bestForSpeed')}")
+print(f"- Best coding: {payload.get('summary', {}).get('bestForCoding')}")
+print(f"- Best quality: {payload.get('summary', {}).get('bestForQuality')}")
+for item in payload.get("models", []):
+    print()
+    print(item.get("id"))
+    print(f"  Family: {item.get('family')} | Speed: {item.get('speedEstimateLabel')} | Agentic: {item.get('agenticScore')}/10 | OpenCode: {item.get('opencodeFit')}/10")
+    print(f"  Size: {item.get('approxSizeGiB')} GiB | Fit: {item.get('fitGroup')} | Badge: {', '.join(item.get('useCaseBadges', []))}")
+PY
+    ;;
   use)
     [ -n "$MODEL_ID" ] || { echo "Prosledi model id."; exit 1; }
     path="$(select_model "$MODEL_ID")"
@@ -257,7 +295,7 @@ PY
     INSTALL_ROOT="$ROOT" SKIP_RUNTIME_BUILD=1 bash "$ROOT/install/linux/install.sh"
     ;;
   *)
-    echo "Koriscenje: $0 [list|use <model-id>|recommend|download <model-id>] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"
+    echo "Koriscenje: $0 [list|compare <model-id>|use <model-id>|recommend|download <model-id>] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"
     exit 1
     ;;
 esac

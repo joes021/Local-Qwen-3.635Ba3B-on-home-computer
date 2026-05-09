@@ -3,12 +3,17 @@ param(
     [string]$DesktopFolder = "$env:USERPROFILE\Desktop",
     [string]$Profile = "balanced",
     [switch]$SkipDependencies,
+    [switch]$SkipRepoClone,
+    [switch]$SkipOpenCodeInstall,
     [switch]$SkipLlamaDownload,
     [switch]$SkipTurboQuantBuild,
     [switch]$SkipModelDownload
 )
 
 $ErrorActionPreference = "Stop"
+$script:CurrentStageName = "Startup"
+$script:TotalInstallStages = 10
+$script:InstallWarnings = New-Object System.Collections.Generic.List[string]
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $defaultsPath = Join-Path $repoRoot "config\profiles\defaults.json"
@@ -26,6 +31,54 @@ $docsDir = Join-Path $InstallRoot "docs"
 $desktopTargetDir = Join-Path $DesktopFolder "Local Qwen Home Computer"
 $statePath = Join-Path $stateDir "install-state.json"
 $installReportPath = Join-Path $stateDir "install-report.json"
+$upstreamDir = Join-Path $appsDir "llama.cpp"
+$turboDir = Join-Path $appsDir "llama.cpp-turboquant"
+$llamaBinDir = Join-Path $binDir "llama.cpp"
+$script:modelChoice = $null
+$script:modelFile = $null
+$script:TurboServerExe = $null
+
+function Write-InstallOverview {
+    param(
+        [string]$InstallRoot,
+        [string]$DesktopTargetDir
+    )
+
+    $lines = @(
+        "This installer will set up Local Qwen Home Computer for Windows.",
+        "Install root: $InstallRoot",
+        "Desktop launchers: $DesktopTargetDir",
+        "",
+        "Planned stages:",
+        "  [1/10] Prepare folders and workspace",
+        "  [2/10] Check or install dependencies",
+        "  [3/10] Copy launchers, scripts, config and icons",
+        "  [4/10] Write install state and desktop shortcuts",
+        "  [5/10] Clone or verify source repositories",
+        "  [6/10] Download or verify llama.cpp runtime",
+        "  [7/10] Install or verify OpenCode",
+        "  [8/10] Download or verify selected model",
+        "  [9/10] Apply settings and OpenCode wiring",
+        "  [10/10] Optional TurboQuant build and final verification",
+        ""
+    )
+
+    Write-Host ($lines -join [Environment]::NewLine) -ForegroundColor Cyan
+}
+
+function Invoke-InstallStage {
+    param(
+        [Parameter(Mandatory = $true)][int]$Number,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][scriptblock]$Action
+    )
+
+    $script:CurrentStageName = $Name
+    Write-Host ("[{0}/{1}] {2}" -f $Number, $script:TotalInstallStages, $Name) -ForegroundColor Cyan
+    & $Action
+    Write-Host ("[{0}/{1}] DONE - {2}" -f $Number, $script:TotalInstallStages, $Name) -ForegroundColor Green
+    Write-Host ""
+}
 
 function Ensure-Dir {
     param([string]$Path)
@@ -447,6 +500,13 @@ function Write-InstallReport {
     $llamaServerPath = Join-Path $LlamaBinDir "llama-server.exe"
     $turboServerPath = Join-Path $TurboDir "$($defaults.turboquant.buildDir)\bin\llama-server.exe"
     $configPath = Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
+    $desktopShortcutNames = @(
+        "Local Qwen Control Center.lnk",
+        "OpenCode - Local Qwen.lnk",
+        "Verify Local Qwen Install.lnk",
+        "Repair Windows App Control.lnk"
+    )
+    $missingShortcuts = @($desktopShortcutNames | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })
 
     $report = [ordered]@{
         generatedAt = (Get-Date).ToString("s")
@@ -464,7 +524,8 @@ function Write-InstallReport {
             }
             desktopShortcuts = [ordered]@{
                 path = $DesktopTargetDir
-                ok = (Test-Path (Join-Path $DesktopTargetDir "Local Qwen Control Center.lnk"))
+                ok = ($missingShortcuts.Count -eq 0)
+                missing = @($missingShortcuts)
             }
             llamaCppRuntime = [ordered]@{
                 path = $llamaServerPath
@@ -494,6 +555,7 @@ function New-Shortcut {
     param(
         [string]$ShortcutPath,
         [string]$TargetPath,
+        [AllowEmptyString()]
         [string]$Arguments,
         [string]$WorkingDirectory,
         [string]$IconLocation,
@@ -512,6 +574,10 @@ function New-Shortcut {
         $shortcut.Description = $Description
     }
     $shortcut.Save()
+
+    if (-not (Test-Path $ShortcutPath)) {
+        throw "Desktop shortcut nije sacuvan: $ShortcutPath"
+    }
 }
 
 function Write-CmdLauncher {
@@ -519,6 +585,7 @@ function Write-CmdLauncher {
         [Parameter(Mandatory = $true)][string]$LaunchersDir,
         [Parameter(Mandatory = $true)][string]$CmdName,
         [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [AllowEmptyString()]
         [string]$ExtraArguments = ""
     )
 
@@ -555,6 +622,7 @@ function Write-HiddenVbsLauncher {
         [Parameter(Mandatory = $true)][string]$LaunchersDir,
         [Parameter(Mandatory = $true)][string]$VbsName,
         [Parameter(Mandatory = $true)][string]$PsScriptName,
+        [AllowEmptyString()]
         [string]$ExtraArguments = ""
     )
 
@@ -621,221 +689,276 @@ function Write-DesktopShortcuts {
         -WorkingDirectory $LaunchersDir `
         -IconLocation "$controlCenterIcon,0" `
         -Description "Inspect or repair Smart App Control / App Control issues"
-}
 
-if (-not $SkipDependencies) {
-    Ensure-Command -Name "git" -WingetId "Git.Git"
-    Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
-    Ensure-Command -Name "npm" -WingetId "OpenJS.NodeJS.LTS"
-    [void](Ensure-PythonRuntime)
-    Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
-    Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
-    Ensure-VsBuildTools
-    Ensure-CudaToolkit
-}
-
-Ensure-Dir $InstallRoot
-Ensure-Dir $stateDir
-Ensure-Dir $binDir
-Ensure-Dir $appsDir
-Ensure-Dir $modelsDir
-Ensure-Dir $launchersDir
-Ensure-Dir $scriptsDir
-Ensure-Dir $configDir
-Ensure-Dir $assetsDir
-Ensure-Dir $docsDir
-Ensure-Dir $desktopTargetDir
-
-$upstreamDir = Join-Path $appsDir "llama.cpp"
-$turboDir = Join-Path $appsDir "llama.cpp-turboquant"
-$llamaBinDir = Join-Path $binDir "llama.cpp"
-$recommendedModelChoice = Get-RecommendedModelChoice
-$existingInstallState = Get-ExistingInstallState
-$existingModelChoice = $null
-$existingModelComplete = $false
-if ($existingInstallState) {
-    $existingModelChoice = Get-ModelChoiceById -ModelId ([string]$existingInstallState.modelId)
-    $existingModelComplete = Test-ModelFileLooksCompleteForChoice -Path ([string]$existingInstallState.modelFile) -ModelChoice $existingModelChoice
-}
-$availableCompleteModelIds = @(Get-AvailableCompleteModelIds)
-$resolvedInstallModel = Invoke-RuntimeHelperJson -Arguments @(
-    "resolve-install-model",
-    "--defaults", $defaultsPath,
-    "--gpu-mib", ([string](Get-DetectedGpuMemoryMiB)),
-    "--ram-gib", ([string](Get-SystemMemoryGiB)),
-    "--cpu-threads", ([string][Environment]::ProcessorCount),
-    "--current-model-id", ([string]$(if ($existingModelChoice) { $existingModelChoice.id } else { "" })),
-    "--current-model-complete", ([string]$existingModelComplete).ToLower(),
-    "--skip-model-download", ([string]$SkipModelDownload.IsPresent).ToLower(),
-    "--available-complete-model-ids", ([string]($availableCompleteModelIds -join ","))
-)
-$modelChoice = $null
-if ($resolvedInstallModel -and $resolvedInstallModel.selectedModel -and $resolvedInstallModel.selectedModel.id) {
-    $modelChoice = Get-ModelChoiceById -ModelId ([string]$resolvedInstallModel.selectedModel.id)
-}
-if (-not $modelChoice) {
-    $modelChoice = $recommendedModelChoice
-}
-$modelFile = Join-Path $modelsDir $modelChoice.filename
-$warnings = New-Object System.Collections.Generic.List[string]
-
-Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
-Copy-FolderContent -Source (Join-Path $repoRoot "scripts") -Destination $scriptsDir
-Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
-Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
-Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt") -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
-
-foreach ($stalePath in @(
-    (Join-Path $launchersDir "version.json"),
-    (Join-Path $launchersDir "release-notes.txt")
-)) {
-    if (Test-Path $stalePath) {
-        Remove-Item -LiteralPath $stalePath -Force -ErrorAction SilentlyContinue
+    $expectedShortcuts = @(
+        "Local Qwen Control Center.lnk",
+        "OpenCode - Local Qwen.lnk",
+        "Verify Local Qwen Install.lnk",
+        "Repair Windows App Control.lnk"
+    )
+    $missing = @($expectedShortcuts | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })
+    if ($missing.Count -gt 0) {
+        throw "Desktop shortcuts nisu kompletno napravljeni: $($missing -join ', ')"
     }
 }
 
-Write-InstallState `
-    -InstallRoot $InstallRoot `
-    -DesktopTargetDir $desktopTargetDir `
-    -UpstreamDir $upstreamDir `
-    -TurboDir $turboDir `
-    -LlamaBinDir $llamaBinDir `
-    -ModelFile $modelFile `
-    -ModelId $modelChoice.id `
-    -Profile $Profile `
-    -StatePath $statePath `
-    -Defaults $defaults
+try {
+    Write-InstallOverview -InstallRoot $InstallRoot -DesktopTargetDir $desktopTargetDir
 
-Write-DesktopShortcuts -LaunchersDir $launchersDir -AssetsDir $assetsDir -DesktopTargetDir $desktopTargetDir
-
-if (!(Test-Path $upstreamDir)) {
-    Invoke-Native git clone https://github.com/ggml-org/llama.cpp.git $upstreamDir
-}
-
-if (!(Test-Path $turboDir)) {
-    Invoke-Native git clone $defaults.turboquant.repo $turboDir
-    Invoke-Native git -C $turboDir checkout $defaults.turboquant.branch
-}
-
-if ((-not $SkipLlamaDownload) -and !(Test-Path (Join-Path $llamaBinDir "llama-server.exe"))) {
-    Download-LlamaCppWindowsCuda -DestinationDir $llamaBinDir
-}
-
-$upstreamServerExe = Join-Path $llamaBinDir "llama-server.exe"
-if (Test-Path $upstreamServerExe) {
-    if (-not (Test-LlamaBinaryRunnable -ServerExe $upstreamServerExe)) {
-        $warnings.Add("Windows je blokirao pokretanje llama-server.exe. Moguca je Application Control / WDAC politika na masini. Ako prečice postoje ali server ne kreće, proveri da li sistem dozvoljava lokalne unsigned exe fajlove.") | Out-Null
+    Invoke-InstallStage -Number 1 -Name "Prepare folders and workspace" -Action {
+        Ensure-Dir $InstallRoot
+        Ensure-Dir $stateDir
+        Ensure-Dir $binDir
+        Ensure-Dir $appsDir
+        Ensure-Dir $modelsDir
+        Ensure-Dir $launchersDir
+        Ensure-Dir $scriptsDir
+        Ensure-Dir $configDir
+        Ensure-Dir $assetsDir
+        Ensure-Dir $docsDir
+        Ensure-Dir $desktopTargetDir
     }
-}
 
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-    throw "npm nije dostupan, pa OpenCode ne moze da se instalira."
-}
+    Invoke-InstallStage -Number 2 -Name "Check or install dependencies" -Action {
+        if ($SkipDependencies) {
+            Write-Host "Skipping dependency installation because -SkipDependencies was requested." -ForegroundColor Yellow
+            return
+        }
 
-if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
-    Invoke-Native npm install -g opencode-ai
-}
-
-if ((-not $SkipModelDownload) -and ((!(Test-Path $modelFile)) -or ((Get-Item $modelFile -ErrorAction SilentlyContinue).Length -lt [int64]$modelChoice.minExpectedBytes))) {
-    Download-RecommendedModel `
-        -RepoId $modelChoice.source `
-        -Filename $modelChoice.filename `
-        -TargetPath $modelFile `
-        -MinExpectedBytes ([int64]$modelChoice.minExpectedBytes)
-}
-
-$settings = [ordered]@{
-    profile = $Profile
-    llama = [ordered]@{
-        contextSize = $defaults.profiles.$Profile.contextSize
-        maxOutputTokens = 8192
-        contextSizeCustomized = $false
-        maxOutputTokensCustomized = $false
+        Ensure-Command -Name "git" -WingetId "Git.Git"
+        Ensure-Command -Name "node" -WingetId "OpenJS.NodeJS.LTS"
+        Ensure-Command -Name "npm" -WingetId "OpenJS.NodeJS.LTS"
+        [void](Ensure-PythonRuntime)
+        Ensure-Command -Name "cmake" -WingetId "Kitware.CMake"
+        Ensure-Command -Name "ninja" -WingetId "Ninja-build.Ninja"
+        Ensure-VsBuildTools
+        Ensure-CudaToolkit
     }
-    opencode = [ordered]@{
-        buildSteps = $defaults.opencode.steps.build
-        planSteps = $defaults.opencode.steps.plan
-        generalSteps = $defaults.opencode.steps.general
-        exploreSteps = $defaults.opencode.steps.explore
+
+    Invoke-InstallStage -Number 3 -Name "Copy launchers, scripts, config and icons" -Action {
+        Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
+        Copy-FolderContent -Source (Join-Path $repoRoot "scripts") -Destination $scriptsDir
+        Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
+        Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force
+        Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt") -Force
+        Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
+
+        foreach ($stalePath in @(
+            (Join-Path $launchersDir "version.json"),
+            (Join-Path $launchersDir "release-notes.txt")
+        )) {
+            if (Test-Path $stalePath) {
+                Remove-Item -LiteralPath $stalePath -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
-}
-$settings | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $stateDir "settings.json") -Encoding UTF8
 
-Write-InstallState `
-    -InstallRoot $InstallRoot `
-    -DesktopTargetDir $desktopTargetDir `
-    -UpstreamDir $upstreamDir `
-    -TurboDir $turboDir `
-    -LlamaBinDir $llamaBinDir `
-    -ModelFile $modelFile `
-    -ModelId $modelChoice.id `
-    -Profile $Profile `
-    -StatePath $statePath `
-    -Defaults $defaults
+    Invoke-InstallStage -Number 4 -Name "Write install state and desktop shortcuts" -Action {
+        $recommendedModelChoice = Get-RecommendedModelChoice
+        $existingInstallState = Get-ExistingInstallState
+        $existingModelChoice = $null
+        $existingModelComplete = $false
+        if ($existingInstallState) {
+            $existingModelChoice = Get-ModelChoiceById -ModelId ([string]$existingInstallState.modelId)
+            $existingModelComplete = Test-ModelFileLooksCompleteForChoice -Path ([string]$existingInstallState.modelFile) -ModelChoice $existingModelChoice
+        }
+        $availableCompleteModelIds = @(Get-AvailableCompleteModelIds)
+        $resolvedInstallModel = Invoke-RuntimeHelperJson -Arguments @(
+            "resolve-install-model",
+            "--defaults", $defaultsPath,
+            "--gpu-mib", ([string](Get-DetectedGpuMemoryMiB)),
+            "--ram-gib", ([string](Get-SystemMemoryGiB)),
+            "--cpu-threads", ([string][Environment]::ProcessorCount),
+            "--current-model-id", ([string]$(if ($existingModelChoice) { $existingModelChoice.id } else { "__none__" })),
+            "--current-model-complete", ([string]$existingModelComplete).ToLower(),
+            "--skip-model-download", ([string]$SkipModelDownload.IsPresent).ToLower(),
+            "--available-complete-model-ids", ([string]$(if ($availableCompleteModelIds.Count -gt 0) { $availableCompleteModelIds -join "," } else { "__none__" }))
+        )
+        $selectedModelChoice = $null
+        if ($resolvedInstallModel -and $resolvedInstallModel.selectedModel -and $resolvedInstallModel.selectedModel.id) {
+            $selectedModelChoice = Get-ModelChoiceById -ModelId ([string]$resolvedInstallModel.selectedModel.id)
+        }
+        if (-not $selectedModelChoice) {
+            $selectedModelChoice = $recommendedModelChoice
+        }
 
-& powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    $warnings.Add("OpenCode konfiguracija nije uspesno upisana tokom install toka. Pokreni configure-settings.ps1 ili Verify Local Qwen Install nakon instalacije.") | Out-Null
-}
+        $script:modelChoice = $selectedModelChoice
+        $script:modelFile = Join-Path $modelsDir $selectedModelChoice.filename
 
-if (-not $SkipTurboQuantBuild) {
-    & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
-    if ($LASTEXITCODE -ne 0) {
-        $warnings.Add("TurboQuant build nije uspeo. Instalacija ostaje upotrebljiva kroz upstream llama.cpp fallback.") | Out-Null
+        Write-InstallState `
+            -InstallRoot $InstallRoot `
+            -DesktopTargetDir $desktopTargetDir `
+            -UpstreamDir $upstreamDir `
+            -TurboDir $turboDir `
+            -LlamaBinDir $llamaBinDir `
+            -ModelFile $script:modelFile `
+            -ModelId $selectedModelChoice.id `
+            -Profile $Profile `
+            -StatePath $statePath `
+            -Defaults $defaults
+
+        Write-DesktopShortcuts -LaunchersDir $launchersDir -AssetsDir $assetsDir -DesktopTargetDir $desktopTargetDir
     }
-}
 
-$turboServerExe = Join-Path $turboDir "$($defaults.turboquant.buildDir)\bin\llama-server.exe"
-Write-InstallState `
-    -InstallRoot $InstallRoot `
-    -DesktopTargetDir $desktopTargetDir `
-    -UpstreamDir $upstreamDir `
-    -TurboDir $turboDir `
-    -LlamaBinDir $llamaBinDir `
-    -ModelFile $modelFile `
-    -ModelId $modelChoice.id `
-    -Profile $Profile `
-    -StatePath $statePath `
-    -Defaults $defaults `
-    -TurboServerExe $(if (Test-Path $turboServerExe) { $turboServerExe } else { $null })
+    Invoke-InstallStage -Number 5 -Name "Clone or verify source repositories" -Action {
+        if ($SkipRepoClone) {
+            Write-Host "Skipping repository clone because -SkipRepoClone was requested." -ForegroundColor Yellow
+            return
+        }
 
-Write-InstallReport `
-    -InstallRoot $InstallRoot `
-    -InstallRootStatePath $statePath `
-    -InstallReportPath $installReportPath `
-    -ModelFile $modelFile `
-    -LlamaBinDir $llamaBinDir `
-    -TurboDir $turboDir `
-    -LaunchersDir $launchersDir `
-    -DesktopTargetDir $desktopTargetDir `
-    -Profile $Profile `
-    -Warnings $warnings
+        if (!(Test-Path $upstreamDir)) {
+            Invoke-Native git clone https://github.com/ggml-org/llama.cpp.git $upstreamDir
+        }
 
-$summary = @"
-Windows install state written to:
-$statePath
+        if (!(Test-Path $turboDir)) {
+            Invoke-Native git clone $defaults.turboquant.repo $turboDir
+            Invoke-Native git -C $turboDir checkout $defaults.turboquant.branch
+        }
+    }
 
-OpenCode global install:
-$(if (Get-Command opencode -ErrorAction SilentlyContinue) { 'OK' } else { 'NOT FOUND' })
+    Invoke-InstallStage -Number 6 -Name "Download or verify llama.cpp runtime" -Action {
+        if ($SkipLlamaDownload) {
+            Write-Host "Skipping llama.cpp runtime download because -SkipLlamaDownload was requested." -ForegroundColor Yellow
+        } elseif (!(Test-Path (Join-Path $llamaBinDir "llama-server.exe"))) {
+            Download-LlamaCppWindowsCuda -DestinationDir $llamaBinDir
+        }
 
-Desktop launchers:
-$desktopTargetDir
+        $upstreamServerExe = Join-Path $llamaBinDir "llama-server.exe"
+        if (Test-Path $upstreamServerExe) {
+            if (-not (Test-LlamaBinaryRunnable -ServerExe $upstreamServerExe)) {
+                $script:InstallWarnings.Add("Windows je blokirao pokretanje llama-server.exe. Moguca je Application Control / WDAC politika na masini. Ako precice postoje ali server ne krece, proveri da li sistem dozvoljava lokalne unsigned exe fajlove.") | Out-Null
+            }
+        } elseif ($SkipLlamaDownload) {
+            $script:InstallWarnings.Add("llama-server.exe nije pronadjen, a runtime download je preskocen. Server launch nece raditi dok se runtime ne preuzme.") | Out-Null
+        }
+    }
 
-Installed launcher root:
-$launchersDir
+    Invoke-InstallStage -Number 7 -Name "Install or verify OpenCode" -Action {
+        if ($SkipOpenCodeInstall) {
+            Write-Host "Skipping OpenCode installation because -SkipOpenCodeInstall was requested." -ForegroundColor Yellow
+            return
+        }
 
-Model path:
-$modelFile
+        if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+            throw "npm nije dostupan, pa OpenCode ne moze da se instalira."
+        }
 
-Install report:
-$installReportPath
+        if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+            Invoke-Native npm install -g opencode-ai
+        }
+    }
+
+    Invoke-InstallStage -Number 8 -Name "Download or verify selected model" -Action {
+        if ($SkipModelDownload) {
+            Write-Host "Skipping model download because -SkipModelDownload was requested." -ForegroundColor Yellow
+            return
+        }
+
+        if ((!(Test-Path $script:modelFile)) -or ((Get-Item $script:modelFile -ErrorAction SilentlyContinue).Length -lt [int64]$script:modelChoice.minExpectedBytes)) {
+            Download-RecommendedModel `
+                -RepoId $script:modelChoice.source `
+                -Filename $script:modelChoice.filename `
+                -TargetPath $script:modelFile `
+                -MinExpectedBytes ([int64]$script:modelChoice.minExpectedBytes)
+        }
+    }
+
+    Invoke-InstallStage -Number 9 -Name "Apply settings and OpenCode wiring" -Action {
+        $settings = [ordered]@{
+            profile = $Profile
+            llama = [ordered]@{
+                contextSize = $defaults.profiles.$Profile.contextSize
+                maxOutputTokens = 8192
+                contextSizeCustomized = $false
+                maxOutputTokensCustomized = $false
+            }
+            opencode = [ordered]@{
+                buildSteps = $defaults.opencode.steps.build
+                planSteps = $defaults.opencode.steps.plan
+                generalSteps = $defaults.opencode.steps.general
+                exploreSteps = $defaults.opencode.steps.explore
+            }
+        }
+        $settings | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $stateDir "settings.json") -Encoding UTF8
+
+        Write-InstallState `
+            -InstallRoot $InstallRoot `
+            -DesktopTargetDir $desktopTargetDir `
+            -UpstreamDir $upstreamDir `
+            -TurboDir $turboDir `
+            -LlamaBinDir $llamaBinDir `
+            -ModelFile $script:modelFile `
+            -ModelId $script:modelChoice.id `
+            -Profile $Profile `
+            -StatePath $statePath `
+            -Defaults $defaults
+
+        & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "configure-settings.ps1") -Profile $Profile | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            $script:InstallWarnings.Add("OpenCode konfiguracija nije uspesno upisana tokom install toka. Pokreni configure-settings.ps1 ili Verify Local Qwen Install nakon instalacije.") | Out-Null
+        }
+    }
+
+    Invoke-InstallStage -Number 10 -Name "Optional TurboQuant build and final verification" -Action {
+        if (-not $SkipTurboQuantBuild) {
+            & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
+            if ($LASTEXITCODE -ne 0) {
+                $script:InstallWarnings.Add("TurboQuant build nije uspeo. Instalacija ostaje upotrebljiva kroz upstream llama.cpp fallback.") | Out-Null
+            }
+        } else {
+            Write-Host "Skipping TurboQuant build because -SkipTurboQuantBuild was requested." -ForegroundColor Yellow
+        }
+
+        $script:TurboServerExe = Join-Path $turboDir "$($defaults.turboquant.buildDir)\bin\llama-server.exe"
+        Write-InstallState `
+            -InstallRoot $InstallRoot `
+            -DesktopTargetDir $desktopTargetDir `
+            -UpstreamDir $upstreamDir `
+            -TurboDir $turboDir `
+            -LlamaBinDir $llamaBinDir `
+            -ModelFile $script:modelFile `
+            -ModelId $script:modelChoice.id `
+            -Profile $Profile `
+            -StatePath $statePath `
+            -Defaults $defaults `
+            -TurboServerExe $(if (Test-Path $script:TurboServerExe) { $script:TurboServerExe } else { $null })
+
+        Write-InstallReport `
+            -InstallRoot $InstallRoot `
+            -InstallRootStatePath $statePath `
+            -InstallReportPath $installReportPath `
+            -ModelFile $script:modelFile `
+            -LlamaBinDir $llamaBinDir `
+            -TurboDir $turboDir `
+            -LaunchersDir $launchersDir `
+            -DesktopTargetDir $desktopTargetDir `
+            -Profile $Profile `
+            -Warnings $script:InstallWarnings
+    }
+
+    $desktopShortcutState = if ((Test-Path (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk")) -and (Test-Path (Join-Path $desktopTargetDir "OpenCode - Local Qwen.lnk"))) { "OK" } else { "MISSING ITEMS" }
+    $summary = @"
+Installation summary
+
+- Install root: $InstallRoot
+- Install state: $statePath
+- Launchers root: $launchersDir
+- Desktop folder: $desktopTargetDir
+- Desktop shortcuts: $desktopShortcutState
+- OpenCode global install: $(if (Get-Command opencode -ErrorAction SilentlyContinue) { 'OK' } else { 'NOT FOUND' })
+- Model path: $script:modelFile
+- Install report: $installReportPath
 "@
 
-if ($warnings.Count -gt 0) {
-    $summary += "`r`nWarnings:`r`n- " + ($warnings -join "`r`n- ")
-}
+    if ($script:InstallWarnings.Count -gt 0) {
+        $summary += "`r`nWarnings:`r`n- " + ($script:InstallWarnings -join "`r`n- ")
+    }
 
-Set-Content -Path (Join-Path $stateDir "install-summary.txt") -Value $summary -Encoding UTF8
-Write-Host $summary
+    Set-Content -Path (Join-Path $stateDir "install-summary.txt") -Value $summary -Encoding UTF8
+    Write-Host "INSTALLATION COMPLETE" -ForegroundColor Green
+    Write-Host $summary
+} catch {
+    Write-Error ("Install failed during stage '{0}': {1}" -f $script:CurrentStageName, $_.Exception.Message)
+    throw
+}

@@ -312,6 +312,26 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIn("maxOutputTokens", payload["changedFields"])
         self.assertTrue(any("balanced -> speed" in line.lower() for line in payload["compareLines"]))
 
+    def test_model_compare_returns_summary_for_selected_models(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-compare",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--model-ids",
+            "qwen36-35b-a3b-IQ2_M.gguf,qwen2.5-coder-7b-instruct-q5_k_m.gguf,gemma-3-4b-it-Q4_K_M.gguf",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["models"]), 3)
+        self.assertEqual(payload["summary"]["bestForCoding"], "qwen2.5-coder-7b-instruct-q5_k_m.gguf")
+        self.assertIn(payload["summary"]["bestForSpeed"], {item["id"] for item in payload["models"]})
+
     def test_agent_audit_marks_open_auto_system_root_as_high_risk(self):
         code, stdout, stderr = run_runtime_command(
             "agent-audit",
@@ -575,6 +595,8 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["current"]["promptTokensPerSecond"], 100.0)
             self.assertEqual(payload["current"]["completionTokensPerSecond"], 100.0)
             self.assertEqual(payload["historyCount"], 1)
+            self.assertEqual(payload["requestCount"], 1)
+            self.assertEqual(payload["activity"]["sources"]["testPrompt"], 1)
 
     def test_log_token_metrics_parses_llama_timing_block_and_dedupes(self):
         with tempfile.TemporaryDirectory() as temp_dir:

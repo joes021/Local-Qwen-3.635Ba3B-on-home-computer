@@ -1,5 +1,20 @@
 Local Qwen Home Computer - recent fixes
 
+v2.7.0
+- Windows installer staged tok je sada zakljucan kao pravi packaging tok: vidljivi koraci `1/10` do `10/10`, jasan `Installation complete`, automatsko zatvaranje na uspehu i otvoren prozor na failure scenariju
+- Installer summary na kraju sada jasno pokazuje install root, launcher root, desktop folder, stanje precica, model path i install report lokaciju umesto sirovog polu-zavrsnog izlaza
+- Windows Control Center sada ima poseban `Request activity` pregled koji prikazuje broj zahteva, poslednje vreme odgovora, izvor poslednjeg zahteva i aktivni model/profil pored live throughput panela
+- Shared token metrics sada cuvaju i request count, poslednji label i raspodelu izvora (`test prompt`, `OpenCode`, `other`), pa Windows i Linux vide isti usage signal
+- Model browser sada ima `Uporedi izabrani` tok koji poredi selektovani, aktivni i preporuceni model i odmah izdvaja `best speed`, `best coding` i `best quality`
+- Quick preset sekcija sada ima `Primeni + start`, tako da korisnik moze jednim klikom da sacuva preset i odmah podigne server sa tim podesavanjima
+- Linux `control-center.sh` i `manage-models.sh` su osvezeni da prikazu request activity detalje i da imaju `compare` tok nad modelima kroz isti shared runtime payload
+
+v2.6.3
+- Windows installer sada ima jasan staged tok sa vidljivim koracima `1/10` do `10/10`, pa korisnik vidi sta se trenutno radi i koliko jos faza ostaje
+- Inno setup vise ne skriva bootstrap fazu i ne ostavlja zbunjujuci finished ekran; uspesan tok sada jasno prijavi `Installation complete` i zatvara se automatski, a neuspeh ostavlja prozor otvoren sa porukom
+- Desktop shortcuts se sada verifikuju odmah posle kreiranja i install report prijavljuje sve nedostajuce `.lnk` fajlove umesto da desktop folder ostane prazan bez objasnjenja
+- Dodat je smoke-test friendly install tok sa `SkipRepoClone` i `SkipOpenCodeInstall` zastavicama, pa se Windows installer moze lokalno simulirati i proveriti bez punog download-a runtime-a i modela
+
 v2.6.2
 - Live throughput panel u Windows Control Center-u je premesten skroz gore u Pokretanje tab da bude vidljiv odmah posle osnovnog statusa
 - Panel je vizuelno pojacan i sada uvek jasno prikazuje prazno stanje kao JOS NEMA MERENJA umesto da deluje kao da throughput sekcija ne postoji
