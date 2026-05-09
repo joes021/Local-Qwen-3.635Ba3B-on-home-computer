@@ -1480,6 +1480,18 @@ def summarize_history_payload(history: list[dict]) -> dict:
         "score": 0,
         "reason": "Jos nema dovoljno zahteva za procenu stabilnosti.",
     }
+    throughput_trend = {
+        "direction": "flat",
+        "label": "stabilan",
+        "signal": "=",
+        "reason": "Jos nema dovoljno podataka za throughput trend.",
+    }
+    latency_trend = {
+        "direction": "flat",
+        "label": "stabilan",
+        "signal": "=",
+        "reason": "Jos nema dovoljno podataka za latency trend.",
+    }
 
     def detect_source(label: str) -> str:
         normalized = str(label or "").lower()
@@ -1510,6 +1522,60 @@ def summarize_history_payload(history: list[dict]) -> dict:
                 }
             )
         if len(history) >= 2:
+            recent_window = history[-4:]
+            if len(recent_window) >= 2:
+                first_half = recent_window[: max(1, len(recent_window) // 2)]
+                second_half = recent_window[max(1, len(recent_window) // 2) :]
+                first_tps = sum(float(item.get("totalTokensPerSecond", 0.0) or 0.0) for item in first_half) / len(first_half)
+                second_tps = sum(float(item.get("totalTokensPerSecond", 0.0) or 0.0) for item in second_half) / len(second_half)
+                tps_delta = second_tps - first_tps
+                if tps_delta >= 1.5:
+                    throughput_trend = {
+                        "direction": "up",
+                        "label": "raste",
+                        "signal": "↑",
+                        "reason": "Skorasnji throughput deluje bolji nego u prethodnom delu uzorka.",
+                    }
+                elif tps_delta <= -1.5:
+                    throughput_trend = {
+                        "direction": "down",
+                        "label": "pada",
+                        "signal": "↓",
+                        "reason": "Skorasnji throughput deluje slabiji nego ranije u uzorku.",
+                    }
+                else:
+                    throughput_trend = {
+                        "direction": "flat",
+                        "label": "stabilan",
+                        "signal": "=",
+                        "reason": "Throughput ne pokazuje veliku promenu kroz poslednje zahteve.",
+                    }
+
+                first_latency = sum(float(item.get("totalMs", 0.0) or 0.0) for item in first_half) / len(first_half)
+                second_latency = sum(float(item.get("totalMs", 0.0) or 0.0) for item in second_half) / len(second_half)
+                latency_delta = second_latency - first_latency
+                if latency_delta >= 400:
+                    latency_trend = {
+                        "direction": "up",
+                        "label": "sporiji",
+                        "signal": "↑",
+                        "reason": "Skorasnji response time je porastao.",
+                    }
+                elif latency_delta <= -400:
+                    latency_trend = {
+                        "direction": "down",
+                        "label": "brzi",
+                        "signal": "↓",
+                        "reason": "Skorasnji response time je opao.",
+                    }
+                else:
+                    latency_trend = {
+                        "direction": "flat",
+                        "label": "stabilan",
+                        "signal": "=",
+                        "reason": "Response time nema veliku promenu kroz poslednje zahteve.",
+                    }
+
             slow_count = sum(1 for item in history if float(item.get("totalMs", 0.0) or 0.0) >= 8000)
             fast_count = sum(1 for item in history if float(item.get("totalMs", 0.0) or 0.0) <= 2500)
             total_tps_values = [float(item.get("totalTokensPerSecond", 0.0) or 0.0) for item in history]
@@ -1563,6 +1629,8 @@ def summarize_history_payload(history: list[dict]) -> dict:
             "lastSource": detect_source(current.get("label")) if current else None,
             "recentActivities": recent_activities,
             "stability": stability,
+            "throughputTrend": throughput_trend,
+            "latencyTrend": latency_trend,
         },
         "averages": {
             "promptTokensPerSecond": round(avg_prompt_tps, 2),

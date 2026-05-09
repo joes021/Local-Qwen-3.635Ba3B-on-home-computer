@@ -613,8 +613,14 @@ $usageStabilityLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 
 $usageStabilityLabel.Text = "Stabilnost: nema podataka"
 $usagePanel.Controls.Add($usageStabilityLabel)
 
+$usageTrendLabel = New-Object System.Windows.Forms.Label
+$usageTrendLabel.Location = New-Object System.Drawing.Point(18, 92)
+$usageTrendLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageTrendLabel.Text = "Trend: throughput = | latency ="
+$usagePanel.Controls.Add($usageTrendLabel)
+
 $usageRecentBox = New-Object System.Windows.Forms.TextBox
-$usageRecentBox.Location = New-Object System.Drawing.Point(18, 96)
+$usageRecentBox.Location = New-Object System.Drawing.Point(18, 114)
 $usageRecentBox.Size = New-Object System.Drawing.Size(610, 28)
 $usageRecentBox.Multiline = $true
 $usageRecentBox.ReadOnly = $true
@@ -1200,6 +1206,7 @@ function Refresh-ThroughputView {
         $usageSourceLabel.Text = "Izvor: jos nema merenja"
         $usageStabilityLabel.Text = "Stabilnost: nema podataka"
         $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
+        $usageTrendLabel.Text = "Trend: throughput = | latency ="
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
         $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
@@ -1236,6 +1243,7 @@ function Refresh-ThroughputView {
         "risky" { [System.Drawing.Color]::FromArgb(180, 45, 45) }
         default { [System.Drawing.Color]::FromArgb(70, 70, 70) }
     }
+    $usageTrendLabel.Text = "Trend: throughput $($tokenMetrics.activity.throughputTrend.signal) $($tokenMetrics.activity.throughputTrend.label) | latency $($tokenMetrics.activity.latencyTrend.signal) $($tokenMetrics.activity.latencyTrend.label)"
 
     $recentLines = @()
     foreach ($item in @($tokenMetrics.activity.recentActivities)) {

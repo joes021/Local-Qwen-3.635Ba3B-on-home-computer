@@ -48,6 +48,10 @@ else:
 stability = throughput.get("activity", {}).get("stability", {})
 if stability:
     print(f"- Stabilnost: {stability.get('label', 'n/a')} ({stability.get('score', 0)}) | {stability.get('reason', '')}")
+throughput_trend = throughput.get("activity", {}).get("throughputTrend", {})
+latency_trend = throughput.get("activity", {}).get("latencyTrend", {})
+if throughput_trend or latency_trend:
+    print(f"- Trend: throughput {throughput_trend.get('signal', '=')} {throughput_trend.get('label', 'n/a')} | latency {latency_trend.get('signal', '=')} {latency_trend.get('label', 'n/a')}")
 recent = throughput.get("activity", {}).get("recentActivities", [])
 if recent:
     print("- Poslednje aktivnosti:")

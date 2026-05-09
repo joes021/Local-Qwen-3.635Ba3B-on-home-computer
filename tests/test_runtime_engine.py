@@ -861,6 +861,94 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["activity"]["stability"]["level"], "risky")
             self.assertLessEqual(payload["activity"]["stability"]["score"], 39)
 
+    def test_token_metrics_trend_detects_faster_throughput_and_lower_latency(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+            samples = [
+                (60, 30, 1800, 1200),
+                (80, 40, 1500, 900),
+                (100, 50, 1200, 700),
+                (120, 60, 1000, 500),
+            ]
+
+            for index, (prompt_tokens, completion_tokens, prompt_ms, completion_ms) in enumerate(samples):
+                response_path = temp_path / f"trend-fast-{index}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": prompt_ms + completion_ms,
+                            "usage": {
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                            },
+                            "timings": {
+                                "prompt_ms": prompt_ms,
+                                "predicted_ms": completion_ms,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    "opencode-trend-fast",
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            self.assertEqual(payload["activity"]["throughputTrend"]["direction"], "up")
+            self.assertEqual(payload["activity"]["latencyTrend"]["direction"], "down")
+
+    def test_token_metrics_trend_detects_falling_throughput_and_higher_latency(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+            samples = [
+                (120, 60, 900, 500),
+                (100, 50, 1200, 700),
+                (80, 40, 1500, 900),
+                (60, 30, 1800, 1200),
+            ]
+
+            for index, (prompt_tokens, completion_tokens, prompt_ms, completion_ms) in enumerate(samples):
+                response_path = temp_path / f"trend-slow-{index}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": prompt_ms + completion_ms,
+                            "usage": {
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                            },
+                            "timings": {
+                                "prompt_ms": prompt_ms,
+                                "predicted_ms": completion_ms,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    "manual-trend-slow",
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            self.assertEqual(payload["activity"]["throughputTrend"]["direction"], "down")
+            self.assertEqual(payload["activity"]["latencyTrend"]["direction"], "up")
+
 
 if __name__ == "__main__":
     unittest.main()

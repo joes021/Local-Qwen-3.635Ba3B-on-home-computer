@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.2
+- Dodat `mini trend` signal za usage panel: throughput sada moze da pokazuje `raste`, `pada` ili `stabilan`, a latency `brzi`, `sporiji` ili `stabilan`
+- Windows `Request activity` sada prikazuje poseban trend red, pa se odmah vidi da li lokalni servis ubrzava ili usporava kroz poslednje zahteve
+- Linux `Quick status` sada prikazuje isti trend signal iz shared telemetry payload-a, bez dodatnih platformskih razlika
+
 v2.8.1
 - Dodat `stability signal` u shared telemetry payload, sa nivoima `stabilno`, `promenljivo`, `rizicno` i kratkim razlogom izvedenim iz skorasnjih zahteva
 - Windows `Request activity` sada prikazuje i stabilnost sa score-om i obojenim statusom, pa je odmah jasno da li promet deluje zdrav ili sumnjiv
