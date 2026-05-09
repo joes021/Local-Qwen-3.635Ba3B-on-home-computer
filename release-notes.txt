@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.4
+- Windows `Pokretanje` tab sada prikazuje glavna servisna dugmad mnogo vise u vrhu prozora, pa `Repair install`, `Test prompt`, `Test throughput`, `Model manager`, `Check updates` i `Install update` vise ne ostaju sakriveni ispod telemetry blokova
+- Dodat je poseban `Test throughput` taster koji koristi isti benchmark tok kao `Test prompt`, ali je imenovan eksplicitno za merenje input/output tokena po sekundi
+- Windows desktop precice sada ukljucuju i `Update Local Qwen`, tako da update moze da se pokrene i bez ulaska u `Control Center`
+
 v2.9.3
 - Windows `Control Center` vise ne preklapa tekstualna polja u tabu `Pokretanje`; `Request activity`, throughput istorija, hardverski plan i status output sada imaju razdvojene vertikalne zone
 - `Pokretanje` tab sada ima veci `AutoScroll` opseg, pa duzi tekstovi i dodatni live telemetry blokovi ne guraju naredna polja jedno preko drugog

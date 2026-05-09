@@ -49,6 +49,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         iss_content = ISS_PATH.read_text(encoding="utf-8")
         self.assertIn("uninstall.ps1", install_content)
         self.assertIn("Uninstall Local Qwen.lnk", install_content)
+        self.assertIn("install-update.ps1", install_content)
+        self.assertIn("Update Local Qwen.lnk", install_content)
         self.assertIn("Uninstallable=yes", iss_content)
 
     def test_release_script_attaches_full_fix_log_asset_and_short_summary(self):

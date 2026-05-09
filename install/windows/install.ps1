@@ -593,6 +593,7 @@ function Write-InstallReport {
         "OpenCode - Local Qwen.lnk",
         "Verify Local Qwen Install.lnk",
         "Repair Windows App Control.lnk",
+        "Update Local Qwen.lnk",
         "Uninstall Local Qwen.lnk"
     )
     $missingShortcuts = @($desktopShortcutNames | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })
@@ -747,6 +748,7 @@ function Write-DesktopShortcuts {
     $openCodeCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "repair-app-control.cmd" -PsScriptName "repair-app-control.ps1"
+    $updateCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "install-update.cmd" -PsScriptName "install-update.ps1"
     $uninstallCmd = Write-CmdLauncher -LaunchersDir $LaunchersDir -CmdName "uninstall-local-qwen.cmd" -PsScriptName "uninstall.ps1"
 
     New-Shortcut `
@@ -782,6 +784,14 @@ function Write-DesktopShortcuts {
         -Description "Inspect or repair Smart App Control / App Control issues"
 
     New-Shortcut `
+        -ShortcutPath (Join-Path $DesktopTargetDir "Update Local Qwen.lnk") `
+        -TargetPath $env:ComSpec `
+        -Arguments "/c `"$updateCmd`"" `
+        -WorkingDirectory $LaunchersDir `
+        -IconLocation "$controlCenterIcon,0" `
+        -Description "Download and launch the latest Local Qwen installer"
+
+    New-Shortcut `
         -ShortcutPath (Join-Path $DesktopTargetDir "Uninstall Local Qwen.lnk") `
         -TargetPath $env:ComSpec `
         -Arguments "/c `"$uninstallCmd`"" `
@@ -794,6 +804,7 @@ function Write-DesktopShortcuts {
         "OpenCode - Local Qwen.lnk",
         "Verify Local Qwen Install.lnk",
         "Repair Windows App Control.lnk",
+        "Update Local Qwen.lnk",
         "Uninstall Local Qwen.lnk"
     )
     $missing = @($expectedShortcuts | Where-Object { -not (Test-Path (Join-Path $DesktopTargetDir $_)) })

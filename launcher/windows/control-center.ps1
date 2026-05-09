@@ -460,7 +460,7 @@ $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $launchTab.AutoScroll = $true
-$launchTab.AutoScrollMinSize = New-Object System.Drawing.Size(0, 920)
+$launchTab.AutoScrollMinSize = New-Object System.Drawing.Size(0, 1080)
 $tabs.TabPages.Add($launchTab)
 
 $settingsTab = New-Object System.Windows.Forms.TabPage
@@ -508,7 +508,7 @@ $profileNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $launchTab.Controls.Add($profileNote)
 
 $hardwareBox = New-Object System.Windows.Forms.TextBox
-$hardwareBox.Location = New-Object System.Drawing.Point(18, 620)
+$hardwareBox.Location = New-Object System.Drawing.Point(18, 716)
 $hardwareBox.Size = New-Object System.Drawing.Size(648, 110)
 $hardwareBox.Multiline = $true
 $hardwareBox.ScrollBars = "Vertical"
@@ -519,7 +519,7 @@ $launchTab.Controls.Add($hardwareBox)
 
 $liveThroughputPanel = New-Object System.Windows.Forms.GroupBox
 $liveThroughputPanel.Text = "LIVE THROUGHPUT"
-$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 176)
+$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 268)
 $liveThroughputPanel.Size = New-Object System.Drawing.Size(648, 96)
 $liveThroughputPanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $liveThroughputPanel.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 228)
@@ -558,12 +558,12 @@ $liveSignalLabel = New-Object System.Windows.Forms.Label
 $liveSignalLabel.Location = New-Object System.Drawing.Point(18, 70)
 $liveSignalLabel.Size = New-Object System.Drawing.Size(612, 18)
 $liveSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
-$liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
+$liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt, Test throughput ili posalji zahtev kroz OpenCode."
 $liveThroughputPanel.Controls.Add($liveSignalLabel)
 
 $usagePanel = New-Object System.Windows.Forms.GroupBox
 $usagePanel.Text = "Request activity"
-$usagePanel.Location = New-Object System.Drawing.Point(18, 278)
+$usagePanel.Location = New-Object System.Drawing.Point(18, 370)
 $usagePanel.Size = New-Object System.Drawing.Size(648, 230)
 $usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
@@ -662,11 +662,11 @@ $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
 $throughputBox.ReadOnly = $true
 $throughputBox.BackColor = [System.Drawing.Color]::FromArgb(255, 253, 242)
-$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
+$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 746)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 842)
 $launchOutput.Size = New-Object System.Drawing.Size(648, 112)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
@@ -1224,7 +1224,7 @@ function Refresh-ThroughputView {
         $liveTotalLabel.Text = "Total: -- tok/s"
         $liveStateLabel.Text = "JOS NEMA MERENJA"
         $liveStateLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
-        $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
+        $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt, Test throughput ili posalji zahtev kroz OpenCode."
         $quickThroughputLabel.Text = "Throughput: --"
         $quickSignalLabel.Text = "Signal: nema podataka"
         $usageCountLabel.Text = "Zahtevi: 0"
@@ -1238,7 +1238,7 @@ function Refresh-ThroughputView {
         $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         $usageTrendLabel.Text = "Trend: throughput = | latency ="
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
-        $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
+        $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
 
@@ -2090,37 +2090,43 @@ $quickRefreshButton.Add_Click({
 
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
-$repairInstallButton.Location = New-Object System.Drawing.Point(18, 716)
+$repairInstallButton.Location = New-Object System.Drawing.Point(18, 176)
 $repairInstallButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($repairInstallButton)
 
 $testPromptButton = New-Object System.Windows.Forms.Button
 $testPromptButton.Text = "Test prompt"
-$testPromptButton.Location = New-Object System.Drawing.Point(152, 716)
+$testPromptButton.Location = New-Object System.Drawing.Point(152, 176)
 $testPromptButton.Size = New-Object System.Drawing.Size(110, 32)
 $launchTab.Controls.Add($testPromptButton)
 
+$testThroughputButton = New-Object System.Windows.Forms.Button
+$testThroughputButton.Text = "Test throughput"
+$testThroughputButton.Location = New-Object System.Drawing.Point(272, 176)
+$testThroughputButton.Size = New-Object System.Drawing.Size(124, 32)
+$launchTab.Controls.Add($testThroughputButton)
+
 $modelManagerButton = New-Object System.Windows.Forms.Button
 $modelManagerButton.Text = "Model manager"
-$modelManagerButton.Location = New-Object System.Drawing.Point(272, 716)
+$modelManagerButton.Location = New-Object System.Drawing.Point(406, 176)
 $modelManagerButton.Size = New-Object System.Drawing.Size(124, 32)
 $launchTab.Controls.Add($modelManagerButton)
 
 $diagnosticsButton = New-Object System.Windows.Forms.Button
 $diagnosticsButton.Text = "Diagnostics"
-$diagnosticsButton.Location = New-Object System.Drawing.Point(406, 716)
-$diagnosticsButton.Size = New-Object System.Drawing.Size(120, 32)
+$diagnosticsButton.Location = New-Object System.Drawing.Point(540, 176)
+$diagnosticsButton.Size = New-Object System.Drawing.Size(126, 32)
 $launchTab.Controls.Add($diagnosticsButton)
 
 $updatesButton = New-Object System.Windows.Forms.Button
 $updatesButton.Text = "Check updates"
-$updatesButton.Location = New-Object System.Drawing.Point(18, 754)
+$updatesButton.Location = New-Object System.Drawing.Point(18, 218)
 $updatesButton.Size = New-Object System.Drawing.Size(150, 32)
 $launchTab.Controls.Add($updatesButton)
 
 $installUpdateButton = New-Object System.Windows.Forms.Button
 $installUpdateButton.Text = "Install update"
-$installUpdateButton.Location = New-Object System.Drawing.Point(178, 754)
+$installUpdateButton.Location = New-Object System.Drawing.Point(178, 218)
 $installUpdateButton.Size = New-Object System.Drawing.Size(150, 32)
 $launchTab.Controls.Add($installUpdateButton)
 
@@ -2770,6 +2776,22 @@ $testPromptButton.Add_Click({
     try {
         $profile = [string](Get-Settings).profile
         Invoke-BackgroundShellScript -Name "Test prompt" -ScriptPath (Join-Path $PSScriptRoot "test-prompt.ps1") -ArgumentList @("-Profile", $profile) -OnSuccess {
+            Refresh-LogsView
+            Refresh-DiagnosticsView
+            Refresh-ThroughputView
+        }
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+    }
+})
+$testThroughputButton.Add_Click({
+    try {
+        $profile = [string](Get-Settings).profile
+        Write-LaunchMessage @(
+            "Pokrecem throughput benchmark kroz test prompt za profil '$profile'.",
+            "Rezultati ce se pojaviti u LIVE THROUGHPUT panelu i istoriji cim zahtev zavrsi."
+        )
+        Invoke-BackgroundShellScript -Name "Test throughput" -ScriptPath (Join-Path $PSScriptRoot "test-prompt.ps1") -ArgumentList @("-Profile", $profile) -OnSuccess {
             Refresh-LogsView
             Refresh-DiagnosticsView
             Refresh-ThroughputView

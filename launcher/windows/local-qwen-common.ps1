@@ -1578,6 +1578,7 @@ function Repair-DesktopShortcuts {
     $verifyCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "repair-install.cmd" -PsScriptName "repair-install.ps1"
     $testPromptCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "test-prompt.cmd" -PsScriptName "test-prompt.ps1"
+    $updateCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "install-update.cmd" -PsScriptName "install-update.ps1"
     $uninstallCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "uninstall-local-qwen.cmd" -PsScriptName "uninstall.ps1"
 
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk") -TargetPath "wscript.exe" -Arguments "`"$controlCenterVbs`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Control center for local Qwen + OpenCode"
@@ -1585,5 +1586,6 @@ function Repair-DesktopShortcuts {
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Verify Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$verifyCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Verify local Qwen installation"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Repair Local Qwen Install.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$repairCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Repair local Qwen install"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Test Local Qwen Prompt.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$testPromptCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Send a smoke-test prompt to local Qwen"
+    New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Update Local Qwen.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$updateCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Download and launch the latest Local Qwen installer"
     New-DesktopShortcutFile -ShortcutPath (Join-Path $desktopTargetDir "Uninstall Local Qwen.lnk") -TargetPath $env:ComSpec -Arguments "/c `"$uninstallCmd`"" -WorkingDirectory $launchersDir -IconLocation "$controlCenterIcon,0" -Description "Uninstall Local Qwen with keep-or-remove model choice"
 }
