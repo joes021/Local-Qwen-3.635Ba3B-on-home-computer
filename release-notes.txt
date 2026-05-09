@@ -1,5 +1,11 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.0
+- `Live usage panel 2.0` sada prikazuje bogatiji operativni dashboard: broj zahteva, prosecan odgovor, poslednji izvor, aktivni model, aktivni profil i stanje servera
+- Shared token metrics payload sada izbacuje i `lastSource` i `recentActivities`, pa Windows i Linux mogu da prikazu poslednjih nekoliko aktivnosti iz istog telemetry izvora
+- Windows `Request activity` blok sada ima i listu poslednjih aktivnosti sa vremenom, izvorom, label-om zahteva, trajanjem i statusom
+- Linux `Quick status` sada prikazuje poslednje aktivnosti, poslednji izvor i prosecan response time, umesto samo grubog throughput signala
+
 v2.7.3
 - Cist public release koji poravnava commit, tag i build artefakte za pametniji guided `Repair all` tok, tako da installer i GitHub tag sada pokazuju na istu sadrzinu
 - Windows i Linux sada dele isti shared `repair-plan` workflow, isti sequencing i isti vidljivi `Last repair summary` rezultat kroz release koji je stvarno vezan za odgovarajuci commit

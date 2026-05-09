@@ -1473,19 +1473,36 @@ def summarize_history_payload(history: list[dict]) -> dict:
     avg_total_tps = 0.0
     avg_total_ms = 0.0
     source_counts = {"testPrompt": 0, "opencode": 0, "other": 0}
+    recent_activities: list[dict] = []
+
+    def detect_source(label: str) -> str:
+        normalized = str(label or "").lower()
+        if "test" in normalized:
+            return "testPrompt"
+        if "opencode" in normalized:
+            return "opencode"
+        return "other"
+
     if history:
         avg_prompt_tps = sum(item.get("promptTokensPerSecond", 0.0) for item in history) / len(history)
         avg_completion_tps = sum(item.get("completionTokensPerSecond", 0.0) for item in history) / len(history)
         avg_total_tps = sum(item.get("totalTokensPerSecond", 0.0) for item in history) / len(history)
         avg_total_ms = sum(item.get("totalMs", 0.0) for item in history) / len(history)
         for item in history:
-            label = str(item.get("label", "")).lower()
-            if "test" in label:
-                source_counts["testPrompt"] += 1
-            elif "opencode" in label:
-                source_counts["opencode"] += 1
-            else:
-                source_counts["other"] += 1
+            source = detect_source(str(item.get("label", "")))
+            source_counts[source] += 1
+        for item in reversed(history[-5:]):
+            source = detect_source(str(item.get("label", "")))
+            recent_activities.append(
+                {
+                    "measuredAt": item.get("measuredAt"),
+                    "label": item.get("label"),
+                    "source": source,
+                    "totalMs": item.get("totalMs", 0.0),
+                    "totalTokensPerSecond": item.get("totalTokensPerSecond", 0.0),
+                    "status": "ok",
+                }
+            )
 
     return {
         "current": current,
@@ -1497,6 +1514,8 @@ def summarize_history_payload(history: list[dict]) -> dict:
         "activity": {
             "averageTotalMs": round(avg_total_ms, 2),
             "sources": source_counts,
+            "lastSource": detect_source(current.get("label")) if current else None,
+            "recentActivities": recent_activities,
         },
         "averages": {
             "promptTokensPerSecond": round(avg_prompt_tps, 2),

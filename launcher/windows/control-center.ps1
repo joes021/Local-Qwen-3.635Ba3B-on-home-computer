@@ -458,6 +458,7 @@ $tabs.TabPages.Add($healthTab)
 $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$launchTab.AutoScroll = $true
 $tabs.TabPages.Add($launchTab)
 
 $settingsTab = New-Object System.Windows.Forms.TabPage
@@ -561,46 +562,62 @@ $liveThroughputPanel.Controls.Add($liveSignalLabel)
 $usagePanel = New-Object System.Windows.Forms.GroupBox
 $usagePanel.Text = "Request activity"
 $usagePanel.Location = New-Object System.Drawing.Point(18, 278)
-$usagePanel.Size = New-Object System.Drawing.Size(648, 92)
+$usagePanel.Size = New-Object System.Drawing.Size(648, 136)
 $usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
 $launchTab.Controls.Add($usagePanel)
 
 $usageCountLabel = New-Object System.Windows.Forms.Label
 $usageCountLabel.Location = New-Object System.Drawing.Point(18, 24)
-$usageCountLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageCountLabel.Size = New-Object System.Drawing.Size(196, 22)
 $usageCountLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
 $usageCountLabel.Text = "Zahtevi: 0"
 $usagePanel.Controls.Add($usageCountLabel)
 
 $usageLastMsLabel = New-Object System.Windows.Forms.Label
 $usageLastMsLabel.Location = New-Object System.Drawing.Point(224, 24)
-$usageLastMsLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageLastMsLabel.Size = New-Object System.Drawing.Size(196, 22)
 $usageLastMsLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
-$usageLastMsLabel.Text = "Poslednji odgovor: --"
+$usageLastMsLabel.Text = "Avg odgovor: --"
 $usagePanel.Controls.Add($usageLastMsLabel)
 
 $usageSourceLabel = New-Object System.Windows.Forms.Label
 $usageSourceLabel.Location = New-Object System.Drawing.Point(430, 24)
-$usageSourceLabel.Size = New-Object System.Drawing.Size(180, 22)
+$usageSourceLabel.Size = New-Object System.Drawing.Size(196, 22)
 $usageSourceLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
 $usageSourceLabel.Text = "Izvor: --"
 $usagePanel.Controls.Add($usageSourceLabel)
 
 $usageModelLabel = New-Object System.Windows.Forms.Label
 $usageModelLabel.Location = New-Object System.Drawing.Point(18, 50)
-$usageModelLabel.Size = New-Object System.Drawing.Size(296, 20)
+$usageModelLabel.Size = New-Object System.Drawing.Size(196, 20)
 $usageModelLabel.Text = "Aktivni model: --"
 $usagePanel.Controls.Add($usageModelLabel)
 
 $usageProfileLabel = New-Object System.Windows.Forms.Label
-$usageProfileLabel.Location = New-Object System.Drawing.Point(320, 50)
-$usageProfileLabel.Size = New-Object System.Drawing.Size(296, 20)
+$usageProfileLabel.Location = New-Object System.Drawing.Point(224, 50)
+$usageProfileLabel.Size = New-Object System.Drawing.Size(196, 20)
 $usageProfileLabel.Text = "Aktivni profil: --"
 $usagePanel.Controls.Add($usageProfileLabel)
 
+$usageServerLabel = New-Object System.Windows.Forms.Label
+$usageServerLabel.Location = New-Object System.Drawing.Point(430, 50)
+$usageServerLabel.Size = New-Object System.Drawing.Size(196, 20)
+$usageServerLabel.Text = "Server: --"
+$usagePanel.Controls.Add($usageServerLabel)
+
+$usageRecentBox = New-Object System.Windows.Forms.TextBox
+$usageRecentBox.Location = New-Object System.Drawing.Point(18, 76)
+$usageRecentBox.Size = New-Object System.Drawing.Size(610, 48)
+$usageRecentBox.Multiline = $true
+$usageRecentBox.ReadOnly = $true
+$usageRecentBox.ScrollBars = "Vertical"
+$usageRecentBox.BackColor = [System.Drawing.Color]::White
+$usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
+$usagePanel.Controls.Add($usageRecentBox)
+
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 378)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 422)
 $throughputBox.Size = New-Object System.Drawing.Size(648, 82)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
@@ -610,7 +627,7 @@ $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji no
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 474)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 518)
 $launchOutput.Size = New-Object System.Drawing.Size(648, 112)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
@@ -1158,8 +1175,10 @@ function Get-LatestReleaseInfoCached {
 
 function Refresh-ThroughputView {
     $tokenMetrics = Get-TokenMetricsSummary
+    $statusBundle = Get-EffectiveServiceStatus
     $usageModelLabel.Text = "Aktivni model: $([string](Get-InstallState).modelId)"
     $usageProfileLabel.Text = "Aktivni profil: $([string](Get-Settings).profile)"
+    $usageServerLabel.Text = "Server: $([string]$statusBundle.Summary.title)"
     if (-not $tokenMetrics.current) {
         $livePromptLabel.Text = "Input: -- tok/s"
         $liveOutputLabel.Text = "Output: -- tok/s"
@@ -1170,8 +1189,9 @@ function Refresh-ThroughputView {
         $quickThroughputLabel.Text = "Throughput: --"
         $quickSignalLabel.Text = "Signal: nema podataka"
         $usageCountLabel.Text = "Zahtevi: 0"
-        $usageLastMsLabel.Text = "Poslednji odgovor: --"
+        $usageLastMsLabel.Text = "Avg odgovor: --"
         $usageSourceLabel.Text = "Izvor: jos nema merenja"
+        $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
         $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
@@ -1198,8 +1218,18 @@ function Refresh-ThroughputView {
     $quickThroughputLabel.Text = "Throughput: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
     $quickSignalLabel.Text = "Signal: $ageText"
     $usageCountLabel.Text = "Zahtevi: $($tokenMetrics.requestCount)"
-    $usageLastMsLabel.Text = "Poslednji odgovor: $($tokenMetrics.current.totalMs) ms"
-    $usageSourceLabel.Text = "Izvor: $($tokenMetrics.lastLabel)"
+    $usageLastMsLabel.Text = "Avg odgovor: $($tokenMetrics.activity.averageTotalMs) ms"
+    $usageSourceLabel.Text = "Izvor: $($tokenMetrics.activity.lastSource) | Label: $($tokenMetrics.lastLabel)"
+
+    $recentLines = @()
+    foreach ($item in @($tokenMetrics.activity.recentActivities)) {
+        $recentLines += "$($item.measuredAt) | $($item.source) | $($item.label) | $($item.totalMs) ms | $($item.status)"
+    }
+    if ($recentLines.Count -eq 0) {
+        $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
+    } else {
+        $usageRecentBox.Text = "Poslednjih $($recentLines.Count) aktivnosti:`r`n$($recentLines -join [Environment]::NewLine)"
+    }
 
     $historyLines = @()
     foreach ($item in @($tokenMetrics.history)) {

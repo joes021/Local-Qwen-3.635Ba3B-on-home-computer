@@ -38,12 +38,20 @@ print(f"- Server: {status.get('title', status.get('state', 'unknown'))}")
 print(f"- Health: {'ok' if status.get('state') == 'active' else 'not-ready'}")
 print(f"- OpenCode: {'config ok' if os.path.isfile(opencode_config) else 'nema config'}")
 print(f"- Model: {state.get('modelId', 'n/a')}")
+print(f"- Profil: {settings.get('profile', 'balanced')}")
 if current:
     print(f"- Throughput: {current.get('totalTokensPerSecond', 0)} tok/s (last)")
-    print(f"- Requests: {throughput.get('requestCount', 0)} | Last label: {throughput.get('lastLabel', 'n/a')}")
+    print(f"- Requests: {throughput.get('requestCount', 0)} | Avg odgovor: {throughput.get('activity', {}).get('averageTotalMs', 0)} ms")
+    print(f"- Last source: {throughput.get('activity', {}).get('lastSource', 'n/a')} | Last label: {throughput.get('lastLabel', 'n/a')}")
 else:
     print("- Throughput: nema podataka")
-print(f"- Profil: {settings.get('profile', 'balanced')}")
+recent = throughput.get("activity", {}).get("recentActivities", [])
+if recent:
+    print("- Poslednje aktivnosti:")
+    for item in recent[:5]:
+        print(f"  * {item.get('measuredAt')} | {item.get('source')} | {item.get('label')} | {item.get('totalMs')} ms | {item.get('status')}")
+else:
+    print("- Poslednje aktivnosti: jos nema merenja")
 PY
 }
 

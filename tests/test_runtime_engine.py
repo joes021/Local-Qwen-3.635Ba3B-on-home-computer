@@ -674,6 +674,10 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["historyCount"], 1)
             self.assertEqual(payload["requestCount"], 1)
             self.assertEqual(payload["activity"]["sources"]["testPrompt"], 1)
+            self.assertEqual(payload["activity"]["lastSource"], "testPrompt")
+            self.assertEqual(len(payload["activity"]["recentActivities"]), 1)
+            self.assertEqual(payload["activity"]["recentActivities"][0]["source"], "testPrompt")
+            self.assertEqual(payload["activity"]["recentActivities"][0]["status"], "ok")
 
     def test_log_token_metrics_parses_llama_timing_block_and_dedupes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -724,6 +728,62 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(code, 0, msg=stderr)
             payload = json.loads(stdout)
             self.assertEqual(payload["historyCount"], 1)
+
+    def test_token_metrics_recent_activities_preserve_order_and_source_types(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+
+            def write_response(name: str, prompt_tokens: int, completion_tokens: int, prompt_ms: int, completion_ms: int) -> pathlib.Path:
+                response_path = temp_path / f"{name}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": prompt_ms + completion_ms,
+                            "usage": {
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                            },
+                            "timings": {
+                                "prompt_ms": prompt_ms,
+                                "predicted_ms": completion_ms,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return response_path
+
+            scenarios = [
+                ("test-prompt", "testPrompt"),
+                ("opencode-chat", "opencode"),
+                ("manual-request", "other"),
+            ]
+
+            for index, (label, _) in enumerate(scenarios, start=1):
+                response_path = write_response(label, 10 * index, 5 * index, 1000, 500)
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    label,
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            self.assertEqual(payload["requestCount"], 3)
+            self.assertEqual(payload["activity"]["lastSource"], "other")
+            self.assertEqual(
+                [item["source"] for item in payload["activity"]["recentActivities"]],
+                ["other", "opencode", "testPrompt"],
+            )
+            self.assertEqual(
+                [item["label"] for item in payload["activity"]["recentActivities"]],
+                ["manual-request", "opencode-chat", "test-prompt"],
+            )
 
 
 if __name__ == "__main__":
