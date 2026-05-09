@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.6.2
+- Live throughput panel u Windows Control Center-u je premesten skroz gore u Pokretanje tab da bude vidljiv odmah posle osnovnog statusa
+- Panel je vizuelno pojacan i sada uvek jasno prikazuje prazno stanje kao JOS NEMA MERENJA umesto da deluje kao da throughput sekcija ne postoji
+- Prazan throughput box sada eksplicitno upucuje da treba pokrenuti Test prompt ili poslati zahtev kroz OpenCode da bi se pojavili podaci
+
 v2.6.1
 - Quick preset tok sada ima compare pregled koji jasno prikazuje sta ce se promeniti u odnosu na trenutno sacuvana podesavanja pre nego sto kliknes na Sacuvaj
 - Windows Control Center prikazuje isti shared preset compare payload direktno u Podesavanja tabu, pa je odmah vidljivo koje profile, context, output i step vrednosti preset menja

@@ -505,8 +505,8 @@ $profileNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $launchTab.Controls.Add($profileNote)
 
 $hardwareBox = New-Object System.Windows.Forms.TextBox
-$hardwareBox.Location = New-Object System.Drawing.Point(18, 182)
-$hardwareBox.Size = New-Object System.Drawing.Size(648, 136)
+$hardwareBox.Location = New-Object System.Drawing.Point(18, 356)
+$hardwareBox.Size = New-Object System.Drawing.Size(648, 110)
 $hardwareBox.Multiline = $true
 $hardwareBox.ScrollBars = "Vertical"
 $hardwareBox.ReadOnly = $true
@@ -515,9 +515,11 @@ $hardwareBox.Text = "Ovde ce biti prikazan hardver i efektivne runtime opcije."
 $launchTab.Controls.Add($hardwareBox)
 
 $liveThroughputPanel = New-Object System.Windows.Forms.GroupBox
-$liveThroughputPanel.Text = "Live throughput"
-$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 326)
-$liveThroughputPanel.Size = New-Object System.Drawing.Size(648, 74)
+$liveThroughputPanel.Text = "LIVE THROUGHPUT"
+$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 176)
+$liveThroughputPanel.Size = New-Object System.Drawing.Size(648, 96)
+$liveThroughputPanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
+$liveThroughputPanel.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 228)
 $launchTab.Controls.Add($liveThroughputPanel)
 
 $livePromptLabel = New-Object System.Windows.Forms.Label
@@ -541,21 +543,29 @@ $liveTotalLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
 $liveTotalLabel.Text = "Total: -- tok/s"
 $liveThroughputPanel.Controls.Add($liveTotalLabel)
 
+$liveStateLabel = New-Object System.Windows.Forms.Label
+$liveStateLabel.Location = New-Object System.Drawing.Point(18, 50)
+$liveStateLabel.Size = New-Object System.Drawing.Size(610, 20)
+$liveStateLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5, [System.Drawing.FontStyle]::Bold)
+$liveStateLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
+$liveStateLabel.Text = "JOS NEMA MERENJA"
+$liveThroughputPanel.Controls.Add($liveStateLabel)
+
 $liveSignalLabel = New-Object System.Windows.Forms.Label
-$liveSignalLabel.Location = New-Object System.Drawing.Point(18, 48)
-$liveSignalLabel.Size = New-Object System.Drawing.Size(592, 18)
+$liveSignalLabel.Location = New-Object System.Drawing.Point(18, 70)
+$liveSignalLabel.Size = New-Object System.Drawing.Size(612, 18)
 $liveSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
-$liveSignalLabel.Text = "Signal: nema podataka"
+$liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
 $liveThroughputPanel.Controls.Add($liveSignalLabel)
 
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 408)
-$throughputBox.Size = New-Object System.Drawing.Size(648, 58)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 278)
+$throughputBox.Size = New-Object System.Drawing.Size(648, 70)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
 $throughputBox.ReadOnly = $true
-$throughputBox.BackColor = [System.Drawing.Color]::White
-$throughputBox.Text = "Ovde ce biti prikazan throughput poslednjeg zahteva i kratka istorija, ukljucujuci live zahteve koje server obradi."
+$throughputBox.BackColor = [System.Drawing.Color]::FromArgb(255, 253, 242)
+$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
 $launchTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
@@ -1090,10 +1100,12 @@ function Refresh-ThroughputView {
         $livePromptLabel.Text = "Input: -- tok/s"
         $liveOutputLabel.Text = "Output: -- tok/s"
         $liveTotalLabel.Text = "Total: -- tok/s"
-        $liveSignalLabel.Text = "Signal: nema podataka"
+        $liveStateLabel.Text = "JOS NEMA MERENJA"
+        $liveStateLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
+        $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt ili posalji zahtev kroz OpenCode."
         $quickThroughputLabel.Text = "Throughput: --"
         $quickSignalLabel.Text = "Signal: nema podataka"
-        $throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
+        $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
         return
     }
 
@@ -1113,6 +1125,8 @@ function Refresh-ThroughputView {
     $livePromptLabel.Text = "Input: $($tokenMetrics.current.promptTokensPerSecond) tok/s"
     $liveOutputLabel.Text = "Output: $($tokenMetrics.current.completionTokensPerSecond) tok/s"
     $liveTotalLabel.Text = "Total: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
+    $liveStateLabel.Text = "LIVE METRIKE SU DOSTUPNE"
+    $liveStateLabel.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
     $liveSignalLabel.Text = "Signal: poslednji zahtev $ageText | merenja: $($tokenMetrics.historyCount)"
     $quickThroughputLabel.Text = "Throughput: $($tokenMetrics.current.totalTokensPerSecond) tok/s"
     $quickSignalLabel.Text = "Signal: $ageText"
@@ -2598,7 +2612,7 @@ $healthMeta.Text = "Health pregled nije jos ucitan."
 $healthContent.Text = "Otvori Health tab ili klikni osvezavanje da se ucita objedinjeni repair i health pregled."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
-$throughputBox.Text = "Throughput jos nije izmeren.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server da bi se pojavili input/output tokeni po sekundi i istorija."
+$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
 $modelInfoBox.Text = "Model info ce se ucitati kada otvoris Podesavanja tab."
 $agentWarning.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
