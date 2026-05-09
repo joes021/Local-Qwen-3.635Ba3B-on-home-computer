@@ -27,7 +27,12 @@ Get-EffectiveServerPlan -Profile ([string](Get-Settings).profile) | Format-List 
 if (Test-Path $reportPath) {
     Write-Host ""
     Write-Host "Install report:" -ForegroundColor Cyan
-    Get-Content $reportPath | Out-Host
+    $sanitizedReport = Get-SanitizedInstallReportJson -HealthOk:$healthOk
+    if ($sanitizedReport) {
+        $sanitizedReport | Out-Host
+    } else {
+        Get-Content $reportPath | Out-Host
+    }
 }
 
 if ($checks.Where({ -not $_.Ok }).Count -gt 0) {

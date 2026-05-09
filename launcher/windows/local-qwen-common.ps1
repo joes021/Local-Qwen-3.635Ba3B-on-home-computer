@@ -949,17 +949,7 @@ function Get-HealthCenterData {
     }
 
     $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
-    $warnings = @()
-    if (Test-Path $reportPath) {
-        try {
-            $report = Get-Content -Raw $reportPath | ConvertFrom-Json
-            if ($report.PSObject.Properties["warnings"] -and $report.warnings) {
-                $warnings = @($report.warnings)
-            }
-        } catch {
-            $warnings = @()
-        }
-    }
+    $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
 
     return Invoke-RuntimeEngineJson -Arguments @(
         "health-center",
@@ -993,17 +983,7 @@ function Get-RepairPlanData {
     }
 
     $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
-    $warnings = @()
-    if (Test-Path $reportPath) {
-        try {
-            $report = Get-Content -Raw $reportPath | ConvertFrom-Json
-            if ($report.PSObject.Properties["warnings"] -and $report.warnings) {
-                $warnings = @($report.warnings)
-            }
-        } catch {
-            $warnings = @()
-        }
-    }
+    $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
 
     return Invoke-RuntimeEngineJson -Arguments @(
         "repair-plan",
@@ -1017,6 +997,61 @@ function Get-RepairPlanData {
         "--profile", ([string](Get-Settings).profile),
         "--warnings-json", (($warnings | ConvertTo-Json -Depth 10 -Compress))
     )
+}
+
+function Get-InstallReportObject {
+    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    if (-not (Test-Path $reportPath)) {
+        return $null
+    }
+    try {
+        return (Get-Content -Raw $reportPath | ConvertFrom-Json)
+    } catch {
+        return $null
+    }
+}
+
+function Test-IsHistoricalAppControlWarning {
+    param(
+        [Parameter(Mandatory = $true)][string]$WarningText
+    )
+    $normalized = [string]$WarningText
+    $normalized = $normalized.ToLowerInvariant()
+    return ($normalized -like "*wdac*") -or ($normalized -like "*app control*")
+}
+
+function Get-EffectiveInstallWarnings {
+    param(
+        [bool]$HealthOk = $false
+    )
+
+    $report = Get-InstallReportObject
+    if (-not $report) {
+        return @()
+    }
+
+    $warnings = @()
+    if ($report.PSObject.Properties["warnings"] -and $report.warnings) {
+        $warnings = @($report.warnings)
+    }
+    if (-not $HealthOk) {
+        return $warnings
+    }
+
+    return @($warnings | Where-Object { -not (Test-IsHistoricalAppControlWarning -WarningText ([string]$_)) })
+}
+
+function Get-SanitizedInstallReportJson {
+    param(
+        [bool]$HealthOk = $false
+    )
+
+    $report = Get-InstallReportObject
+    if (-not $report) {
+        return $null
+    }
+    $report.warnings = @(Get-EffectiveInstallWarnings -HealthOk:$HealthOk)
+    return ($report | ConvertTo-Json -Depth 10)
 }
 
 function Get-NextActionRecommendation {

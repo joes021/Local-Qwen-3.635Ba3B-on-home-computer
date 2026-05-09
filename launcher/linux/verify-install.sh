@@ -45,7 +45,13 @@ for name, ok, value in checks:
 if os.path.isfile(report_path):
     print("\nInstall report:")
     with open(report_path, "r", encoding="utf-8") as f:
-        print(f.read())
+        report = json.load(f)
+    if health_ok:
+        report["warnings"] = [
+            warning for warning in (report.get("warnings") or [])
+            if ("wdac" not in str(warning).lower()) and ("app control" not in str(warning).lower())
+        ]
+    print(json.dumps(report, indent=4, ensure_ascii=False))
 
 raise SystemExit(1 if bad else 0)
 PY

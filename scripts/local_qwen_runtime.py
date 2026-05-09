@@ -1051,18 +1051,26 @@ def build_health_center(
     ]
 
     service = summarize_service_status(has_health=has_server, lifecycle_state=lifecycle_state)
+    effective_warnings = [
+        warning
+        for warning in warnings
+        if not (
+            service["effectiveState"] == "active"
+            and (("wdac" in str(warning).lower()) or ("app control" in str(warning).lower()))
+        )
+    ]
     warning_entries = [
         {
             "id": f"warning-{index + 1}",
             "title": warning,
             "severity": "warning",
         }
-        for index, warning in enumerate(warnings)
+        for index, warning in enumerate(effective_warnings)
         if str(warning).strip()
     ]
     wdac_warning = any(
         ("wdac" in str(warning).lower()) or ("app control" in str(warning).lower())
-        for warning in warnings
+        for warning in effective_warnings
     )
 
     broken_count = sum(1 for item in checks if not item["ok"])

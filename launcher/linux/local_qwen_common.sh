@@ -324,9 +324,9 @@ PY
 )"; then has_model="true"; else has_model="false"; fi
   if [ -x "$(get_local_qwen_root)/apps/llama.cpp/build/bin/llama-server" ] || [ -x "$(get_local_qwen_root)/apps/llama.cpp-turboquant/build-cuda/bin/llama-server" ]; then has_runtime="true"; else has_runtime="false"; fi
   if [ -f "$HOME/.config/opencode/opencode.json" ]; then has_config="true"; else has_config="false"; fi
-  warnings_json="$(python3 - <<'PY' "$report_path"
+  warnings_json="$(python3 - <<'PY' "$report_path" "$has_server"
 import json, os, sys
-path = sys.argv[1]
+path, health_ok = sys.argv[1], sys.argv[2].lower() == "true"
 warnings = []
 if os.path.exists(path):
     try:
@@ -334,6 +334,11 @@ if os.path.exists(path):
             warnings = json.load(f).get("warnings", []) or []
     except Exception:
         warnings = []
+if health_ok:
+    warnings = [
+        warning for warning in warnings
+        if ("wdac" not in str(warning).lower()) and ("app control" not in str(warning).lower())
+    ]
 print(json.dumps(warnings))
 PY
 )"
@@ -374,9 +379,9 @@ PY
 )"; then has_model="true"; else has_model="false"; fi
   if [ -x "$(get_local_qwen_root)/apps/llama.cpp/build/bin/llama-server" ] || [ -x "$(get_local_qwen_root)/apps/llama.cpp-turboquant/build-cuda/bin/llama-server" ]; then has_runtime="true"; else has_runtime="false"; fi
   if [ -f "$HOME/.config/opencode/opencode.json" ]; then has_config="true"; else has_config="false"; fi
-  warnings_json="$(python3 - <<'PY' "$report_path"
+  warnings_json="$(python3 - <<'PY' "$report_path" "$has_server"
 import json, os, sys
-path = sys.argv[1]
+path, health_ok = sys.argv[1], sys.argv[2].lower() == "true"
 warnings = []
 if os.path.exists(path):
     try:
@@ -384,6 +389,11 @@ if os.path.exists(path):
             warnings = json.load(f).get("warnings", []) or []
     except Exception:
         warnings = []
+if health_ok:
+    warnings = [
+        warning for warning in warnings
+        if ("wdac" not in str(warning).lower()) and ("app control" not in str(warning).lower())
+    ]
 print(json.dumps(warnings))
 PY
 )"

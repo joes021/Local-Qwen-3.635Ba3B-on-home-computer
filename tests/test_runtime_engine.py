@@ -622,6 +622,34 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIn("repair-app-control", [item["id"] for item in payload["recommendedActions"]])
         self.assertEqual(payload["primaryAction"]["id"], "repair-app-control")
 
+    def test_health_center_ignores_historical_wdac_warning_when_server_is_active(self):
+        code, stdout, stderr = run_runtime_command(
+            "health-center",
+            "--has-server",
+            "true",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--lifecycle-state",
+            "active",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+            "--warnings-json",
+            json.dumps(["Application Control / WDAC blokira llama-server.exe"]),
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["overallState"], "healthy")
+        self.assertEqual(payload["warnings"], [])
+        self.assertNotIn("repair-app-control", [item["id"] for item in payload["recommendedActions"]])
+
     def test_service_status_reports_inactive_without_health_or_lifecycle(self):
         code, stdout, stderr = run_runtime_command(
             "service-status",

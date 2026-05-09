@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.8.5
+- `WDAC / App Control` warning se sada automatski tretira kao istorijski ako je `llama-server` vec aktivan i health endpoint vraca `ok`, pa healthy masine vise ne dobijaju lazni aktivni alarm
+- Windows i Linux `verify-install` sada prikazuju sanitizovan `install report`, tako da zastareli WDAC warning ne prekriva stvarno zdravo stanje sistema
+- Health i repair tokovi sada koriste iste filtrirane warning podatke, pa `Repair App Control` vise ne iskace kao primarni problem kada server vec normalno radi
+
 v2.8.4
 - `Source drilldown 2.0` sada po izvoru (`testPrompt`, `opencode`, `other`) prikazuje i prosecno vreme odgovora i prosecni throughput, ne samo broj zahteva i poslednji label
 - Windows `Request activity` je prosiren detaljnijim izvor-pregledom po linijama, tako da se odmah vidi koji izvor je sporiji ili brzi
