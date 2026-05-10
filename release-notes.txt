@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.22
+- Linux `check-updates.sh` vise ne prosipa sirov JSON kada se pozove iz `Control Center` toka ili direktno iz terminala. Podrazumevani izlaz je sada cist i ljudski citljiv: trenutna verzija, latest javna verzija, status da li postoji update i release URL
+- JSON payload za skriptovanje ostaje dostupan kroz eksplicitni `--json` mod, pa Linux UX postaje uredniji bez gubitka masinski citljivog izlaza
+
 v2.10.21
 - Linux `install-update.sh` vise ne pokrece skinuti `.run` u interaktivnom TUI modu kada se update trazi iz vec instalirane kopije. Umesto toga koristi neinteraktivni `--cli-install` refresh sa trenutnim `InstallRoot`, profilom i modelom, uz preskakanje package/source/OpenCode/model/runtime koraka koji nisu potrebni za obican update launchera i skripti
 - Ovo direktno zatvara Ubuntu nalaz gde je update launcher uspeo da skine novu verziju, ali je onda pao na `sudo: a terminal is required` jer je uletao u puni interaktivni installer tok umesto u laki refresh/update put
