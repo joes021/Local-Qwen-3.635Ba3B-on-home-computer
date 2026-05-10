@@ -45,6 +45,26 @@ function Invoke-Native {
     }
 }
 
+function Stop-RunningLlamaServerProcesses {
+    $processes = @(Get-Process llama-server -ErrorAction SilentlyContinue)
+    if ($processes.Count -eq 0) {
+        return
+    }
+
+    Write-Host "Zaustavljam aktivne llama-server procese pre TurboQuant build-a..." -ForegroundColor Yellow
+    $processes | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    $deadline = (Get-Date).AddSeconds(15)
+    do {
+        Start-Sleep -Milliseconds 500
+        $remaining = @(Get-Process llama-server -ErrorAction SilentlyContinue)
+    } until ($remaining.Count -eq 0 -or (Get-Date) -ge $deadline)
+
+    if ($remaining.Count -gt 0) {
+        throw "Nisam uspeo da zaustavim sve llama-server procese pre TurboQuant build-a."
+    }
+}
+
 function Set-StatePropertyValue {
     param(
         [Parameter(Mandatory = $true)]$StateObject,
@@ -216,6 +236,8 @@ function Import-CudaEnvironment {
 $cmake = Get-ToolPath "cmake"
 $ninja = Get-ToolPath "ninja"
 $buildRoot = Join-Path $state.turboDir $defaults.turboquant.buildDir
+
+Stop-RunningLlamaServerProcesses
 
 $originalPath = [Environment]::GetEnvironmentVariable("PATH", "Process")
 $currentPath = $originalPath

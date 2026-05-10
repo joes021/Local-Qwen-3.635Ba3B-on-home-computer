@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.2
+- Windows `TurboQuant` build sada pre konfiguracije i linkovanja nasilno zaustavlja sve aktivne `llama-server` procese i ceka da zaista nestanu, pa se vise ne desava da build padne na `LNK1104 cannot open file 'bin\\llama-common.dll'` samo zato sto je stari runtime jos drzao DLL zakljucan
+- Ovaj fix je potvrden kroz pravi `build-turboquant.ps1 -Reconfigure` prolaz na instaliranoj kopiji, posle cega `install-state.json` ponovo pokazuje validan `turboServerExe` i `verify-install` vidi `UsesTurboQuant: True`
+
 v2.10.1
 - Poravnat je javni release tok tako da se tag, commit i instalacioni asseti za internet-enabled `OpenCode` build sada stvarno poklapaju; koristi ovu verziju umesto prelaznog `v2.10.0`
 - `OpenCode` internet pristup ostaje ukljucen kroz `websearch` i `webfetch`, a launcher i agent sesija eksplicitno pale `OPENCODE_ENABLE_EXA=1` kako bi web search radio i sa lokalnim `llama.cpp` providerom

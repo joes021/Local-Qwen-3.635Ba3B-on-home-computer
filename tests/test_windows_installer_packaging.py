@@ -187,6 +187,9 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
 
     def test_turboquant_build_can_use_local_ninja_fallback(self):
         build_script = (WINDOWS_LAUNCHER_DIR / "build-turboquant.ps1").read_text(encoding="utf-8")
+        self.assertIn('function Stop-RunningLlamaServerProcesses', build_script)
+        self.assertIn('Stop-RunningLlamaServerProcesses', build_script)
+        self.assertIn('Get-Process llama-server -ErrorAction SilentlyContinue', build_script)
         self.assertIn('Join-Path $state.installRoot "tools\\ninja\\ninja.exe"', build_script)
         self.assertIn('$ninja = Get-ToolPath "ninja"', build_script)
         self.assertIn('[Environment]::SetEnvironmentVariable("PATH", $currentPath, "Process")', build_script)
