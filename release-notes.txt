@@ -1,5 +1,11 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.7
+- Linux installer je sada zaista samostalniji: `.run` prvo pokusava svoj GUI tok, zatim ako nema `zenity` pokusava da ga sam instalira, a tek onda pada nazad na TUI, umesto da odmah korisnika ostavi na sirovom tekstualnom promptu bez pokusaja da dovrsi desktop iskustvo
+- Linux TUI sada ima validaciju unosa i potvrdu pre starta, pa vise ne prihvata greske tipa `Install root = y` ili `Profile = y`; putanje, profil i numericka polja se proveravaju pre nego sto krene pravi install
+- Linux payload bug je zatvoren: `.run` sada nosi i `release-notes.txt`, pa install vise ne puca na `cp: cannot stat ... release-notes.txt`, a `install.sh` ima i fallback poruku ako taj fajl nekad ipak izostane
+- Dodat je stvarni Linux smoke coverage u testovima: proveravaju se GUI/TUI wrapperi, validacija TUI unosa i `install.sh` smoke mode koji pravi `install-state.json`, `install-report.json` i desktop launchere bez punog downloada
+
 v2.10.6
 - Linux `.run` paket sada podrzava prirodniji desktop tok na dvoklik: ako postoji graficko okruzenje, setup prvo otvara mali GUI wizard za izbor install root-a, profila i osnovnih opcija, a zatim sam pokrece terminalsku instalaciju sa vidljivim logom i `Press Enter to close` zavrsetkom
 - Isti Linux paket i dalje cuva stari pouzdani fallback: ako nema desktop sesije, `zenity` ili terminal emulatora, `.run` automatski pada nazad na postojeci TUI/CLI installer, pa headless i server masine nisu polomljene

@@ -5,6 +5,10 @@ INSTALL_ROOT="${INSTALL_ROOT:-$HOME/local-qwen-home}"
 PROFILE="${PROFILE:-balanced}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
 SKIP_RUNTIME_BUILD="${SKIP_RUNTIME_BUILD:-0}"
+LOCAL_QWEN_SKIP_PACKAGE_INSTALL="${LOCAL_QWEN_SKIP_PACKAGE_INSTALL:-0}"
+LOCAL_QWEN_SKIP_SOURCE_CLONE="${LOCAL_QWEN_SKIP_SOURCE_CLONE:-0}"
+LOCAL_QWEN_SKIP_OPENCODE_INSTALL="${LOCAL_QWEN_SKIP_OPENCODE_INSTALL:-0}"
+LOCAL_QWEN_SKIP_PREREQ_CHECKS="${LOCAL_QWEN_SKIP_PREREQ_CHECKS:-0}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULTS_PATH="$REPO_ROOT/config/profiles/defaults.json"
 STATE_DIR="$INSTALL_ROOT/state"
@@ -56,33 +60,41 @@ ensure_packages_linux() {
 mkdir -p "$STATE_DIR" "$APPS_DIR" "$BIN_DIR" "$MODELS_DIR" "$LAUNCHERS_DIR" "$CONFIG_DIR" "$ASSETS_DIR"
 mkdir -p "$INSTALL_ROOT/docs"
 
-ensure_packages_linux
-
-if ! command -v git >/dev/null 2>&1; then
-  echo "git nije instaliran. Instaliraj ga pa ponovo pokreni installer."
-  exit 1
+if [ "$LOCAL_QWEN_SKIP_PACKAGE_INSTALL" != "1" ]; then
+  ensure_packages_linux
 fi
 
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "Node.js i npm su potrebni za OpenCode. Instaliraj ih pa pokreni skriptu ponovo."
-  exit 1
+if [ "$LOCAL_QWEN_SKIP_PREREQ_CHECKS" != "1" ]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git nije instaliran. Instaliraj ga pa ponovo pokreni installer."
+    exit 1
+  fi
+
+  if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo "Node.js i npm su potrebni za OpenCode. Instaliraj ih pa pokreni skriptu ponovo."
+    exit 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 je potreban za model download i config pisanje."
+    exit 1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl je potreban."
+    exit 1
+  fi
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 je potreban za model download i config pisanje."
-  exit 1
-fi
-
-if ! command -v curl >/dev/null 2>&1; then
-  echo "curl je potreban."
-  exit 1
-fi
-
-if [ ! -d "$APPS_DIR/llama.cpp" ]; then
+if [ "$LOCAL_QWEN_SKIP_SOURCE_CLONE" = "1" ]; then
+  mkdir -p "$APPS_DIR/llama.cpp" "$APPS_DIR/llama.cpp-turboquant"
+elif [ ! -d "$APPS_DIR/llama.cpp" ]; then
   git clone https://github.com/ggml-org/llama.cpp.git "$APPS_DIR/llama.cpp"
 fi
 
-if [ ! -d "$APPS_DIR/llama.cpp-turboquant" ]; then
+if [ "$LOCAL_QWEN_SKIP_SOURCE_CLONE" = "1" ]; then
+  :
+elif [ ! -d "$APPS_DIR/llama.cpp-turboquant" ]; then
   TURBO_REPO="$(python3 - <<'PY' "$DEFAULTS_PATH"
 import json, sys
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
@@ -99,7 +111,9 @@ PY
   git -C "$APPS_DIR/llama.cpp-turboquant" checkout "$TURBO_BRANCH"
 fi
 
-if ! command -v opencode >/dev/null 2>&1; then
+if [ "$LOCAL_QWEN_SKIP_OPENCODE_INSTALL" = "1" ]; then
+  :
+elif ! command -v opencode >/dev/null 2>&1; then
   npm install -g opencode-ai
 fi
 
@@ -108,7 +122,11 @@ cp -R "$REPO_ROOT/config/profiles/." "$CONFIG_DIR/profiles/"
 mkdir -p "$ASSETS_DIR/icons"
 cp -R "$REPO_ROOT/assets/icons/." "$ASSETS_DIR/icons/"
 cp "$REPO_ROOT/version.json" "$INSTALL_ROOT/version.json"
-cp "$REPO_ROOT/release-notes.txt" "$INSTALL_ROOT/docs/release-notes.txt"
+if [ -f "$REPO_ROOT/release-notes.txt" ]; then
+  cp "$REPO_ROOT/release-notes.txt" "$INSTALL_ROOT/docs/release-notes.txt"
+else
+  printf 'Release notes nisu dostupne u ovom payload-u.\n' > "$INSTALL_ROOT/docs/release-notes.txt"
+fi
 
 chmod +x "$LAUNCHERS_DIR/"*.sh
 

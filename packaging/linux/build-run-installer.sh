@@ -24,6 +24,7 @@ mkdir -p "$PAYLOAD_DIR" "$OUTPUT_DIR"
 
 cp "$REPO_ROOT/version.json" "$PAYLOAD_DIR/"
 cp "$REPO_ROOT/README.md" "$PAYLOAD_DIR/"
+cp "$REPO_ROOT/release-notes.txt" "$PAYLOAD_DIR/"
 mkdir -p "$PAYLOAD_DIR/install" "$PAYLOAD_DIR/launcher" "$PAYLOAD_DIR/config" "$PAYLOAD_DIR/assets"
 cp -R "$REPO_ROOT/install/linux" "$PAYLOAD_DIR/install/"
 cp -R "$REPO_ROOT/launcher/linux" "$PAYLOAD_DIR/launcher/"

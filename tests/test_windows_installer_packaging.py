@@ -33,6 +33,13 @@ def run_powershell_snippet(snippet: str, *, env: dict | None = None) -> subproce
     )
 
 
+def to_git_bash_path(path: pathlib.Path) -> str:
+    resolved = path.resolve()
+    drive = resolved.drive.rstrip(":").lower()
+    suffix = resolved.as_posix()[2:]
+    return f"/mnt/{drive}{suffix}"
+
+
 class WindowsInstallerPackagingTests(unittest.TestCase):
     def test_inno_setup_uses_finished_page_and_embeds_hidden_bootstrap_run(self):
         content = ISS_PATH.read_text(encoding="utf-8")
@@ -146,16 +153,192 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
     def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")
         gui_script = (REPO_ROOT / "install" / "linux" / "installer-gui.sh").read_text(encoding="utf-8")
+        tui_script = (REPO_ROOT / "install" / "linux" / "installer-tui.sh").read_text(encoding="utf-8")
 
         self.assertIn('installer-gui.sh', build_script)
+        self.assertIn('cp "$REPO_ROOT/release-notes.txt" "$PAYLOAD_DIR/"', build_script)
         self.assertIn('WAYLAND_DISPLAY', build_script)
         self.assertIn('exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"', build_script)
         self.assertIn('command -v zenity', gui_script)
+        self.assertIn('sudo apt-get install -y zenity', gui_script)
+        self.assertIn('installer-gui.sh") --skip-zenity-bootstrap', gui_script)
         self.assertIn('pick_terminal()', gui_script)
         self.assertIn('launch_script_in_terminal', gui_script)
         self.assertIn('zenity --entry', gui_script)
         self.assertIn('zenity --list', gui_script)
         self.assertIn('exec bash "$TUI_SCRIPT"', gui_script)
+        self.assertIn('LOCAL_QWEN_INSTALLER_TARGET_SCRIPT', tui_script)
+        self.assertIn('Potvrdi instalaciju? y/n', tui_script)
+
+    def test_linux_tui_validates_inputs_and_runs_target_script(self):
+        script_path = REPO_ROOT / "install" / "linux" / "installer-tui.sh"
+        bash_script_path = to_git_bash_path(script_path)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            output_path = temp_path / "payload.json"
+            helper_path = temp_path / "capture-install.sh"
+            helper_path.write_bytes(
+                (
+                    "\n".join(
+                        [
+                            "#!/usr/bin/env bash",
+                            "set -euo pipefail",
+                            "python3 - <<'PY' \"$LOCAL_QWEN_INSTALLER_TARGET_OUTPUT\"",
+                            "import json, os, sys",
+                            "payload = {",
+                            "  'INSTALL_ROOT': os.environ.get('INSTALL_ROOT'),",
+                            "  'PROFILE': os.environ.get('PROFILE'),",
+                            "  'CONTEXT_SIZE': os.environ.get('CONTEXT_SIZE'),",
+                            "  'MAX_OUTPUT_TOKENS': os.environ.get('MAX_OUTPUT_TOKENS'),",
+                            "  'BUILD_STEPS': os.environ.get('BUILD_STEPS'),",
+                            "  'PLAN_STEPS': os.environ.get('PLAN_STEPS'),",
+                            "  'GENERAL_STEPS': os.environ.get('GENERAL_STEPS'),",
+                            "  'EXPLORE_STEPS': os.environ.get('EXPLORE_STEPS'),",
+                            "  'WORKING_DIRECTORY': os.environ.get('WORKING_DIRECTORY'),",
+                            "  'SKIP_MODEL_DOWNLOAD': os.environ.get('SKIP_MODEL_DOWNLOAD'),",
+                            "  'SKIP_RUNTIME_BUILD': os.environ.get('SKIP_RUNTIME_BUILD'),",
+                            "}",
+                            "with open(sys.argv[1], 'w', encoding='utf-8') as handle:",
+                            "    json.dump(payload, handle)",
+                            "PY",
+                            "",
+                        ]
+                    )
+                ).encode("utf-8")
+            )
+            os.chmod(helper_path, 0o755)
+
+            answers = "\n".join(
+                [
+                    "y",
+                    "/tmp/local-qwen-home",
+                    "fast",
+                    "balanced",
+                    "abc",
+                    "262144",
+                    "8192",
+                    "120",
+                    "80",
+                    "100",
+                    "sixty",
+                    "60",
+                    "workdir",
+                    "/tmp/workdir",
+                    "y",
+                    "y",
+                    "y",
+                ]
+            ) + "\n"
+
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    (
+                        f"export LOCAL_QWEN_INSTALLER_TARGET_SCRIPT='{to_git_bash_path(helper_path)}'; "
+                        f"export LOCAL_QWEN_INSTALLER_TARGET_OUTPUT='{to_git_bash_path(output_path)}'; "
+                        f"printf '{answers.replace(chr(10), r'\\n')}' | bash '{bash_script_path}'"
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(REPO_ROOT),
+                timeout=60,
+            )
+
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            self.assertTrue(output_path.exists(), msg=completed.stdout + completed.stderr)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["INSTALL_ROOT"], "/tmp/local-qwen-home")
+            self.assertEqual(payload["PROFILE"], "balanced")
+            self.assertEqual(payload["CONTEXT_SIZE"], "262144")
+            self.assertEqual(payload["EXPLORE_STEPS"], "60")
+            self.assertEqual(payload["WORKING_DIRECTORY"], "/tmp/workdir")
+            self.assertEqual(payload["SKIP_MODEL_DOWNLOAD"], "0")
+            self.assertEqual(payload["SKIP_RUNTIME_BUILD"], "0")
+            self.assertIn("Unos 'y' izgleda kao potvrda", completed.stderr)
+            self.assertIn("Dozvoljene vrednosti su: speed balanced video", completed.stderr)
+            self.assertIn("Ovde je potreban pozitivan ceo broj.", completed.stderr)
+            self.assertIn("Putanja treba da pocinje sa /, ~/ ili ./ .", completed.stderr)
+
+    def test_linux_install_script_supports_smoke_mode_and_release_notes_fallback(self):
+        install_script = (REPO_ROOT / "install" / "linux" / "install.sh").read_text(encoding="utf-8")
+        self.assertIn('LOCAL_QWEN_SKIP_PACKAGE_INSTALL="${LOCAL_QWEN_SKIP_PACKAGE_INSTALL:-0}"', install_script)
+        self.assertIn('LOCAL_QWEN_SKIP_SOURCE_CLONE="${LOCAL_QWEN_SKIP_SOURCE_CLONE:-0}"', install_script)
+        self.assertIn('LOCAL_QWEN_SKIP_OPENCODE_INSTALL="${LOCAL_QWEN_SKIP_OPENCODE_INSTALL:-0}"', install_script)
+        self.assertIn('LOCAL_QWEN_SKIP_PREREQ_CHECKS="${LOCAL_QWEN_SKIP_PREREQ_CHECKS:-0}"', install_script)
+        self.assertIn('if [ "$LOCAL_QWEN_SKIP_PACKAGE_INSTALL" != "1" ]; then', install_script)
+        self.assertIn('if [ "$LOCAL_QWEN_SKIP_SOURCE_CLONE" = "1" ]; then', install_script)
+        self.assertIn('if [ "$LOCAL_QWEN_SKIP_OPENCODE_INSTALL" = "1" ]; then', install_script)
+        self.assertIn('if [ "$LOCAL_QWEN_SKIP_PREREQ_CHECKS" != "1" ]; then', install_script)
+        self.assertIn('if [ -f "$REPO_ROOT/release-notes.txt" ]; then', install_script)
+        self.assertIn("Release notes nisu dostupne u ovom payload-u.", install_script)
+
+    def test_linux_install_script_smoke_mode_creates_state_and_report(self):
+        repo_bash_path = to_git_bash_path(REPO_ROOT)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            smoke_script = temp_path / "linux-install-smoke.sh"
+            smoke_script.write_bytes(
+                (
+                    "\n".join(
+                        [
+                            "#!/usr/bin/env bash",
+                            "set -euo pipefail",
+                            f"cd '{repo_bash_path}'",
+                            'TEMP_ROOT="/tmp/local-qwen-smoke-$$"',
+                            'rm -rf "$TEMP_ROOT"',
+                            'mkdir -p "$TEMP_ROOT"',
+                            'INSTALL_ROOT="${TEMP_ROOT}/install-root"',
+                            'DESKTOP_DIR="${TEMP_ROOT}/Desktop"',
+                            'HOME="${TEMP_ROOT}/home"',
+                            'mkdir -p "${HOME}"',
+                            'export HOME',
+                            'export INSTALL_ROOT',
+                            'export XDG_DESKTOP_DIR="${DESKTOP_DIR}"',
+                            'export PROFILE=balanced',
+                            'export SKIP_MODEL_DOWNLOAD=1',
+                            'export SKIP_RUNTIME_BUILD=1',
+                            'export LOCAL_QWEN_SKIP_PACKAGE_INSTALL=1',
+                            'export LOCAL_QWEN_SKIP_SOURCE_CLONE=1',
+                            'export LOCAL_QWEN_SKIP_OPENCODE_INSTALL=1',
+                            'export LOCAL_QWEN_SKIP_PREREQ_CHECKS=1',
+                            'bash ./install/linux/install.sh >/dev/null',
+                            'python3 - <<\'PY\' "$INSTALL_ROOT/state/install-state.json" "$INSTALL_ROOT/state/install-report.json" "$DESKTOP_DIR"',
+                            'import json, os, sys',
+                            'state_path, report_path, desktop_dir = sys.argv[1:4]',
+                            'with open(state_path, "r", encoding="utf-8") as handle:',
+                            '    state = json.load(handle)',
+                            'with open(report_path, "r", encoding="utf-8") as handle:',
+                            '    report = json.load(handle)',
+                            'print(json.dumps({',
+                            '    "modelId": state.get("modelId"),',
+                            '    "profile": state.get("profile"),',
+                            '    "hasReport": os.path.isfile(report_path),',
+                            '    "desktopEntries": sorted(os.listdir(desktop_dir)),',
+                            '    "launchersOk": report.get("components", {}).get("launchers", {}).get("ok"),',
+                            '}, ensure_ascii=False))',
+                            'PY',
+                            'rm -rf "$TEMP_ROOT"',
+                            "",
+                        ]
+                    )
+                ).encode("utf-8")
+            )
+            completed = subprocess.run(
+                ["bash", to_git_bash_path(smoke_script)],
+                capture_output=True,
+                text=True,
+                cwd=str(REPO_ROOT),
+                timeout=120,
+            )
+        self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+        payload = json.loads(completed.stdout.strip())
+        self.assertEqual(payload["profile"], "balanced")
+        self.assertTrue(payload["hasReport"])
+        self.assertTrue(payload["launchersOk"])
+        self.assertIn("local-qwen-control-center.desktop", payload["desktopEntries"])
+        self.assertIn("opencode-local-qwen.desktop", payload["desktopEntries"])
 
     def test_check_updates_hides_raw_json_unless_requested(self):
         content = (WINDOWS_LAUNCHER_DIR / "check-updates.ps1").read_text(encoding="utf-8")

@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_SCRIPT="$SCRIPT_DIR/install.sh"
 TUI_SCRIPT="$SCRIPT_DIR/installer-tui.sh"
+GUI_RELAUNCH_GUARD="${1:-}"
 
 has_desktop_session() {
   [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "x11" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]
@@ -47,11 +48,47 @@ launch_script_in_terminal() {
   esac
 }
 
+install_zenity_in_terminal() {
+  local runner_script
+  runner_script="$(mktemp)"
+  cat > "$runner_script" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Zenity nije pronadjen. Pokusavam automatsku instalaciju..."
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update
+  sudo apt-get install -y zenity
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y zenity
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -Sy --noconfirm zenity
+elif command -v zypper >/dev/null 2>&1; then
+  sudo zypper install -y zenity
+else
+  echo "Ne znam kako da automatski instaliram zenity na ovoj distribuciji."
+fi
+echo
+if command -v zenity >/dev/null 2>&1; then
+  echo "Zenity je instaliran. Pokrecem graficki installer..."
+  exec bash $(printf '%q' "$SCRIPT_DIR/installer-gui.sh") --skip-zenity-bootstrap
+fi
+echo "Zenity i dalje nije dostupan. Prelazim na tekstualni installer."
+exec bash $(printf '%q' "$TUI_SCRIPT")
+EOF
+  chmod +x "$runner_script"
+  launch_script_in_terminal "$runner_script"
+}
+
 if ! has_desktop_session; then
   exec bash "$TUI_SCRIPT"
 fi
 
 if ! command -v zenity >/dev/null 2>&1; then
+  if [ "$GUI_RELAUNCH_GUARD" != "--skip-zenity-bootstrap" ]; then
+    if install_zenity_in_terminal; then
+      exit 0
+    fi
+  fi
   if launch_script_in_terminal "$TUI_SCRIPT"; then
     exit 0
   fi
