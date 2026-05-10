@@ -39,6 +39,15 @@ class RuntimeEngineTests(unittest.TestCase):
 
         self.assertGreater(current, latest)
 
+    def test_build_release_asset_urls_returns_versioned_assets(self):
+        payload = RUNTIME_MODULE.build_release_asset_urls(
+            "joes021/Local-Qwen-3.635Ba3B-on-home-computer",
+            "2.10.17",
+        )
+        self.assertEqual(payload["tagName"], "v2.10.17")
+        self.assertTrue(payload["windowsInstallerUrl"].endswith("/Local-Qwen-Setup-2.10.17.exe"))
+        self.assertTrue(payload["linuxInstallerUrl"].endswith("/Local-Qwen-Setup-2.10.17.run"))
+
     def test_recommendation_prefers_iq2_for_6gb_gpu(self):
         code, stdout, stderr = run_runtime_command(
             "recommend",

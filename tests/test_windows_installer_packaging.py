@@ -14,6 +14,7 @@ INSTALL_PS1_PATH = REPO_ROOT / "install" / "windows" / "install.ps1"
 RELEASE_ALL_PATH = REPO_ROOT / "packaging" / "release-all.ps1"
 WINDOWS_LAUNCHER_DIR = REPO_ROOT / "launcher" / "windows"
 WINDOWS_COMMON_PATH = WINDOWS_LAUNCHER_DIR / "local-qwen-common.ps1"
+LINUX_LAUNCHER_DIR = REPO_ROOT / "launcher" / "linux"
 LINUX_BUILD_WRAPPER_PATH = REPO_ROOT / "packaging" / "linux" / "build-run-package.ps1"
 
 
@@ -149,6 +150,15 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('Push-Location $repoRoot', content)
         self.assertIn('& bash @arguments', content)
         self.assertIn('throw "Linux installer build nije uspeo (exit $LASTEXITCODE)."', content)
+
+    def test_linux_install_update_downloads_versioned_release_asset(self):
+        content = (LINUX_LAUNCHER_DIR / "install-update.sh").read_text(encoding="utf-8")
+        self.assertIn('LATEST_VERSION="$(python3 - <<\'PY\' "$LATEST_JSON"', content)
+        self.assertIn('DOWNLOAD_URL="$(python3 - <<\'PY\' "$LATEST_JSON"', content)
+        self.assertIn('TARGET_PATH="$TARGET_DIR/Local-Qwen-Setup-$LATEST_VERSION.run"', content)
+        self.assertIn('echo "Nova verzija: v$LATEST_VERSION"', content)
+        self.assertIn('curl -L "$DOWNLOAD_URL" -o "$TARGET_PATH"', content)
+        self.assertNotIn('releases/latest/download/Local-Qwen-Setup-latest.run', content)
 
     def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")

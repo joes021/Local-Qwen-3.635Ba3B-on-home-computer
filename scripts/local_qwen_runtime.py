@@ -49,6 +49,17 @@ def parse_json_argument(value: str, fallback):
     return fallback
 
 
+def build_release_asset_urls(repo: str, version: str, base_name: str = "Local-Qwen-Setup") -> dict[str, str]:
+    clean_version = str(version or "").lstrip("v")
+    tag = f"v{clean_version}" if clean_version else ""
+    base = f"https://github.com/{repo}/releases/download/{tag}"
+    return {
+        "tagName": tag,
+        "windowsInstallerUrl": f"{base}/{base_name}-{clean_version}.exe" if clean_version else "",
+        "linuxInstallerUrl": f"{base}/{base_name}-{clean_version}.run" if clean_version else "",
+    }
+
+
 def normalize_models(defaults: dict) -> list[dict]:
     models = []
     for key, raw in defaults.get("modelChoices", {}).items():
@@ -932,6 +943,7 @@ def command_latest_release(args: argparse.Namespace) -> int:
     with urllib.request.urlopen(request, timeout=30) as response:
         payload = json.loads(response.read().decode("utf-8"))
     tag_name = payload.get("tag_name", "").lstrip("v")
+    asset_urls = build_release_asset_urls(args.repo, tag_name)
     current_tuple = _coerce_semver_tuple(args.current_version)
     latest_tuple = _coerce_semver_tuple(tag_name)
     ahead_of_public_release = False
@@ -956,10 +968,13 @@ def command_latest_release(args: argparse.Namespace) -> int:
             {
                 "currentVersion": args.current_version,
                 "latestVersion": tag_name,
+                "latestTag": asset_urls["tagName"],
                 "updateAvailable": update_available,
                 "aheadOfPublicRelease": ahead_of_public_release,
                 "versionRelation": version_relation,
                 "releaseUrl": payload.get("html_url"),
+                "windowsInstallerUrl": asset_urls["windowsInstallerUrl"],
+                "linuxInstallerUrl": asset_urls["linuxInstallerUrl"],
             },
             indent=2,
         )

@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.18
+- Linux `install-update.sh` vise ne preuzima slepo `releases/latest/download/Local-Qwen-Setup-latest.run`; sada iz GitHub release API odgovora uzima eksplicitnu `latestVersion` i skida bas verzionisani `.run` asset za taj tag, pa update tok ne zavisi od keša ili starog `latest` aliasa
+- Shared runtime `latest-release` sada vraca i `latestTag`, `linuxInstallerUrl` i `windowsInstallerUrl`, da launcher slojevi mogu pouzdano da ciljaju konkretne release assete umesto da rekonstruišu URL-ove napamet
+- Dodat je test koji cuva da Linux update launcher koristi verzionisani download URL i lokalni cilj `Local-Qwen-Setup-$LATEST_VERSION.run`, sto direktno pokriva Ubuntu nalaz gde je `latest.run` jednom ostao na starijoj verziji
+
 v2.10.17
 - Linux `Dodaj lokalni GGUF` i `Dodaj HF model` vise ne prosipaju Python `DeprecationWarning` poruke zbog `datetime.utcnow()`; custom-model registry sada koristi timezone-aware UTC timestamp, pa rezultat dodavanja modela ostaje cist i razumljiv korisniku
 
