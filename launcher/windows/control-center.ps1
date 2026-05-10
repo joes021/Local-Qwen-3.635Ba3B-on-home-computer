@@ -347,10 +347,22 @@ function Refresh-ModelDownloadProgressView {
             "Model download u toku"
         }
         Set-WorkerStatus -State "Working" -Detail $statusDetail
+        if ($settingsStatus) {
+            $settingsStatus.Text = $statusDetail + " | " + (Format-EtaText -Seconds $progress.etaSeconds)
+            $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
+        }
     } elseif ($progress.status -eq "completed") {
         Set-WorkerStatus -State "Idle" -Detail "Model download zavrsen"
+        if ($settingsStatus) {
+            $settingsStatus.Text = "Model download zavrsen."
+            $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
+        }
     } elseif ($progress.status -eq "failed") {
         Set-WorkerStatus -State "Error" -Detail "Model download nije uspeo"
+        if ($settingsStatus) {
+            $settingsStatus.Text = "Model download nije uspeo."
+            $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 45, 45)
+        }
     }
 }
 
@@ -1428,7 +1440,7 @@ function Refresh-BenchmarkChart {
     [void]$benchmarkChart.Titles.Add("Live throughput trend kroz poslednje zahteve")
 
     $history = @($TokenMetrics.history)
-    $startIndex = [Math]::Max(0, $history.Count - 20)
+    $startIndex = [Math]::Max(0, $history.Count - 10)
     $window = $history[$startIndex..($history.Count - 1)]
     for ($i = 0; $i -lt $window.Count; $i++) {
         $item = $window[$i]
@@ -1475,7 +1487,7 @@ function Refresh-ThroughputView {
         $usageStabilityLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         $usageTrendLabel.Text = "Trend: throughput = | latency ="
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
-        $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
+        $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili broj input/output tokena, brzine u tok/s i istorija."
         Refresh-BenchmarkChart -TokenMetrics $tokenMetrics
         return
     }
@@ -1534,8 +1546,8 @@ function Refresh-ThroughputView {
     }
 
     $throughputBox.Text = @(
-        "Poslednje merenje: prompt $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokensPerSecond) tok/s | total $($tokenMetrics.current.totalTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
-        "Prosek istorije: prompt $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output $($tokenMetrics.averages.completionTokensPerSecond) tok/s | total $($tokenMetrics.averages.totalTokensPerSecond) tok/s",
+        "Poslednje merenje: input $($tokenMetrics.current.promptTokens) tokens pri $($tokenMetrics.current.promptTokensPerSecond) tok/s | output $($tokenMetrics.current.completionTokens) tokens pri $($tokenMetrics.current.completionTokensPerSecond) tok/s | total speed $($tokenMetrics.current.totalTokensPerSecond) tok/s | total $($tokenMetrics.current.totalMs) ms",
+        "Prosek istorije: input speed $($tokenMetrics.averages.promptTokensPerSecond) tok/s | output speed $($tokenMetrics.averages.completionTokensPerSecond) tok/s | total speed $($tokenMetrics.averages.totalTokensPerSecond) tok/s",
         "Aktivnost: avg odgovor $($tokenMetrics.activity.averageTotalMs) ms | test prompt $($tokenMetrics.activity.sources.testPrompt) | OpenCode $($tokenMetrics.activity.sources.opencode) | ostalo $($tokenMetrics.activity.sources.other)",
         "Istorija: $($historyLines -join '   ;   ')"
     ) -join [Environment]::NewLine
@@ -1761,7 +1773,8 @@ function Apply-ModelFilters {
     $script:VisibleModelList = @($filteredPayload.models)
     $modelCombo.Items.Clear()
     foreach ($item in $script:VisibleModelList) {
-        [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB")
+        $installedMarker = if ($item.installed) { "SKINUT" } else { "NIJE SKINUT" }
+        [void]$modelCombo.Items.Add("$($item.label) | $($item.family) | $($item.approxSizeGiB) GiB | $installedMarker")
     }
 
     if ($modelCombo.Items.Count -eq 0) {
@@ -1882,6 +1895,7 @@ function Refresh-ModelSelectionInfo {
 
         $modelInfoBox.Text = @(
             "Status: $statusText"
+            "Lokalni status: $(if ($selectedModel.installed) { 'SKINUT' } else { 'NIJE SKINUT' })$(if ($selectedModel.active) { ' | AKTIVAN' } else { '' })"
             "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10 | Speed: $speedText"
             "Installed: $(Format-ModelInfoValue -Value $selectedModel.installedSizeGiB -Suffix 'GiB') | Need disk: $(Format-ModelInfoValue -Value $selectedModel.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selectedModel.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selectedModel.hasEnoughDisk) { '--' } elseif ($selectedModel.hasEnoughDisk) { 'da' } else { 'ne' })"
             "GPU prag: $(Format-ModelInfoValue -Value $selectedModel.minimumGpuMiB -Suffix 'MiB') | Preporuceni GPU: $(Format-ModelInfoValue -Value $selectedModel.recommendedGpuMiB -Suffix 'MiB') | RAM: $(Format-ModelInfoValue -Value $selectedModel.minimumRamGiB -Suffix 'GiB')"
@@ -1900,6 +1914,89 @@ function Refresh-ModelUiFromInstallState {
         Apply-ModelFilters
         Refresh-ModelSelectionInfo
     } catch {
+    }
+}
+
+function Show-AddHuggingFaceModelDialog {
+    $dialog = New-Object System.Windows.Forms.Form
+    $dialog.Text = "Dodaj Hugging Face model"
+    $dialog.StartPosition = "CenterParent"
+    $dialog.Size = New-Object System.Drawing.Size(520, 290)
+    $dialog.MinimumSize = New-Object System.Drawing.Size(520, 290)
+    $dialog.BackColor = [System.Drawing.Color]::WhiteSmoke
+    $dialog.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    $repoLabel = New-Object System.Windows.Forms.Label
+    $repoLabel.Text = "Repo"
+    $repoLabel.Location = New-Object System.Drawing.Point(18, 18)
+    $repoLabel.Size = New-Object System.Drawing.Size(80, 22)
+    $dialog.Controls.Add($repoLabel)
+
+    $repoBox = New-Object System.Windows.Forms.TextBox
+    $repoBox.Location = New-Object System.Drawing.Point(18, 42)
+    $repoBox.Size = New-Object System.Drawing.Size(460, 28)
+    $dialog.Controls.Add($repoBox)
+
+    $fileLabel = New-Object System.Windows.Forms.Label
+    $fileLabel.Text = "Filename (.gguf)"
+    $fileLabel.Location = New-Object System.Drawing.Point(18, 78)
+    $fileLabel.Size = New-Object System.Drawing.Size(140, 22)
+    $dialog.Controls.Add($fileLabel)
+
+    $fileBox = New-Object System.Windows.Forms.TextBox
+    $fileBox.Location = New-Object System.Drawing.Point(18, 102)
+    $fileBox.Size = New-Object System.Drawing.Size(460, 28)
+    $dialog.Controls.Add($fileBox)
+
+    $labelLabel = New-Object System.Windows.Forms.Label
+    $labelLabel.Text = "Prikazni naziv"
+    $labelLabel.Location = New-Object System.Drawing.Point(18, 138)
+    $labelLabel.Size = New-Object System.Drawing.Size(120, 22)
+    $dialog.Controls.Add($labelLabel)
+
+    $labelBox = New-Object System.Windows.Forms.TextBox
+    $labelBox.Location = New-Object System.Drawing.Point(18, 162)
+    $labelBox.Size = New-Object System.Drawing.Size(220, 28)
+    $dialog.Controls.Add($labelBox)
+
+    $familyLabel = New-Object System.Windows.Forms.Label
+    $familyLabel.Text = "Family"
+    $familyLabel.Location = New-Object System.Drawing.Point(258, 138)
+    $familyLabel.Size = New-Object System.Drawing.Size(80, 22)
+    $dialog.Controls.Add($familyLabel)
+
+    $familyBox = New-Object System.Windows.Forms.TextBox
+    $familyBox.Location = New-Object System.Drawing.Point(258, 162)
+    $familyBox.Size = New-Object System.Drawing.Size(220, 28)
+    $familyBox.Text = "Custom"
+    $dialog.Controls.Add($familyBox)
+
+    $okButton = New-Object System.Windows.Forms.Button
+    $okButton.Text = "Dodaj"
+    $okButton.Location = New-Object System.Drawing.Point(278, 208)
+    $okButton.Size = New-Object System.Drawing.Size(96, 34)
+    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $dialog.Controls.Add($okButton)
+
+    $cancelButton = New-Object System.Windows.Forms.Button
+    $cancelButton.Text = "Odustani"
+    $cancelButton.Location = New-Object System.Drawing.Point(382, 208)
+    $cancelButton.Size = New-Object System.Drawing.Size(96, 34)
+    $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $dialog.Controls.Add($cancelButton)
+
+    $dialog.AcceptButton = $okButton
+    $dialog.CancelButton = $cancelButton
+
+    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        Repo = $repoBox.Text
+        FileName = $fileBox.Text
+        Label = $labelBox.Text
+        Family = $familyBox.Text
     }
 }
 
@@ -2063,15 +2160,27 @@ function Show-ModelBrowserDialog {
     $useRecommendedButton.Size = New-Object System.Drawing.Size(266, 34)
     $browserForm.Controls.Add($useRecommendedButton)
 
+    $addLocalButton = New-Object System.Windows.Forms.Button
+    $addLocalButton.Text = "Dodaj lokalni GGUF"
+    $addLocalButton.Location = New-Object System.Drawing.Point(820, 566)
+    $addLocalButton.Size = New-Object System.Drawing.Size(128, 34)
+    $browserForm.Controls.Add($addLocalButton)
+
+    $addHfButton = New-Object System.Windows.Forms.Button
+    $addHfButton.Text = "Dodaj HF model"
+    $addHfButton.Location = New-Object System.Drawing.Point(958, 566)
+    $addHfButton.Size = New-Object System.Drawing.Size(128, 34)
+    $browserForm.Controls.Add($addHfButton)
+
     $compareButton = New-Object System.Windows.Forms.Button
     $compareButton.Text = "Uporedi izabrani"
-    $compareButton.Location = New-Object System.Drawing.Point(820, 566)
+    $compareButton.Location = New-Object System.Drawing.Point(820, 608)
     $compareButton.Size = New-Object System.Drawing.Size(266, 34)
     $browserForm.Controls.Add($compareButton)
 
     $closeBrowserButton = New-Object System.Windows.Forms.Button
     $closeBrowserButton.Text = "Zatvori"
-    $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 608)
+    $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 646)
     $closeBrowserButton.Size = New-Object System.Drawing.Size(110, 34)
     $closeBrowserButton.Add_Click({ $browserForm.Close() })
     $browserForm.Controls.Add($closeBrowserButton)
@@ -2100,6 +2209,7 @@ function Show-ModelBrowserDialog {
 
         $detailBox.Text = @(
             "Status: $($statusText -join ' | ')",
+            "Lokalni status: $(if ($selected.installed) { 'SKINUT' } else { 'NIJE SKINUT' })$(if ($selected.active) { ' | AKTIVAN' } else { '' })",
             "Model: $($selected.id)",
             "Family: $($selected.family) | Use case: $($selected.useCase)",
             "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
@@ -2129,6 +2239,7 @@ function Show-ModelBrowserDialog {
                 $status = @()
                 if ($item.active) { $status += "AKTIVAN" }
                 if ($item.installed) { $status += "INSTALLED" }
+                if (-not $item.installed) { $status += "NIJE SKINUT" }
                 if ($item.recommended) { $status += "PREPORUKA" }
                 if ($item.useCaseBadges -and @($item.useCaseBadges).Count -gt 0) { $status += ((@($item.useCaseBadges) | Select-Object -First 1) -join '') }
                 $status += switch ($item.fitGroup) {
@@ -2198,6 +2309,7 @@ function Show-ModelBrowserDialog {
             return
         }
         $selected = $grid.SelectedRows[0].Tag
+        $summaryLabel.Text = "Pokrecem download za $($selected.id)..."
         Invoke-BackgroundShellScript -Name "Model browser download" -ScriptPath $manageModelsScript -ArgumentList @("-ModelId", ([string]$selected.id), "-Download") -OnSuccess ({
             Refresh-ModelUiFromInstallState
             Refresh-LaunchStatus
@@ -2206,6 +2318,44 @@ function Show-ModelBrowserDialog {
         }.GetNewClosure()) -OnTick ({
             Refresh-ModelDownloadProgressView
         }.GetNewClosure())
+    }.GetNewClosure())
+
+    $addLocalButton.Add_Click({
+        try {
+            $picker = New-Object System.Windows.Forms.OpenFileDialog
+            $picker.Filter = "GGUF modeli (*.gguf)|*.gguf"
+            $picker.Title = "Izaberi lokalni GGUF model"
+            if ($picker.ShowDialog($browserForm) -ne [System.Windows.Forms.DialogResult]::OK) {
+                return
+            }
+            $model = Import-LocalGgufModel -SourcePath $picker.FileName
+            Write-LaunchMessage @("Lokalni model je dodat: $($model.id)")
+            Refresh-ModelUiFromInstallState
+            Refresh-LaunchStatus
+            & $refreshBrowserGrid
+            $summaryLabel.Text = "Dodat lokalni model: $($model.id)"
+        } catch {
+            Write-LaunchMessage @($_.Exception.Message)
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+        }
+    }.GetNewClosure())
+
+    $addHfButton.Add_Click({
+        try {
+            $dialogResult = Show-AddHuggingFaceModelDialog
+            if (-not $dialogResult) {
+                return
+            }
+            $model = Add-HuggingFaceCustomModel -Repo $dialogResult.Repo -FileName $dialogResult.FileName -Label $dialogResult.Label -Family $dialogResult.Family
+            Write-LaunchMessage @("HF model je dodat u katalog: $($model.id)")
+            Refresh-ModelUiFromInstallState
+            Refresh-LaunchStatus
+            & $refreshBrowserGrid
+            $summaryLabel.Text = "Dodat HF model u katalog: $($model.id)"
+        } catch {
+            Write-LaunchMessage @($_.Exception.Message)
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
+        }
     }.GetNewClosure())
 
     $useRecommendedButton.Add_Click({
@@ -2838,6 +2988,8 @@ $downloadModelButton.Add_Click({
             throw "Nijedan model nije dostupan za aktivne filtere."
         }
         $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
+        $settingsStatus.Text = "Pokrecem download za $($selectedModel.id)..."
+        $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(176, 120, 18)
         Invoke-BackgroundShellScript -Name "Model download" -ScriptPath $manageModelsScript -ArgumentList @("-ModelId", ([string]$selectedModel.id), "-Download") -OnSuccess {
             $settingsStatus.Text = "Model je osvezen: $($selectedModel.id)"
             $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)

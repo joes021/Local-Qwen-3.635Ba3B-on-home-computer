@@ -23,6 +23,9 @@ class WindowsControlCenterLayoutTests(unittest.TestCase):
         self.assertIn('IsXValueIndexed = $true', content)
         self.assertIn('Points.AddY', content)
         self.assertIn('AxisLabel = $label', content)
+        self.assertIn('Dodaj lokalni GGUF', content)
+        self.assertIn('Dodaj HF model', content)
+        self.assertIn('Lokalni status: $(if ($selected.installed) { \'SKINUT\' } else { \'NIJE SKINUT\' })', content)
 
 
 if __name__ == "__main__":

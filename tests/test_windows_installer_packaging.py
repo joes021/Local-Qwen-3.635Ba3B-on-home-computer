@@ -167,6 +167,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("if ($sizeMap.Contains($modelId)) {", common)
         self.assertIn("$model.installedSizeBytes = $installedBytes", common)
         self.assertIn("$model.installedSizeGiB = [math]::Round(($installedBytes / 1GB), 2)", common)
+        self.assertIn("function Get-CustomModelsRegistryPath", common)
+        self.assertIn("function Get-EffectiveDefaultsPath", common)
+        self.assertIn("function Import-LocalGgufModel", common)
+        self.assertIn("function Add-HuggingFaceCustomModel", common)
 
     def test_runtime_helpers_skip_empty_optional_arguments(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")

@@ -61,6 +61,76 @@ function Get-Defaults {
     return Get-Content -Raw $defaultsPath | ConvertFrom-Json
 }
 
+function Get-CustomModelsRegistryPath {
+    $root = Get-LocalQwenRoot
+    return Join-Path $root "state\custom-models.json"
+}
+
+function Get-CustomModels {
+    $path = Get-CustomModelsRegistryPath
+    if (-not (Test-Path $path)) {
+        return @()
+    }
+
+    try {
+        $payload = Get-Content -Raw $path | ConvertFrom-Json
+        if ($payload -is [System.Array]) {
+            return @($payload)
+        }
+        if ($payload -and $payload.models) {
+            return @($payload.models)
+        }
+    } catch {
+    }
+
+    return @()
+}
+
+function Save-CustomModels {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Models
+    )
+
+    $path = Get-CustomModelsRegistryPath
+    Ensure-Directory (Split-Path -Parent $path)
+    [pscustomobject]@{
+        updatedAt = (Get-Date).ToUniversalTime().ToString("o")
+        models = @($Models)
+    } | ConvertTo-Json -Depth 20 | Set-Content -Path $path -Encoding UTF8
+    return $path
+}
+
+function Get-EffectiveDefaultsPath {
+    $defaults = Get-Defaults
+    $customModels = @(Get-CustomModels)
+    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+
+    if ($customModels.Count -eq 0) {
+        return $defaultsPath
+    }
+
+    if (-not $defaults.PSObject.Properties["modelChoices"]) {
+        $defaults | Add-Member -NotePropertyName "modelChoices" -NotePropertyValue ([ordered]@{})
+    }
+
+    foreach ($item in $customModels) {
+        if (-not $item) {
+            continue
+        }
+        $key = if ($item.PSObject.Properties["key"] -and $item.key) {
+            [string]$item.key
+        } else {
+            ([string]$item.id -replace '[^a-zA-Z0-9_-]', '_')
+        }
+        $defaults.modelChoices | Add-Member -NotePropertyName $key -NotePropertyValue $item -Force
+    }
+
+    $path = Join-Path (Get-LocalQwenRoot) "state\effective-defaults.json"
+    Ensure-Directory (Split-Path -Parent $path)
+    $defaults | ConvertTo-Json -Depth 20 | Set-Content -Path $path -Encoding UTF8
+    return $path
+}
+
 function Get-RuntimeEngineScriptPath {
     $root = Get-LocalQwenRoot
     $path = Join-Path $root "scripts\local_qwen_runtime.py"
@@ -796,7 +866,7 @@ function Get-HardwareProfileSummary {
 }
 
 function Get-ModelCatalog {
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $payload = Invoke-RuntimeEngineJson -Arguments @(
         "catalog",
         "--defaults", $defaultsPath
@@ -805,7 +875,7 @@ function Get-ModelCatalog {
 }
 
 function Get-RecommendationBundle {
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -819,7 +889,7 @@ function Get-RecommendationBundle {
 }
 
 function Get-DownloadCandidates {
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -833,7 +903,7 @@ function Get-DownloadCandidates {
 }
 
 function Get-SettingsPresetsBundle {
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -858,7 +928,7 @@ function Get-SettingsPresetPreview {
         [Parameter(Mandatory = $true)][int]$CurrentExplore
     )
 
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -884,7 +954,7 @@ function Get-ModelComparePayload {
         [Parameter(Mandatory = $true)][string[]]$ModelIds
     )
 
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -912,12 +982,11 @@ function Get-InstalledModelIds {
 }
 
 function Get-InstalledModelSizeMap {
-    $defaults = Get-Defaults
+    $catalog = @(Get-ModelCatalog)
     $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
     $sizes = [ordered]@{}
 
-    foreach ($property in $defaults.modelChoices.PSObject.Properties) {
-        $choice = $property.Value
+    foreach ($choice in $catalog) {
         $candidatePath = Join-Path $modelsDir ([string]$choice.filename)
         if (Test-Path $candidatePath) {
             $sizes[[string]$choice.id] = [int64](Get-Item $candidatePath).Length
@@ -946,7 +1015,7 @@ function Get-FilteredModelCatalog {
         [switch]$FitOnly
     )
 
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -981,7 +1050,7 @@ function Get-ModelBrowserPayload {
         [switch]$VerifiedOnly
     )
 
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Get-EffectiveDefaultsPath
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
@@ -1256,6 +1325,141 @@ function Get-ModelMetadata {
     }
 
     return $null
+}
+
+function Add-OrUpdateCustomModel {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Model
+    )
+
+    $models = New-Object System.Collections.Generic.List[object]
+    $replaced = $false
+    foreach ($item in @(Get-CustomModels)) {
+        if ($item -and [string]$item.id -eq [string]$Model.id) {
+            $models.Add($Model) | Out-Null
+            $replaced = $true
+        } else {
+            $models.Add($item) | Out-Null
+        }
+    }
+    if (-not $replaced) {
+        $models.Add($Model) | Out-Null
+    }
+    Save-CustomModels -Models @($models)
+    return $Model
+}
+
+function Import-LocalGgufModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [string]$Label = "",
+        [string]$Family = "Custom"
+    )
+
+    if (-not (Test-Path $SourcePath)) {
+        throw "Lokalni GGUF nije pronadjen: $SourcePath"
+    }
+    if ([System.IO.Path]::GetExtension($SourcePath).ToLowerInvariant() -ne ".gguf") {
+        throw "Podrzani su samo .gguf fajlovi."
+    }
+
+    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    Ensure-Directory $modelsDir
+    $file = Get-Item $SourcePath
+    $fileName = $file.Name
+    $targetPath = Join-Path $modelsDir $fileName
+    if ($file.FullName -ne $targetPath) {
+        Copy-Item -LiteralPath $file.FullName -Destination $targetPath -Force
+    }
+
+    $friendlyLabel = if ([string]::IsNullOrWhiteSpace($Label)) { [System.IO.Path]::GetFileNameWithoutExtension($fileName) } else { $Label.Trim() }
+    $sizeBytes = [int64](Get-Item $targetPath).Length
+    $model = [pscustomobject]@{
+        key = ([System.IO.Path]::GetFileNameWithoutExtension($fileName) -replace '[^a-zA-Z0-9_-]', '_')
+        id = $fileName
+        label = $friendlyLabel
+        family = $(if ([string]::IsNullOrWhiteSpace($Family)) { "Custom" } else { $Family.Trim() })
+        agenticScore = 6
+        opencodeFit = 6
+        useCase = "agentic-general"
+        filename = $fileName
+        minExpectedBytes = $sizeBytes
+        approxSizeGiB = [math]::Round(($sizeBytes / 1GB), 2)
+        minimumGpuMiB = 0
+        recommendedGpuMiB = 0
+        minimumRamGiB = 8
+        preferredProfiles = @("speed", "balanced")
+        qualityTier = "compact"
+        curationLevel = "custom"
+        description = "Rucno dodat lokalni GGUF model."
+        customSource = "local-file"
+        originalPath = $file.FullName
+        sources = @()
+    }
+    Add-OrUpdateCustomModel -Model $model | Out-Null
+    return $model
+}
+
+function Add-HuggingFaceCustomModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$FileName,
+        [string]$Label = "",
+        [string]$Family = "Custom"
+    )
+
+    $repoText = $Repo.Trim()
+    $fileNameText = $FileName.Trim()
+    if ([string]::IsNullOrWhiteSpace($repoText) -or [string]::IsNullOrWhiteSpace($fileNameText)) {
+        throw "Repo i filename su obavezni."
+    }
+    if ([System.IO.Path]::GetExtension($fileNameText).ToLowerInvariant() -ne ".gguf") {
+        throw "HF model mora da pokazuje na .gguf fajl."
+    }
+
+    $url = "https://huggingface.co/$repoText/resolve/main/$fileNameText"
+    $sizeBytes = 0
+    try {
+        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -ErrorAction Stop
+        $headerValue = $response.Headers["Content-Length"]
+        if ($headerValue) {
+            $sizeBytes = [int64]$headerValue
+        }
+    } catch {
+        $sizeBytes = 0
+    }
+
+    $friendlyLabel = if ([string]::IsNullOrWhiteSpace($Label)) { [System.IO.Path]::GetFileNameWithoutExtension($fileNameText) } else { $Label.Trim() }
+    $approxGiB = if ($sizeBytes -gt 0) { [math]::Round(($sizeBytes / 1GB), 2) } else { 0.0 }
+    $model = [pscustomobject]@{
+        key = ([System.IO.Path]::GetFileNameWithoutExtension($fileNameText) -replace '[^a-zA-Z0-9_-]', '_')
+        id = $fileNameText
+        label = $friendlyLabel
+        family = $(if ([string]::IsNullOrWhiteSpace($Family)) { "Custom" } else { $Family.Trim() })
+        agenticScore = 6
+        opencodeFit = 6
+        useCase = "agentic-general"
+        source = $repoText
+        filename = $fileNameText
+        minExpectedBytes = $(if ($sizeBytes -gt 0) { [int64]([math]::Floor($sizeBytes * 0.9)) } else { 0 })
+        approxSizeGiB = $approxGiB
+        minimumGpuMiB = 0
+        recommendedGpuMiB = 0
+        minimumRamGiB = 8
+        preferredProfiles = @("speed", "balanced")
+        qualityTier = "compact"
+        curationLevel = "custom"
+        description = "Rucno dodat Hugging Face GGUF model."
+        customSource = "huggingface"
+        sources = @(
+            [pscustomobject]@{
+                repo = $repoText
+                filename = $fileNameText
+            }
+        )
+    }
+    Add-OrUpdateCustomModel -Model $model | Out-Null
+    return $model
 }
 
 function Set-SelectedModel {

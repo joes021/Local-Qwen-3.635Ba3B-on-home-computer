@@ -245,6 +245,29 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertGreater(quality["diskNeededGiB"], 0)
         self.assertFalse(quality["hasEnoughDisk"])
 
+    def test_model_browser_exposes_qwen3_8b_verified_fallback(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--current-model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--search",
+            "Qwen3-8B",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        qwen8 = next(item for item in payload["models"] if item["id"] == "Qwen3-8B-Q4_K_M.gguf")
+        self.assertEqual(qwen8["curationLevel"], "verified")
+        self.assertEqual(qwen8["family"], "Qwen")
+        self.assertGreater(qwen8["approxSizeGiB"], 0)
+
     def test_model_browser_keeps_non_active_installed_model_visible_with_own_size(self):
         code, stdout, stderr = run_runtime_command(
             "model-browser",
@@ -899,6 +922,46 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(payload["activity"]["sourceBreakdown"]["testPrompt"]["averageTotalTokensPerSecond"], 10.0)
             self.assertEqual(payload["activity"]["sourceBreakdown"]["opencode"]["averageTotalTokensPerSecond"], 20.0)
             self.assertEqual(payload["activity"]["sourceBreakdown"]["other"]["averageTotalTokensPerSecond"], 30.0)
+
+    def test_token_metrics_recent_activities_keep_last_ten_items(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+
+            for index in range(12):
+                response_path = temp_path / f"recent-{index}.json"
+                response_path.write_text(
+                    json.dumps(
+                        {
+                            "_elapsed_ms": 1200 + index,
+                            "usage": {
+                                "prompt_tokens": 100 + index,
+                                "completion_tokens": 20 + index,
+                            },
+                            "timings": {
+                                "prompt_ms": 700,
+                                "predicted_ms": 500,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                code, stdout, stderr = run_runtime_command(
+                    "token-metrics",
+                    "--response-file",
+                    str(response_path),
+                    "--history-file",
+                    str(history_path),
+                    "--label",
+                    f"manual-{index}",
+                )
+                self.assertEqual(code, 0, msg=stderr)
+
+            payload = json.loads(stdout)
+            recent_labels = [item["label"] for item in payload["activity"]["recentActivities"]]
+            self.assertEqual(len(recent_labels), 10)
+            self.assertEqual(recent_labels[0], "manual-11")
+            self.assertEqual(recent_labels[-1], "manual-2")
 
     def test_token_metrics_stability_marks_fast_history_as_stable(self):
         with tempfile.TemporaryDirectory() as temp_dir:

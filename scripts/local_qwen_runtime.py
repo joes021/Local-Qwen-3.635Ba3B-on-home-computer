@@ -1585,7 +1585,7 @@ def summarize_history_payload(history: list[dict]) -> dict:
                 entry["averageTotalTokensPerSecond"] = round(
                     entry["averageTotalTokensPerSecond"] / entry["count"], 2
                 )
-        for item in reversed(history[-5:]):
+        for item in reversed(history[-10:]):
             source = detect_source(str(item.get("label", "")))
             recent_activities.append(
                 {
@@ -1931,14 +1931,14 @@ def build_parser() -> argparse.ArgumentParser:
     token_metrics.add_argument("--response-file", required=True)
     token_metrics.add_argument("--history-file", required=True)
     token_metrics.add_argument("--label", default="request")
-    token_metrics.add_argument("--max-history", type=int, default=5)
+    token_metrics.add_argument("--max-history", type=int, default=10)
     token_metrics.set_defaults(func=command_token_metrics)
 
     log_token_metrics = subparsers.add_parser("log-token-metrics")
     log_token_metrics.add_argument("--log-file", required=True)
     log_token_metrics.add_argument("--history-file", required=True)
     log_token_metrics.add_argument("--label", default="live-log")
-    log_token_metrics.add_argument("--max-history", type=int, default=5)
+    log_token_metrics.add_argument("--max-history", type=int, default=10)
     log_token_metrics.add_argument("--tail-lines", type=int, default=400)
     log_token_metrics.set_defaults(func=command_log_token_metrics)
 

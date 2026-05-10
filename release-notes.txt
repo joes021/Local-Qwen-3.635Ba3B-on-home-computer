@@ -1,5 +1,13 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.3
+- Windows `Model library 2.0` sada jasno prikazuje lokalni status modela (`SKINUT`, `NIJE SKINUT`, `AKTIVAN`) i ne ostavlja utisak da je katalog samo spisak preporuka bez stvarnog stanja na disku
+- `Preuzmi izabrani model` i `Preuzmi / osvezi` sada daju vidljiv progress kroz status liniju i output panel: procenat, preuzeto/ukupno, brzinu i ETA, pa download vise ne deluje kao da se nista ne desava
+- `Model browser` sada podrzava i rucno dodavanje modela na oba trazena nacina: `Dodaj lokalni GGUF` za lokalni `.gguf` fajl i `Dodaj HF model` za Hugging Face `repo + filename` unos
+- Uveden je lokalni `custom model registry`, pa rucno dodati modeli ulaze u isti browser, installed status, recommendation i aktivaciju kao i kurirani modeli iz default kataloga
+- Dodat je i manji kurirani fallback `Qwen 3 8B Q4_K_M`, da postoji sigurniji i laksi Qwen izbor ispod 10-11 GB klase kada korisnik ne zeli samo velike A3B varijante
+- Benchmark / telemetry rolling prikaz je poravnat na poslednjih `10` zahteva umesto starog mesanja `5` i `20`, a throughput tekst sada jasnije razlikuje broj tokena od brzine u `tok/s`
+
 v2.10.2
 - Windows `TurboQuant` build sada pre konfiguracije i linkovanja nasilno zaustavlja sve aktivne `llama-server` procese i ceka da zaista nestanu, pa se vise ne desava da build padne na `LNK1104 cannot open file 'bin\\llama-common.dll'` samo zato sto je stari runtime jos drzao DLL zakljucan
 - Ovaj fix je potvrden kroz pravi `build-turboquant.ps1 -Reconfigure` prolaz na instaliranoj kopiji, posle cega `install-state.json` ponovo pokazuje validan `turboServerExe` i `verify-install` vidi `UsesTurboQuant: True`

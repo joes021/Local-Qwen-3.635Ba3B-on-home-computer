@@ -176,6 +176,25 @@
       "curationLevel": "experimental",
       "description": "Reasoning-tilted fallback za eksperimentalni agentic tok kada hoces vise deliberacije nego brzine."
     },
+    "qwen3_8b_q4": {
+      "id": "Qwen3-8B-Q4_K_M.gguf",
+      "label": "Qwen 3 8B Q4_K_M",
+      "family": "Qwen",
+      "agenticScore": 8,
+      "opencodeFit": 8,
+      "useCase": "agentic-general",
+      "source": "Qwen/Qwen3-8B-GGUF",
+      "filename": "Qwen3-8B-Q4_K_M.gguf",
+      "minExpectedBytes": 5000000000,
+      "approxSizeGiB": 5.2,
+      "minimumGpuMiB": 4096,
+      "recommendedGpuMiB": 6144,
+      "minimumRamGiB": 12,
+      "preferredProfiles": ["speed", "balanced"],
+      "qualityTier": "compact",
+      "curationLevel": "verified",
+      "description": "Praktican manji Qwen izbor kada hoces sigurniji fallback ispod 10-11 GB modela uz dobar OpenCode rad."
+    },
     "q4_k_m_quality": {
       "id": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
       "label": "Qwen 3.6 35B A3B Q4_K_M",
