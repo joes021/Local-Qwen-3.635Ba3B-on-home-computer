@@ -158,7 +158,12 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('TARGET_PATH="$TARGET_DIR/Local-Qwen-Setup-$LATEST_VERSION.run"', content)
         self.assertIn('echo "Nova verzija: v$LATEST_VERSION"', content)
         self.assertIn('curl -L "$DOWNLOAD_URL" -o "$TARGET_PATH"', content)
+        self.assertIn('encoding="utf-8-sig"', content)
         self.assertNotIn('releases/latest/download/Local-Qwen-Setup-latest.run', content)
+
+    def test_linux_check_updates_reads_version_json_with_bom_tolerance(self):
+        content = (LINUX_LAUNCHER_DIR / "check-updates.sh").read_text(encoding="utf-8")
+        self.assertIn('encoding="utf-8-sig"', content)
 
     def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")

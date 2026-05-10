@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.19
+- Linux `check-updates.sh` i `install-update.sh` sada citaju `version.json` BOM-tolerantno (`utf-8-sig`), pa update tok vise ne puca na `Unexpected UTF-8 BOM` kada instalirana kopija nosi UTF-8 BOM u verzionom fajlu
+- Linux update launcher je sada potvrden i testom i kodom kao verzionisani download tok: preuzima konkretan `Local-Qwen-Setup-X.Y.Z.run` asset za najnoviji tag, umesto da zavisi od `latest.run` aliasa i njegovog keša
+
 v2.10.18
 - Linux `install-update.sh` vise ne preuzima slepo `releases/latest/download/Local-Qwen-Setup-latest.run`; sada iz GitHub release API odgovora uzima eksplicitnu `latestVersion` i skida bas verzionisani `.run` asset za taj tag, pa update tok ne zavisi od keša ili starog `latest` aliasa
 - Shared runtime `latest-release` sada vraca i `latestTag`, `linuxInstallerUrl` i `windowsInstallerUrl`, da launcher slojevi mogu pouzdano da ciljaju konkretne release assete umesto da rekonstruišu URL-ove napamet

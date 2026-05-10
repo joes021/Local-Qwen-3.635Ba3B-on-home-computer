@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CURRENT_VERSION="$(python3 - <<'PY' "$(get_local_qwen_root)/version.json"
 import json, sys
-with open(sys.argv[1], "r", encoding="utf-8") as f:
+with open(sys.argv[1], "r", encoding="utf-8-sig") as f:
     print(json.load(f).get("version", "unknown"))
 PY
 )"
