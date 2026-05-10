@@ -5,6 +5,7 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONTROL_CENTER_PATH = REPO_ROOT / "launcher" / "linux" / "control-center.sh"
 DASHBOARD_PATH = REPO_ROOT / "launcher" / "linux" / "control-center-dashboard.sh"
+ACTIONS_PATH = REPO_ROOT / "launcher" / "linux" / "control-center-actions.sh"
 
 
 class LinuxControlCenterTuiTests(unittest.TestCase):
@@ -54,6 +55,15 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('run_action_with_result_screen "Dodaj lokalni GGUF" "$SCRIPT_DIR/manage-models.sh" add-local', dashboard)
         self.assertIn('run_action_with_result_screen "Dodaj HF model" "$SCRIPT_DIR/manage-models.sh" add-hf', dashboard)
         self.assertIn('pick_model_id "Pregled modela" "Izaberi model za detalje."', dashboard)
+        self.assertIn('run_external_terminal_action_or_inline "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"', dashboard)
+
+    def test_dashboard_uses_external_terminal_for_long_running_actions_when_possible(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("run_external_terminal_action_or_inline()", dashboard)
+        self.assertIn('"$SCRIPT_DIR/desktop-launch.sh" "$@" >/dev/null 2>&1', dashboard)
+        self.assertIn('show_info_screen "$title" "Akcija je pokrenuta u novom terminalu. Prati tok tamo dok se ne zavrsi."', dashboard)
+        self.assertIn('run_external_terminal_action_or_inline "Install update" "$SCRIPT_DIR/install-update.sh"', dashboard)
 
     def test_dashboard_handles_back_without_exiting(self):
         dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
@@ -78,6 +88,15 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('"Promeni stepove"', dashboard)
         self.assertIn('"Promeni working dir"', dashboard)
         self.assertIn('"Quick presets"', dashboard)
+
+    def test_action_result_preview_does_not_use_pipefail_unfriendly_head_pipeline(self):
+        actions = ACTIONS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("extract_nonempty_preview_lines()", actions)
+        self.assertIn('summary="$(extract_nonempty_preview_lines "$output" 6)"', actions)
+        self.assertIn('details="$(extract_nonempty_preview_lines "$output" 8)"', actions)
+        self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 6", actions)
+        self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 8", actions)
 
 
 if __name__ == "__main__":

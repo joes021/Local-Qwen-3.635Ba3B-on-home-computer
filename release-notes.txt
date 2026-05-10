@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.23
+- Linux `Control Center` vise ne ume da prijavi laznu gresku `141` samo zato sto je shared rezultat ekran sekao duzi izlaz kroz `head` pod `pipefail`. Preview summary i error detalji sada seku linije bez SIGPIPE side efekta, pa rutinske akcije sa duzim izlazom ostaju stabilne
+- Linux desktop TUI sada za duze tokove kao `Preuzmi model` i `Install update` pokrece poseban terminal kada je dostupan desktop terminal emulator, umesto da korisnik gleda tih i mrtav ekran bez live izlaza. To daje vidljiv napredak i prirodniji UX za model download i update tok
+
 v2.10.22
 - Linux `check-updates.sh` vise ne prosipa sirov JSON kada se pozove iz `Control Center` toka ili direktno iz terminala. Podrazumevani izlaz je sada cist i ljudski citljiv: trenutna verzija, latest javna verzija, status da li postoji update i release URL
 - JSON payload za skriptovanje ostaje dostupan kroz eksplicitni `--json` mod, pa Linux UX postaje uredniji bez gubitka masinski citljivog izlaza

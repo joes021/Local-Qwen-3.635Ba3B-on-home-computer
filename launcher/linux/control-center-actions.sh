@@ -35,6 +35,26 @@ print(formatted)
 PY
 }
 
+extract_nonempty_preview_lines() {
+  local text="${1:-}"
+  local max_lines="${2:-6}"
+  python3 - <<'PY' "$text" "$max_lines"
+import sys
+
+text = sys.argv[1]
+max_lines = int(sys.argv[2])
+lines = []
+for raw in text.splitlines():
+    stripped = raw.strip()
+    if not stripped:
+        continue
+    lines.append(stripped)
+    if len(lines) >= max_lines:
+        break
+print("\n".join(lines))
+PY
+}
+
 show_info_screen() {
   local title="$1"
   local body="${2:-}"
@@ -127,7 +147,7 @@ run_action_with_result_screen() {
   shift
   local output summary details response temp_file
   if output="$("$@" 2>&1)"; then
-    summary="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | head -n 6)"
+    summary="$(extract_nonempty_preview_lines "$output" 6)"
     if [ -z "$summary" ]; then
       summary="Akcija je zavrsena bez dodatnog izlaza."
     fi
@@ -144,7 +164,7 @@ run_action_with_result_screen() {
       show_info_screen "$title" "$output"
     fi
   else
-    details="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | head -n 8)"
+    details="$(extract_nonempty_preview_lines "$output" 8)"
     if [ -z "$details" ]; then
       details="Akcija nije uspela bez korisne poruke."
     fi

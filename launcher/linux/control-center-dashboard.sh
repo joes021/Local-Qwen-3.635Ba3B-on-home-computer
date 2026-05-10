@@ -213,6 +213,16 @@ launch_opencode_from_center() {
   "$SCRIPT_DIR/desktop-launch.sh" "$SCRIPT_DIR/start-opencode.sh" "$profile"
 }
 
+run_external_terminal_action_or_inline() {
+  local title="$1"
+  shift
+  if { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${XDG_CURRENT_DESKTOP:-}" ]; } && "$SCRIPT_DIR/desktop-launch.sh" "$@" >/dev/null 2>&1; then
+    show_info_screen "$title" "Akcija je pokrenuta u novom terminalu. Prati tok tamo dok se ne zavrsi."
+    return 0
+  fi
+  run_action_with_result_screen "$title" "$@"
+}
+
 show_launch_menu() {
   while true; do
     choice="$(run_dashboard_menu "Pokretanje" "Izaberi akciju." \
@@ -254,7 +264,7 @@ show_tools_menu() {
       4) run_action_with_result_screen "Repair config" "$SCRIPT_DIR/repair-config.sh" ;;
       5) run_action_with_result_screen "Guided repair" "$SCRIPT_DIR/repair-install.sh" ;;
       6) run_action_with_result_screen "Check updates" "$SCRIPT_DIR/check-updates.sh" ;;
-      7) run_action_with_result_screen "Install update" "$SCRIPT_DIR/install-update.sh" ;;
+      7) run_external_terminal_action_or_inline "Install update" "$SCRIPT_DIR/install-update.sh" ;;
       8) return ;;
       *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 8." ;;
     esac
@@ -387,9 +397,9 @@ show_models_menu() {
       3)
         model_id="$(pick_model_id "Preuzmi model" "Izaberi model za preuzimanje.")" || continue
         if [ -n "$model_id" ]; then
-          run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"
+          run_external_terminal_action_or_inline "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"
         else
-          run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" recommend
+          run_external_terminal_action_or_inline "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" recommend
         fi
         ;;
       4)
