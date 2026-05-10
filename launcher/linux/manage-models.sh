@@ -19,6 +19,7 @@ RECOMMENDED_ONLY=0
 FIT_ONLY=0
 CODER_ONLY=0
 VERIFIED_ONLY=0
+POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,8 +52,8 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "Nepoznat argument: $1"
-      exit 1
+      POSITIONAL_ARGS+=("$1")
+      shift
       ;;
   esac
 done
@@ -190,10 +191,12 @@ PY
 }
 
 get_installed_model_sizes_json() {
-  python3 - <<'PY' "$DEFAULTS_PATH" "$MODELS_DIR"
+  local defaults_path
+  defaults_path="$(get_defaults_path)"
+  python3 - <<'PY' "$defaults_path" "$MODELS_DIR"
 import json, os, sys
 defaults_path, models_dir = sys.argv[1:3]
-with open(defaults_path, "r", encoding="utf-8") as f:
+with open(defaults_path, "r", encoding="utf-8-sig") as f:
     defaults = json.load(f)
 result = {}
 for item in defaults.get("modelChoices", {}).values():
@@ -356,7 +359,21 @@ for item in payload.get("models", []):
     if item.get("useCaseBadges"):
         status.append("badge=" + "|".join(item.get("useCaseBadges")))
     print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Speed {item.get('speedEstimateLabel')} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
-    print(f"    Installed: {item.get('installedSizeGiB')} GiB | Need disk: {item.get('diskNeededGiB')} GiB | Free disk: {item.get('freeDiskGiB')} GiB | Enough disk: {'da' if item.get('hasEnoughDisk') else 'ne'}")
+    if item.get("installed"):
+        installed_value = item.get("installedSizeGiB")
+        if installed_value and float(installed_value) > 0:
+            installed_text = f"{installed_value} GiB"
+        else:
+            installed_text = "nepoznato"
+    else:
+        installed_text = "nije skinut"
+    need_disk = item.get("diskNeededGiB")
+    free_disk = item.get("freeDiskGiB")
+    enough_disk = item.get("hasEnoughDisk")
+    need_disk_text = f"{need_disk} GiB" if need_disk is not None else "nepoznato"
+    free_disk_text = f"{free_disk} GiB" if free_disk is not None else "nepoznato"
+    enough_disk_text = "da" if enough_disk is True else "ne" if enough_disk is False else "nepoznato"
+    print(f"    Installed: {installed_text} | Need disk: {need_disk_text} | Free disk: {free_disk_text} | Enough disk: {enough_disk_text}")
     print(f"    {item.get('description')}")
 print()
 print("* = trenutno aktivan model")
@@ -438,8 +455,8 @@ PY
     ;;
   add-local)
     [ -n "$MODEL_ID" ] || { echo "Prosledi putanju do lokalnog GGUF fajla."; exit 1; }
-    label="${1:-}"
-    family="${2:-Custom}"
+    label="${POSITIONAL_ARGS[0]:-}"
+    family="${POSITIONAL_ARGS[1]:-Custom}"
     result_json="$(import_local_gguf_model "$MODEL_ID" "$label" "$family")"
     model_file="$(python3 - <<'PY' "$result_json"
 import json, sys
@@ -451,10 +468,10 @@ PY
     ;;
   add-hf)
     [ -n "$MODEL_ID" ] || { echo "Prosledi HF repo."; exit 1; }
-    hf_file="${1:-}"
+    hf_file="${POSITIONAL_ARGS[0]:-}"
     [ -n "$hf_file" ] || { echo "Prosledi HF filename."; exit 1; }
-    label="${2:-}"
-    family="${3:-Custom}"
+    label="${POSITIONAL_ARGS[1]:-}"
+    family="${POSITIONAL_ARGS[2]:-Custom}"
     result_json="$(add_huggingface_custom_model "$MODEL_ID" "$hf_file" "$label" "$family")"
     model_file="$(python3 - <<'PY' "$result_json"
 import json, sys

@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.15
+- Linux `manage-models.sh add-local` i `add-hf` vise ne lome dodatne argumente poput labela i familije na `Nepoznat argument`; parser sada razdvaja opcione flagove od pozicionih vrednosti, pa `Dodaj lokalni GGUF` i `Dodaj HF model` zaista prolaze kroz isti installer-backed tok iz `Control Center`-a
+- Linux `Model browser` CLI prikaz vise ne laze sa `Installed: 0.0 GiB` za stvarno prisutan model; velicina se cita kroz svez defaults payload, a kada backend ipak nema pouzdan broj prikazuje se `nepoznato` umesto varljivog `0.0`
+- Ovaj hotfix je uhvacen kroz pravi GitHub -> Ubuntu x86 update krug na `100.66.19.49`, ne samo kroz lokalni test suite, pa zakljucava Linux tokove koje je prvi `2.10.14` smoke odmah razotkrio
+
 v2.10.14
 - Linux `Control Center` TUI sada koristi sire `whiptail` prozore, uvucen i prelomljen tekst, kao i result/details ekrane sa skrolovanjem, pa poruke vise ne deluju zalepljeno uz levu ivicu niti seku pocetke reci kada su duze
 - Linux `Modeli` ekran je ociscen: status oznake su pojednostavljene u jednu jasnu liniju, lista modela koristi kompaktniji dvokolonski raspored `naziv | status/fit`, a detalji modela sada prikazuju i `Instalirano` pored potrebnog i slobodnog prostora
