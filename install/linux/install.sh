@@ -119,6 +119,8 @@ fi
 
 cp -R "$REPO_ROOT/launcher/linux/." "$LAUNCHERS_DIR/"
 cp -R "$REPO_ROOT/config/profiles/." "$CONFIG_DIR/profiles/"
+mkdir -p "$INSTALL_ROOT/scripts"
+cp -R "$REPO_ROOT/scripts/." "$INSTALL_ROOT/scripts/"
 mkdir -p "$ASSETS_DIR/icons"
 cp -R "$REPO_ROOT/assets/icons/." "$ASSETS_DIR/icons/"
 cp "$REPO_ROOT/version.json" "$INSTALL_ROOT/version.json"

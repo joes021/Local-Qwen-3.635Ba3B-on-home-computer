@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.9
+- Linux instalacija sada stvarno kopira i `scripts/` u `LocalQwenHome`, pa `local-qwen-control-center.desktop` i `opencode-local-qwen.desktop` vise ne umiru odmah zato sto launcheri ne mogu da nadju `scripts/local_qwen_runtime.py`
+- Ovaj hotfix je potvrden kroz stvarni Ubuntu x86_64 reinstall i direktan launcher smoke: `control-center.sh` sada normalno podize pocetni ekran umesto da odmah izleti pri startu
+
 v2.10.8
 - Linux `.run` payload sada stvarno nosi i `scripts/local_qwen_runtime.py` i ostatak `scripts/` foldera, pa installer vise ne puca na `python3: can't open file .../scripts/local_qwen_runtime.py` kada se pokrene na pravoj Ubuntu masini iz samog release artefakta
 - Ovaj hotfix je potvrden kroz stvarni Ubuntu install rerun na x86_64 okruzenju, umesto samo kroz repo-level smoke, tako da Linux release sada odgovara onome sto installer zaista trazi iz raspakovanog payload-a

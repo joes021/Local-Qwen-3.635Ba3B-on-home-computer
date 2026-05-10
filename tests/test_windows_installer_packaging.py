@@ -273,6 +273,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('if [ "$LOCAL_QWEN_SKIP_SOURCE_CLONE" = "1" ]; then', install_script)
         self.assertIn('if [ "$LOCAL_QWEN_SKIP_OPENCODE_INSTALL" = "1" ]; then', install_script)
         self.assertIn('if [ "$LOCAL_QWEN_SKIP_PREREQ_CHECKS" != "1" ]; then', install_script)
+        self.assertIn('mkdir -p "$INSTALL_ROOT/scripts"', install_script)
+        self.assertIn('cp -R "$REPO_ROOT/scripts/." "$INSTALL_ROOT/scripts/"', install_script)
         self.assertIn('if [ -f "$REPO_ROOT/release-notes.txt" ]; then', install_script)
         self.assertIn("Release notes nisu dostupne u ovom payload-u.", install_script)
 
@@ -306,9 +308,9 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
                             'export LOCAL_QWEN_SKIP_OPENCODE_INSTALL=1',
                             'export LOCAL_QWEN_SKIP_PREREQ_CHECKS=1',
                             'bash ./install/linux/install.sh >/dev/null',
-                            'python3 - <<\'PY\' "$INSTALL_ROOT/state/install-state.json" "$INSTALL_ROOT/state/install-report.json" "$DESKTOP_DIR"',
+                            'python3 - <<\'PY\' "$INSTALL_ROOT/state/install-state.json" "$INSTALL_ROOT/state/install-report.json" "$DESKTOP_DIR" "$INSTALL_ROOT/scripts/local_qwen_runtime.py"',
                             'import json, os, sys',
-                            'state_path, report_path, desktop_dir = sys.argv[1:4]',
+                            'state_path, report_path, desktop_dir, runtime_path = sys.argv[1:5]',
                             'with open(state_path, "r", encoding="utf-8") as handle:',
                             '    state = json.load(handle)',
                             'with open(report_path, "r", encoding="utf-8") as handle:',
@@ -317,6 +319,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
                             '    "modelId": state.get("modelId"),',
                             '    "profile": state.get("profile"),',
                             '    "hasReport": os.path.isfile(report_path),',
+                            '    "hasRuntimeScript": os.path.isfile(runtime_path),',
                             '    "desktopEntries": sorted(os.listdir(desktop_dir)),',
                             '    "launchersOk": report.get("components", {}).get("launchers", {}).get("ok"),',
                             '}, ensure_ascii=False))',
@@ -338,6 +341,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         payload = json.loads(completed.stdout.strip())
         self.assertEqual(payload["profile"], "balanced")
         self.assertTrue(payload["hasReport"])
+        self.assertTrue(payload["hasRuntimeScript"])
         self.assertTrue(payload["launchersOk"])
         self.assertIn("local-qwen-control-center.desktop", payload["desktopEntries"])
         self.assertIn("opencode-local-qwen.desktop", payload["desktopEntries"])
