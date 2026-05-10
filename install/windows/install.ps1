@@ -955,7 +955,7 @@ function Write-InstallState {
         $state.turboServerExe = $TurboServerExe
     }
 
-    $state | ConvertTo-Json -Depth 10 | Set-Content -Path $StatePath -Encoding UTF8
+    Write-Utf8NoBomText -Path $StatePath -Content ($state | ConvertTo-Json -Depth 10)
 }
 
 function Write-InstallReport {
@@ -1025,7 +1025,7 @@ function Write-InstallReport {
         warnings = @($Warnings)
     }
 
-    $report | ConvertTo-Json -Depth 10 | Set-Content -Path $InstallReportPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $InstallReportPath -Content ($report | ConvertTo-Json -Depth 10)
 }
 
 function New-Shortcut {
@@ -1417,7 +1417,7 @@ try {
                 exploreSteps = $defaults.opencode.steps.explore
             }
         }
-        $settings | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $stateDir "settings.json") -Encoding UTF8
+        Write-Utf8NoBomText -Path (Join-Path $stateDir "settings.json") -Content ($settings | ConvertTo-Json -Depth 10)
 
         Write-InstallState `
             -InstallRoot $InstallRoot `

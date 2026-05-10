@@ -1,7 +1,7 @@
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
 $state = Get-InstallState
-$root = Get-LocalQwenRoot
+$root = Get-LocalQwenStateRoot
 $settings = Get-Settings
 $messages = New-Object System.Collections.Generic.List[string]
 $found = New-Object System.Collections.Generic.List[string]
@@ -141,15 +141,38 @@ if ($manual.Count -eq 0 -and $fixed.Count -eq 0) {
 }
 
 $repairSummaryPath = Get-RepairSummaryPath
-$repairSummary = Invoke-RuntimeEngineJson -Arguments @(
+$repairSummaryArguments = [System.Collections.Generic.List[string]]::new()
+@(
     "repair-summary",
-    "--outcome", $(if ($manual.Count -gt 0) { "partial" } else { "completed" }),
-    "--found-json", (Convert-CollectionToJsonArrayString -Collection $found),
-    "--fixed-json", (Convert-CollectionToJsonArrayString -Collection $fixed),
-    "--manual-json", (Convert-CollectionToJsonArrayString -Collection $manual),
-    "--notes-json", (Convert-CollectionToJsonArrayString -Collection $notes)
-)
-$repairSummary | ConvertTo-Json -Depth 20 | Set-Content -Path $repairSummaryPath -Encoding UTF8
+    "--outcome", $(if ($manual.Count -gt 0) { "partial" } else { "completed" })
+) | ForEach-Object { $repairSummaryArguments.Add($_) | Out-Null }
+
+$foundArgument = Convert-CollectionToCliListArgument -Collection $found
+if (-not [string]::IsNullOrWhiteSpace($foundArgument)) {
+    $repairSummaryArguments.Add("--found-json") | Out-Null
+    $repairSummaryArguments.Add($foundArgument) | Out-Null
+}
+
+$fixedArgument = Convert-CollectionToCliListArgument -Collection $fixed
+if (-not [string]::IsNullOrWhiteSpace($fixedArgument)) {
+    $repairSummaryArguments.Add("--fixed-json") | Out-Null
+    $repairSummaryArguments.Add($fixedArgument) | Out-Null
+}
+
+$manualArgument = Convert-CollectionToCliListArgument -Collection $manual
+if (-not [string]::IsNullOrWhiteSpace($manualArgument)) {
+    $repairSummaryArguments.Add("--manual-json") | Out-Null
+    $repairSummaryArguments.Add($manualArgument) | Out-Null
+}
+
+$notesArgument = Convert-CollectionToCliListArgument -Collection $notes
+if (-not [string]::IsNullOrWhiteSpace($notesArgument)) {
+    $repairSummaryArguments.Add("--notes-json") | Out-Null
+    $repairSummaryArguments.Add($notesArgument) | Out-Null
+}
+
+$repairSummary = Invoke-RuntimeEngineJson -Arguments @($repairSummaryArguments.ToArray())
+Write-Utf8NoBomText -Path $repairSummaryPath -Content ($repairSummary | ConvertTo-Json -Depth 20)
 
 $summaryPath = Join-Path $root "state\install-summary.txt"
 $summary = @(
@@ -178,7 +201,7 @@ $summary = @(
     "Next step:",
     ([string]$repairSummary.nextStep)
 ) -join [Environment]::NewLine
-Set-Content -Path $summaryPath -Value $summary -Encoding UTF8
+Write-Utf8NoBomText -Path $summaryPath -Content $summary
 
 $messages | ForEach-Object { Write-Host $_ }
 Write-Host "Repair found: $($repairSummary.counts.found) | fixed: $($repairSummary.counts.fixed) | manual: $($repairSummary.counts.manual)"

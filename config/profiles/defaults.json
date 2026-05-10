@@ -212,7 +212,6 @@
       "preferredProfiles": ["balanced", "video"],
       "qualityTier": "quality",
       "curationLevel": "verified",
-      "primaryRecommendation": true,
       "description": "Kvalitetniji kvant za jace desktop konfiguracije sa vise VRAM-a i RAM-a."
     }
   },

@@ -76,7 +76,7 @@ function Get-UninstallMode {
     }
 }
 
-$root = Get-LocalQwenRoot
+$root = Get-LocalQwenStateRoot
 $state = Get-InstallState
 $bootstrapRoot = Join-Path ${env:ProgramFiles} "LocalQwenSetupBootstrap"
 $selectedMode = Get-UninstallMode
@@ -90,7 +90,7 @@ switch ($selectedMode) {
     "keep-models" {
         Remove-DesktopLaunchers
         foreach ($relative in @("launchers", "scripts", "assets", "config", "docs", "state", "bin", "apps")) {
-            Remove-PathIfExists (Join-Path $root $relative)
+            [void](Remove-PathIfExists (Join-Path $root $relative))
         }
         foreach ($file in @("version.json", "release-notes.txt", "README.md")) {
             $path = Join-Path $root $file

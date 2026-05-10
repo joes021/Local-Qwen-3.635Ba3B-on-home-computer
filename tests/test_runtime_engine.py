@@ -33,6 +33,12 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIsNone(RUNTIME_MODULE._coerce_semver_tuple("2.9"))
         self.assertIsNone(RUNTIME_MODULE._coerce_semver_tuple("latest"))
 
+    def test_latest_release_marks_local_build_ahead_of_public_release(self):
+        current = RUNTIME_MODULE._coerce_semver_tuple("2.10.4")
+        latest = RUNTIME_MODULE._coerce_semver_tuple("2.10.3")
+
+        self.assertGreater(current, latest)
+
     def test_recommendation_prefers_iq2_for_6gb_gpu(self):
         code, stdout, stderr = run_runtime_command(
             "recommend",
@@ -79,7 +85,10 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIn("qwen36-35b-a3b-IQ2_M.gguf", ids)
         self.assertIn("gemma-3-4b-it-Q4_K_M.gguf", ids)
         iq2 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
+        q4 = next(item for item in payload["models"] if item["id"] == "Qwen3.6-35B-A3B-Q4_K_M.gguf")
         self.assertGreaterEqual(len(iq2["sources"]), 2)
+        self.assertTrue(iq2["primaryRecommendation"])
+        self.assertFalse(q4["primaryRecommendation"])
 
     def test_download_candidates_group_models_for_6gb_gpu(self):
         code, stdout, stderr = run_runtime_command(
@@ -267,6 +276,27 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(qwen8["curationLevel"], "verified")
         self.assertEqual(qwen8["family"], "Qwen")
         self.assertGreater(qwen8["approxSizeGiB"], 0)
+
+    def test_model_browser_tolerates_one_mib_gpu_detection_gap_for_minimum_threshold(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "4095",
+            "--ram-gib",
+            "32",
+            "--cpu-threads",
+            "24",
+            "--current-model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--search",
+            "IQ2_M",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        qwen36 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
+        self.assertNotEqual(qwen36["fitGroup"], "notRecommended")
 
     def test_model_browser_keeps_non_active_installed_model_visible_with_own_size(self):
         code, stdout, stderr = run_runtime_command(
@@ -1126,6 +1156,54 @@ class RuntimeEngineTests(unittest.TestCase):
             payload = json.loads(stdout)
             self.assertEqual(payload["activity"]["throughputTrend"]["direction"], "down")
             self.assertEqual(payload["activity"]["latencyTrend"]["direction"], "up")
+
+    def test_repair_summary_accepts_unit_separator_encoded_lists(self):
+        code, stdout, stderr = run_runtime_command(
+            "repair-summary",
+            "--outcome",
+            "completed",
+            "--found-json",
+            "Prva stavka\x1fDruga stavka",
+            "--fixed-json",
+            "Popravljeno A\x1fPopravljeno B",
+            "--manual-json",
+            "",
+            "--notes-json",
+            "Napomena",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["found"], ["Prva stavka", "Druga stavka"])
+        self.assertEqual(payload["fixed"], ["Popravljeno A", "Popravljeno B"])
+        self.assertEqual(payload["notes"], ["Napomena"])
+
+    def test_health_center_accepts_unit_separator_encoded_warnings(self):
+        code, stdout, stderr = run_runtime_command(
+            "health-center",
+            "--has-server",
+            "false",
+            "--has-model",
+            "true",
+            "--has-runtime",
+            "true",
+            "--has-opencode-config",
+            "true",
+            "--has-install-report",
+            "true",
+            "--warnings-json",
+            "WDAC warning\x1fApp Control warning",
+            "--lifecycle-state",
+            "inactive",
+            "--model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--profile",
+            "balanced",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        warning_titles = [item["title"] for item in payload["warnings"]]
+        self.assertTrue(any("WDAC" in title for title in warning_titles))
+        self.assertTrue(any("App Control" in title for title in warning_titles))
 
 
 if __name__ == "__main__":

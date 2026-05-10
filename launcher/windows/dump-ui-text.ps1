@@ -6,8 +6,16 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
+function Get-PreferredDumpStateRoot {
+    $installedRoot = Join-Path $env:USERPROFILE "LocalQwenHome"
+    if (Test-Path (Join-Path $installedRoot "state\install-state.json")) {
+        return $installedRoot
+    }
+    return Get-LocalQwenStateRoot
+}
+
 function Get-DefaultOutputPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-PreferredDumpStateRoot
     return (Join-Path $root "state\ui-dump.txt")
 }
 
@@ -57,17 +65,19 @@ if (-not $OutputPath) {
 
 Ensure-Directory (Split-Path -Parent $OutputPath)
 
-$root = Get-LocalQwenRoot
-$controlCenterPath = Join-Path $root "launchers\control-center.ps1"
-$commonPath = Join-Path $root "launchers\local-qwen-common.ps1"
-$releaseNotesPath = Join-Path $root "release-notes.txt"
-$versionPath = Join-Path $root "version.json"
-$settingsPath = Join-Path $root "state\settings.json"
-$installReportPath = Join-Path $root "state\install-report.json"
+$codeRoot = Get-LocalQwenCodeRoot
+$stateRoot = Get-PreferredDumpStateRoot
+$controlCenterPath = Join-Path $stateRoot "launchers\control-center.ps1"
+$commonPath = Join-Path $stateRoot "launchers\local-qwen-common.ps1"
+$releaseNotesPath = Join-Path $stateRoot "release-notes.txt"
+$versionPath = Join-Path $stateRoot "version.json"
+$settingsPath = Join-Path $stateRoot "state\settings.json"
+$installReportPath = Join-Path $stateRoot "state\install-report.json"
 
 $lines = New-Object System.Collections.Generic.List[string]
 $lines.Add("Local Qwen UI dump generated at $(Get-Date -Format s)") | Out-Null
-$lines.Add("Install root: $root") | Out-Null
+$lines.Add("Code root: $codeRoot") | Out-Null
+$lines.Add("State root: $stateRoot") | Out-Null
 $lines.Add("App version: v$(Get-AppVersion)") | Out-Null
 
 Add-Section -Lines $lines -Title "Key files"
@@ -102,5 +112,5 @@ if (Test-Path $releaseNotesPath) {
     }
 }
 
-$lines | Set-Content -Path $OutputPath -Encoding UTF8
+Write-Utf8NoBomText -Path $OutputPath -Content ($lines -join [Environment]::NewLine)
 Write-Host "UI dump sacuvan: $OutputPath"

@@ -8,11 +8,26 @@ function Get-WindowsPowerShellExe {
     return $path
 }
 
-function Get-LocalQwenRoot {
+function Write-Utf8NoBomText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+
+    $directory = Split-Path -Parent $Path
+    if ($directory) {
+        Ensure-Directory $directory
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Get-LocalQwenCodeRoot {
     $oneLevelUp = Join-Path $PSScriptRoot ".."
     $twoLevelsUp = Join-Path $PSScriptRoot "..\.."
-
     $candidateRoots = @($oneLevelUp, $twoLevelsUp)
+
     foreach ($candidate in $candidateRoots) {
         $resolved = $null
         try {
@@ -22,8 +37,8 @@ function Get-LocalQwenRoot {
         }
 
         if (
-            (Test-Path (Join-Path $resolved "state\install-state.json")) -or
             (Test-Path (Join-Path $resolved "config\profiles\defaults.json")) -or
+            (Test-Path (Join-Path $resolved "scripts\local_qwen_runtime.py")) -or
             (Test-Path (Join-Path $resolved "launchers"))
         ) {
             return $resolved
@@ -33,8 +48,27 @@ function Get-LocalQwenRoot {
     return (Resolve-Path $twoLevelsUp).Path
 }
 
+function Get-LocalQwenStateRoot {
+    $codeRoot = Get-LocalQwenCodeRoot
+    $installedRoot = Join-Path $env:USERPROFILE "LocalQwenHome"
+
+    if (Test-Path (Join-Path $codeRoot "state\install-state.json")) {
+        return $codeRoot
+    }
+
+    if (Test-Path (Join-Path $installedRoot "state\install-state.json")) {
+        return (Resolve-Path $installedRoot).Path
+    }
+
+    return $codeRoot
+}
+
+function Get-LocalQwenRoot {
+    return Get-LocalQwenCodeRoot
+}
+
 function Get-InstallState {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $statePath = Join-Path $root "state\install-state.json"
     if (!(Test-Path $statePath)) {
         throw "Install state nije pronadjen: $statePath"
@@ -43,16 +77,48 @@ function Get-InstallState {
     return Get-Content -Raw $statePath | ConvertFrom-Json
 }
 
+function Get-StateModelFilePath {
+    param(
+        [Parameter(Mandatory = $true)]$State
+    )
+
+    if ($State.PSObject.Properties["modelFile"] -and -not [string]::IsNullOrWhiteSpace([string]$State.modelFile)) {
+        return [string]$State.modelFile
+    }
+
+    if ($State.PSObject.Properties["modelPath"] -and -not [string]::IsNullOrWhiteSpace([string]$State.modelPath)) {
+        return [string]$State.modelPath
+    }
+
+    $installRoot = if ($State.PSObject.Properties["installRoot"] -and -not [string]::IsNullOrWhiteSpace([string]$State.installRoot)) {
+        [string]$State.installRoot
+    } else {
+        Get-LocalQwenStateRoot
+    }
+
+    $modelId = if ($State.PSObject.Properties["modelId"] -and -not [string]::IsNullOrWhiteSpace([string]$State.modelId)) {
+        [string]$State.modelId
+    } else {
+        $null
+    }
+
+    if ($modelId) {
+        return Join-Path (Join-Path $installRoot "models") $modelId
+    }
+
+    return Join-Path $installRoot "models"
+}
+
 function Save-InstallState {
     param([Parameter(Mandatory = $true)]$State)
 
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $statePath = Join-Path $root "state\install-state.json"
-    $State | ConvertTo-Json -Depth 20 | Set-Content -Path $statePath -Encoding UTF8
+    Write-Utf8NoBomText -Path $statePath -Content ($State | ConvertTo-Json -Depth 20)
 }
 
 function Get-Defaults {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenCodeRoot
     $defaultsPath = Join-Path $root "config\profiles\defaults.json"
     if (!(Test-Path $defaultsPath)) {
         throw "Defaults config nije pronadjen: $defaultsPath"
@@ -62,7 +128,7 @@ function Get-Defaults {
 }
 
 function Get-CustomModelsRegistryPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     return Join-Path $root "state\custom-models.json"
 }
 
@@ -93,17 +159,19 @@ function Save-CustomModels {
 
     $path = Get-CustomModelsRegistryPath
     Ensure-Directory (Split-Path -Parent $path)
-    [pscustomobject]@{
-        updatedAt = (Get-Date).ToUniversalTime().ToString("o")
-        models = @($Models)
-    } | ConvertTo-Json -Depth 20 | Set-Content -Path $path -Encoding UTF8
+    Write-Utf8NoBomText -Path $path -Content (
+        [pscustomobject]@{
+            updatedAt = (Get-Date).ToUniversalTime().ToString("o")
+            models = @($Models)
+        } | ConvertTo-Json -Depth 20
+    )
     return $path
 }
 
 function Get-EffectiveDefaultsPath {
     $defaults = Get-Defaults
     $customModels = @(Get-CustomModels)
-    $defaultsPath = Join-Path (Get-LocalQwenRoot) "config\profiles\defaults.json"
+    $defaultsPath = Join-Path (Get-LocalQwenCodeRoot) "config\profiles\defaults.json"
 
     if ($customModels.Count -eq 0) {
         return $defaultsPath
@@ -125,14 +193,14 @@ function Get-EffectiveDefaultsPath {
         $defaults.modelChoices | Add-Member -NotePropertyName $key -NotePropertyValue $item -Force
     }
 
-    $path = Join-Path (Get-LocalQwenRoot) "state\effective-defaults.json"
+    $path = Join-Path (Get-LocalQwenStateRoot) "state\effective-defaults.json"
     Ensure-Directory (Split-Path -Parent $path)
-    $defaults | ConvertTo-Json -Depth 20 | Set-Content -Path $path -Encoding UTF8
+    Write-Utf8NoBomText -Path $path -Content ($defaults | ConvertTo-Json -Depth 20)
     return $path
 }
 
 function Get-RuntimeEngineScriptPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenCodeRoot
     $path = Join-Path $root "scripts\local_qwen_runtime.py"
     if (Test-Path $path) {
         return $path
@@ -141,7 +209,7 @@ function Get-RuntimeEngineScriptPath {
 }
 
 function Get-Settings {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $settingsPath = Join-Path $root "state\settings.json"
     if (Test-Path $settingsPath) {
         return Get-Content -Raw $settingsPath | ConvertFrom-Json
@@ -168,13 +236,13 @@ function Get-Settings {
 function Save-Settings {
     param([Parameter(Mandatory = $true)]$Settings)
 
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $settingsPath = Join-Path $root "state\settings.json"
-    $Settings | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $settingsPath -Content ($Settings | ConvertTo-Json -Depth 20)
 }
 
 function Get-VersionFilePath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenCodeRoot
     $path = Join-Path $root "version.json"
     if (Test-Path $path) {
         return $path
@@ -200,7 +268,7 @@ function Get-AppVersion {
 }
 
 function Get-ReleaseNotesPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenCodeRoot
     foreach ($candidate in @(
         (Join-Path $root "release-notes.txt"),
         (Join-Path $root "docs\release-notes.txt")
@@ -344,7 +412,7 @@ function Get-LogDirectory {
 }
 
 function Get-ServiceLifecyclePath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     return (Join-Path $root "state\server-lifecycle.json")
 }
 
@@ -367,7 +435,7 @@ function Set-ServiceLifecycleState {
         reason = $Reason
         updatedAt = (Get-Date).ToString("s")
     }
-    $payload | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding UTF8
+    Write-Utf8NoBomText -Path $path -Content ($payload | ConvertTo-Json -Depth 10)
 }
 
 function Get-ServiceLifecycleState {
@@ -393,8 +461,8 @@ function Get-LatestLlamaLogs {
     $logDir = Get-LogDirectory
     $stdout = Get-ChildItem $logDir -Filter "llama-*.out.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $stderr = Get-ChildItem $logDir -Filter "llama-*.err.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    $installSummary = Join-Path (Get-LocalQwenRoot) "state\install-summary.txt"
-    $installReport = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $installSummary = Join-Path (Get-LocalQwenStateRoot) "state\install-summary.txt"
+    $installReport = Join-Path (Get-LocalQwenStateRoot) "state\install-report.json"
 
     return [pscustomobject]@{
         LogDir = $logDir
@@ -406,14 +474,19 @@ function Get-LatestLlamaLogs {
 }
 
 function Get-DiagnosticsDirectory {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $path = Join-Path $root "state\diagnostics"
     Ensure-Directory $path
     return $path
 }
 
+function Get-InstallSummaryPath {
+    $root = Get-LocalQwenStateRoot
+    return Join-Path $root "state\install-summary.txt"
+}
+
 function Get-RepairSummaryPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     return Join-Path $root "state\repair-summary.json"
 }
 
@@ -430,12 +503,12 @@ function Get-RepairSummaryData {
 }
 
 function Get-TokenMetricsHistoryPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     return Join-Path $root "state\token-metrics-history.json"
 }
 
 function Get-ModelDownloadProgressPath {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     return Join-Path $root "state\model-download-progress.json"
 }
 
@@ -597,17 +670,38 @@ function Add-OptionalRuntimeArgument {
 function Convert-CollectionToJsonArrayString {
     param($Collection)
 
-    $items = New-Object System.Collections.Generic.List[object]
+    $items = New-Object System.Collections.ArrayList
     if ($null -ne $Collection) {
         foreach ($item in $Collection) {
-            $items.Add($item) | Out-Null
+            [void]$items.Add($item)
         }
     }
     if ($items.Count -eq 0) {
         return "[]"
     }
 
-    return ($items | ConvertTo-Json -Depth 10 -Compress)
+    return (@($items.ToArray()) | ConvertTo-Json -Depth 10 -Compress)
+}
+
+function Convert-CollectionToCliListArgument {
+    param($Collection)
+
+    $items = New-Object System.Collections.ArrayList
+    if ($null -ne $Collection) {
+        foreach ($item in $Collection) {
+            $text = [string]$item
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                [void]$items.Add($text)
+            }
+        }
+    }
+    if ($items.Count -eq 0) {
+        return ""
+    }
+
+    $json = (@($items.ToArray()) | ConvertTo-Json -Depth 10 -Compress)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    return ("b64:" + [Convert]::ToBase64String($bytes))
 }
 
 function Get-LlamaHealthUrl {
@@ -972,8 +1066,9 @@ function Get-InstalledModelIds {
     $catalog = @(Get-ModelCatalog)
     $installed = New-Object System.Collections.Generic.List[string]
     $state = Get-InstallState
+    $modelsDir = Split-Path -Parent (Get-StateModelFilePath -State $state)
     foreach ($item in $catalog) {
-        $candidatePath = Join-Path (Split-Path -Parent $state.modelFile) ([string]$item.filename)
+        $candidatePath = Join-Path $modelsDir ([string]$item.filename)
         if (Test-ModelFileLooksComplete -Path $candidatePath -ModelId ([string]$item.id)) {
             $installed.Add([string]$item.id) | Out-Null
         }
@@ -983,7 +1078,7 @@ function Get-InstalledModelIds {
 
 function Get-InstalledModelSizeMap {
     $catalog = @(Get-ModelCatalog)
-    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    $modelsDir = Join-Path (Get-LocalQwenStateRoot) "models"
     $sizes = [ordered]@{}
 
     foreach ($choice in $catalog) {
@@ -997,7 +1092,7 @@ function Get-InstalledModelSizeMap {
 }
 
 function Get-ModelsDriveFreeGiB {
-    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    $modelsDir = Join-Path (Get-LocalQwenStateRoot) "models"
     Ensure-Directory $modelsDir
     try {
         $rootPath = [System.IO.Path]::GetPathRoot($modelsDir)
@@ -1019,24 +1114,25 @@ function Get-FilteredModelCatalog {
     $gpuMiB = Get-DetectedGpuMemoryMiB
     $ramGiB = Get-SystemMemoryGiB
     $cpuThreads = [Environment]::ProcessorCount
-    $arguments = @(
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    @(
         "filter-models",
         "--defaults", $defaultsPath,
         "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
         "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
         "--cpu-threads", ([string]$cpuThreads)
-    )
+    ) | ForEach-Object { $arguments.Add($_) | Out-Null }
     if ($VerifiedOnly) {
-        $arguments += "--verified-only"
+        $arguments.Add("--verified-only") | Out-Null
     }
     if ($CoderOnly) {
-        $arguments += "--coder-only"
+        $arguments.Add("--coder-only") | Out-Null
     }
     if ($FitOnly) {
-        $arguments += "--fit-only"
+        $arguments.Add("--fit-only") | Out-Null
     }
 
-    return Invoke-RuntimeEngineJson -Arguments $arguments
+    return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())
 }
 
 function Get-ModelBrowserPayload {
@@ -1057,30 +1153,35 @@ function Get-ModelBrowserPayload {
     $state = Get-InstallState
     $freeDiskGiB = Get-ModelsDriveFreeGiB
     $sizeMap = Get-InstalledModelSizeMap
-    $arguments = @(
+    $installedModelIds = [string]((Get-InstalledModelIds) -join ",")
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    @(
         "model-browser",
         "--defaults", $defaultsPath,
         "--gpu-mib", ([string]$(if ($gpuMiB) { $gpuMiB } else { 0 })),
         "--ram-gib", ([string]$(if ($ramGiB) { $ramGiB } else { 0 })),
         "--cpu-threads", ([string]$cpuThreads),
-        "--current-model-id", ([string]$state.modelId),
-        "--installed-model-ids", ([string]((Get-InstalledModelIds) -join ",")),
         "--installed-model-sizes-json", ($sizeMap | ConvertTo-Json -Compress),
         "--free-disk-gib", ([string]$(if ($null -ne $freeDiskGiB) { $freeDiskGiB } else { -1 }))
+    ) | ForEach-Object { $arguments.Add($_) | Out-Null }
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--current-model-id" -Value ([string]$state.modelId
     )
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--installed-model-ids" -Value $installedModelIds
     if (-not [string]::IsNullOrWhiteSpace($Search)) {
-        $arguments += @("--search", $Search)
+        $arguments.Add("--search") | Out-Null
+        $arguments.Add($Search) | Out-Null
     }
     if (-not [string]::IsNullOrWhiteSpace($Family)) {
-        $arguments += @("--family", $Family)
+        $arguments.Add("--family") | Out-Null
+        $arguments.Add($Family) | Out-Null
     }
-    if ($InstalledOnly) { $arguments += "--installed-only" }
-    if ($RecommendedOnly) { $arguments += "--recommended-only" }
-    if ($FitOnly) { $arguments += "--fit-only" }
-    if ($CoderOnly) { $arguments += "--coder-only" }
-    if ($VerifiedOnly) { $arguments += "--verified-only" }
+    if ($InstalledOnly) { $arguments.Add("--installed-only") | Out-Null }
+    if ($RecommendedOnly) { $arguments.Add("--recommended-only") | Out-Null }
+    if ($FitOnly) { $arguments.Add("--fit-only") | Out-Null }
+    if ($CoderOnly) { $arguments.Add("--coder-only") | Out-Null }
+    if ($VerifiedOnly) { $arguments.Add("--verified-only") | Out-Null }
 
-    $payload = Invoke-RuntimeEngineJson -Arguments $arguments
+    $payload = Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())
     if ($payload -and $payload.models) {
         foreach ($model in @($payload.models)) {
             $modelId = [string]$model.id
@@ -1128,8 +1229,9 @@ function Get-OnboardingChecklist {
     $state = Get-InstallState
     $hasServer = Test-LlamaHealth
     $hasModel = $false
+    $modelPath = Get-StateModelFilePath -State $state
     try {
-        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+        $hasModel = Test-ModelFileLooksComplete -Path $modelPath
     } catch {
         $hasModel = $false
     }
@@ -1145,15 +1247,16 @@ function Get-OnboardingChecklist {
     ) | ForEach-Object { $arguments.Add($_) | Out-Null }
     Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value $profile
     Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
-    return Invoke-RuntimeEngineJson -Arguments $arguments
+    return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())
 }
 
 function Get-HealthCenterData {
     $state = Get-InstallState
     $health = Test-LlamaHealth
     $hasModel = $false
+    $modelPath = Get-StateModelFilePath -State $state
     try {
-        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+        $hasModel = Test-ModelFileLooksComplete -Path $modelPath
     } catch {
         $hasModel = $false
     }
@@ -1165,9 +1268,9 @@ function Get-HealthCenterData {
         $runtimeOk = $false
     }
 
-    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $reportPath = Join-Path (Get-LocalQwenStateRoot) "state\install-report.json"
     $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
-    $warningsJson = Convert-CollectionToJsonArrayString -Collection $warnings
+    $warningsJson = Convert-CollectionToCliListArgument -Collection $warnings
 
     $arguments = [System.Collections.Generic.List[string]]::new()
     @(
@@ -1176,21 +1279,37 @@ function Get-HealthCenterData {
         "--has-model", ([string]$hasModel).ToLower(),
         "--has-runtime", ([string]$runtimeOk).ToLower(),
         "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
-        "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
-        "--warnings-json", $warningsJson
+        "--has-install-report", ([string](Test-Path $reportPath)).ToLower()
     ) | ForEach-Object { $arguments.Add($_) | Out-Null }
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--lifecycle-state" -Value ([string](Get-ServiceLifecycleState).state)
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value ([string](Get-Settings).profile)
-    return Invoke-RuntimeEngineJson -Arguments $arguments
+    if (-not [string]::IsNullOrWhiteSpace($warningsJson)) {
+        $arguments.Add("--warnings-json") | Out-Null
+        $arguments.Add($warningsJson) | Out-Null
+    }
+    $lifecycleState = [string](Get-ServiceLifecycleState).state
+    if (-not [string]::IsNullOrWhiteSpace($lifecycleState)) {
+        $arguments.Add("--lifecycle-state") | Out-Null
+        $arguments.Add($lifecycleState) | Out-Null
+    }
+    $currentModelId = [string]$state.modelId
+    if (-not [string]::IsNullOrWhiteSpace($currentModelId)) {
+        $arguments.Add("--model-id") | Out-Null
+        $arguments.Add($currentModelId) | Out-Null
+    }
+    $currentProfile = [string](Get-Settings).profile
+    if (-not [string]::IsNullOrWhiteSpace($currentProfile)) {
+        $arguments.Add("--profile") | Out-Null
+        $arguments.Add($currentProfile) | Out-Null
+    }
+    return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())
 }
 
 function Get-RepairPlanData {
     $state = Get-InstallState
     $health = Test-LlamaHealth
     $hasModel = $false
+    $modelPath = Get-StateModelFilePath -State $state
     try {
-        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+        $hasModel = Test-ModelFileLooksComplete -Path $modelPath
     } catch {
         $hasModel = $false
     }
@@ -1202,9 +1321,9 @@ function Get-RepairPlanData {
         $runtimeOk = $false
     }
 
-    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $reportPath = Join-Path (Get-LocalQwenStateRoot) "state\install-report.json"
     $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
-    $warningsJson = Convert-CollectionToJsonArrayString -Collection $warnings
+    $warningsJson = Convert-CollectionToCliListArgument -Collection $warnings
 
     $arguments = [System.Collections.Generic.List[string]]::new()
     @(
@@ -1213,17 +1332,32 @@ function Get-RepairPlanData {
         "--has-model", ([string]$hasModel).ToLower(),
         "--has-runtime", ([string]$runtimeOk).ToLower(),
         "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
-        "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
-        "--warnings-json", $warningsJson
+        "--has-install-report", ([string](Test-Path $reportPath)).ToLower()
     ) | ForEach-Object { $arguments.Add($_) | Out-Null }
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--lifecycle-state" -Value ([string](Get-ServiceLifecycleState).state)
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
-    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value ([string](Get-Settings).profile)
-    return Invoke-RuntimeEngineJson -Arguments $arguments
+    if (-not [string]::IsNullOrWhiteSpace($warningsJson)) {
+        $arguments.Add("--warnings-json") | Out-Null
+        $arguments.Add($warningsJson) | Out-Null
+    }
+    $lifecycleState = [string](Get-ServiceLifecycleState).state
+    if (-not [string]::IsNullOrWhiteSpace($lifecycleState)) {
+        $arguments.Add("--lifecycle-state") | Out-Null
+        $arguments.Add($lifecycleState) | Out-Null
+    }
+    $currentModelId = [string]$state.modelId
+    if (-not [string]::IsNullOrWhiteSpace($currentModelId)) {
+        $arguments.Add("--model-id") | Out-Null
+        $arguments.Add($currentModelId) | Out-Null
+    }
+    $currentProfile = [string](Get-Settings).profile
+    if (-not [string]::IsNullOrWhiteSpace($currentProfile)) {
+        $arguments.Add("--profile") | Out-Null
+        $arguments.Add($currentProfile) | Out-Null
+    }
+    return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())
 }
 
 function Get-InstallReportObject {
-    $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+    $reportPath = Join-Path (Get-LocalQwenStateRoot) "state\install-report.json"
     if (-not (Test-Path $reportPath)) {
         return $null
     }
@@ -1281,8 +1415,9 @@ function Get-NextActionRecommendation {
     $state = Get-InstallState
     $hasServer = Test-LlamaHealth
     $hasModel = $false
+    $modelPath = Get-StateModelFilePath -State $state
     try {
-        $hasModel = Test-ModelFileLooksComplete -Path $state.modelFile
+        $hasModel = Test-ModelFileLooksComplete -Path $modelPath
     } catch {
         $hasModel = $false
     }
@@ -1332,20 +1467,20 @@ function Add-OrUpdateCustomModel {
         [Parameter(Mandatory = $true)][pscustomobject]$Model
     )
 
-    $models = New-Object System.Collections.Generic.List[object]
+    $models = New-Object System.Collections.ArrayList
     $replaced = $false
     foreach ($item in @(Get-CustomModels)) {
         if ($item -and [string]$item.id -eq [string]$Model.id) {
-            $models.Add($Model) | Out-Null
+            [void]$models.Add($Model)
             $replaced = $true
         } else {
-            $models.Add($item) | Out-Null
+            [void]$models.Add($item)
         }
     }
     if (-not $replaced) {
-        $models.Add($Model) | Out-Null
+        [void]$models.Add($Model)
     }
-    Save-CustomModels -Models @($models)
+    Save-CustomModels -Models @($models.ToArray())
     return $Model
 }
 
@@ -1363,7 +1498,7 @@ function Import-LocalGgufModel {
         throw "Podrzani su samo .gguf fajlovi."
     }
 
-    $modelsDir = Join-Path (Get-LocalQwenRoot) "models"
+    $modelsDir = Join-Path (Get-LocalQwenStateRoot) "models"
     Ensure-Directory $modelsDir
     $file = Get-Item $SourcePath
     $fileName = $file.Name
@@ -1472,7 +1607,11 @@ function Set-SelectedModel {
     }
 
     $state.modelId = [string]$meta.id
-    $state.modelFile = Join-Path (Split-Path -Parent $state.modelFile) ([string]$meta.filename)
+    $currentModelPath = Get-StateModelFilePath -State $state
+    $modelsDir = Split-Path -Parent $currentModelPath
+    $resolvedModelPath = Join-Path $modelsDir ([string]$meta.filename)
+    $state.modelFile = $resolvedModelPath
+    $state.modelPath = $resolvedModelPath
     Save-InstallState -State $state
     return $state
 }
@@ -1506,16 +1645,17 @@ function Test-ModelFileLooksComplete {
 
 function Get-LlamaModelPath {
     $state = Get-InstallState
-    if (!(Test-Path $state.modelFile)) {
-        throw "Model nije pronadjen: $($state.modelFile)"
+    $modelPath = Get-StateModelFilePath -State $state
+    if (!(Test-Path $modelPath)) {
+        throw "Model nije pronadjen: $modelPath"
     }
-    if (-not (Test-ModelFileLooksComplete -Path $state.modelFile)) {
-        $file = Get-Item $state.modelFile
+    if (-not (Test-ModelFileLooksComplete -Path $modelPath)) {
+        $file = Get-Item $modelPath
         $meta = Get-ModelMetadata
         $minExpectedBytes = if ($meta -and $meta.PSObject.Properties["minExpectedBytes"]) { [int64]$meta.minExpectedBytes } else { 0 }
-        throw "Model deluje nepotpuno: $($state.modelFile) (trenutno $($file.Length) bajtova, ocekivano najmanje $minExpectedBytes)"
+        throw "Model deluje nepotpuno: $modelPath (trenutno $($file.Length) bajtova, ocekivano najmanje $minExpectedBytes)"
     }
-    return $state.modelFile
+    return $modelPath
 }
 
 function Download-RecommendedModel {
@@ -1548,7 +1688,7 @@ function Download-RecommendedModel {
         throw "huggingface_hub instalacija nije uspela."
     }
 
-    $targetDir = Split-Path -Parent $state.modelFile
+    $targetDir = Split-Path -Parent (Get-StateModelFilePath -State $state)
     Ensure-Directory $targetDir
     $tmpPy = Join-Path $env:TEMP "local_qwen_repair_model.py"
     $progressPath = Get-ModelDownloadProgressPath
@@ -1739,7 +1879,7 @@ if last_error is not None:
 }
 
 function Restore-BundledSupportFiles {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $copied = New-Object System.Collections.Generic.List[string]
     $baseDir = Join-Path ${env:ProgramFiles} "LocalQwenSetupBootstrap"
     $map = @(
@@ -1899,12 +2039,12 @@ function Update-OpenCodeConfig {
     $existing.agent.general.steps = [int]$settings.opencode.generalSteps
     $existing.agent.explore.steps = [int]$settings.opencode.exploreSteps
 
-    $existing | ConvertTo-Json -Depth 20 | Set-Content -Path $configPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $configPath -Content ($existing | ConvertTo-Json -Depth 20)
     return $configPath
 }
 
 function Write-InstallReport {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $state = Get-InstallState
     $reportPath = Join-Path $root "state\install-report.json"
     $logMeta = Get-LatestLlamaLogs
@@ -1962,9 +2102,9 @@ function Write-InstallReport {
                 ok = [bool]($turboServerPath -and (Test-Path $turboServerPath))
             }
             model = [ordered]@{
-                path = $state.modelFile
-                ok = (Test-Path $state.modelFile)
-                sizeBytes = if (Test-Path $state.modelFile) { (Get-Item $state.modelFile).Length } else { 0 }
+                path = (Get-StateModelFilePath -State $state)
+                ok = (Test-Path (Get-StateModelFilePath -State $state))
+                sizeBytes = if (Test-Path (Get-StateModelFilePath -State $state)) { (Get-Item (Get-StateModelFilePath -State $state)).Length } else { 0 }
                 selectedId = $state.modelId
                 metadata = Get-ModelMetadata
             }
@@ -1984,12 +2124,12 @@ function Write-InstallReport {
         warnings = @($warnings)
     }
 
-    $report | ConvertTo-Json -Depth 10 | Set-Content -Path $reportPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $reportPath -Content ($report | ConvertTo-Json -Depth 10)
     return $reportPath
 }
 
 function Export-DiagnosticsBundle {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $diagDir = Get-DiagnosticsDirectory
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $bundleDir = Join-Path $diagDir "bundle-$stamp"
@@ -2000,7 +2140,10 @@ function Export-DiagnosticsBundle {
         (Join-Path $root "state\settings.json"),
         (Join-Path $root "state\install-report.json"),
         (Join-Path $root "state\install-summary.txt"),
+        (Join-Path $root "state\repair-summary.json"),
+        (Join-Path $root "state\token-metrics-history.json"),
         (Join-Path $root "version.json"),
+        (Join-Path $root "release-notes.txt"),
         (Get-OpenCodeConfigPath)
     )
 
@@ -2031,7 +2174,7 @@ function Export-DiagnosticsBundle {
         }
         agent = if (Test-Path (Join-Path $root "state\agent-launch-settings.json")) { Get-Content -Raw (Join-Path $root "state\agent-launch-settings.json") | ConvertFrom-Json } else { $null }
     }
-    $meta | ConvertTo-Json -Depth 20 | Set-Content -Path (Join-Path $bundleDir "diagnostics-meta.json") -Encoding UTF8
+    Write-Utf8NoBomText -Path (Join-Path $bundleDir "diagnostics-meta.json") -Content ($meta | ConvertTo-Json -Depth 20)
 
     $zipPath = Join-Path $diagDir "local-qwen-diagnostics-$stamp.zip"
     if (Test-Path $zipPath) {
@@ -2123,7 +2266,7 @@ function New-DesktopShortcutFile {
 }
 
 function Repair-DesktopShortcuts {
-    $root = Get-LocalQwenRoot
+    $root = Get-LocalQwenStateRoot
     $launchersDir = Join-Path $root "launchers"
     $assetsDir = Join-Path $root "assets"
     $desktopTargetDir = Get-DesktopTargetDir

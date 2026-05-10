@@ -45,7 +45,7 @@ Source: "..\..\release-notes.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\install\windows\install.ps1"; DestDir: "{app}\install\windows"; Flags: ignoreversion
 Source: "..\..\launcher\windows\*"; DestDir: "{app}\launcher\windows"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\..\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc"
 Source: "..\..\assets\icons\*"; DestDir: "{app}\assets\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\config\profiles\*"; DestDir: "{app}\config\profiles"; Flags: ignoreversion recursesubdirs createallsubdirs
 

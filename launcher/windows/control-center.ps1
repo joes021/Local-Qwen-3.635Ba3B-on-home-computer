@@ -20,6 +20,8 @@ $script:SavedSettingsBuild = $null
 $script:SavedSettingsPlan = $null
 $script:SavedSettingsGeneral = $null
 $script:SavedSettingsExplore = $null
+$script:BrowserDownloadStatusBox = $null
+$script:BrowserSummaryLabel = $null
 
 $configureSettingsScript = Join-Path $PSScriptRoot "configure-settings.ps1"
 $startServerScript = Join-Path $PSScriptRoot "start-server.ps1"
@@ -202,6 +204,19 @@ function Set-WorkerStatus {
     $workerStatusLabel.Text = "Status: $State$(if ($Detail) { ' | ' + $Detail } else { '' })"
 }
 
+function Update-WorkerHeartbeat {
+    if (-not $script:ActiveWorkerName -or -not $script:ActiveWorkerStartedAt) {
+        return
+    }
+
+    $elapsed = [int]([DateTime]::Now - $script:ActiveWorkerStartedAt).TotalSeconds
+    if ($elapsed -lt 0) {
+        $elapsed = 0
+    }
+
+    Set-WorkerStatus -State "Working" -Detail ("{0} radi vec {1}s" -f $script:ActiveWorkerName, $elapsed)
+}
+
 function Invoke-BackgroundShellScript {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -212,6 +227,8 @@ function Invoke-BackgroundShellScript {
         [scriptblock]$OnTick = $null
     )
 
+    $script:ActiveWorkerName = $Name
+    $script:ActiveWorkerStartedAt = [DateTime]::Now
     Set-WorkerStatus -State "Working" -Detail $Name
     Write-LaunchMessage @("$Name je pokrenut u pozadini.")
     $powerShellExe = Get-WindowsPowerShellExe
@@ -234,6 +251,9 @@ function Invoke-BackgroundShellScript {
                 & $OnTick
             } catch {
             }
+        }
+        if ($job.State -eq 'Running') {
+            Update-WorkerHeartbeat
         }
         if ($job.State -in @('Completed', 'Failed', 'Stopped')) {
             $poller.Stop()
@@ -261,11 +281,18 @@ function Invoke-BackgroundShellScript {
 
             if ($exitCode -eq 0) {
                 Set-WorkerStatus -State "Idle" -Detail "$Name zavrsen"
+                $script:ActiveWorkerName = $null
+                $script:ActiveWorkerStartedAt = $null
                 if ($OnSuccess) {
                     & $OnSuccess
                 }
             } else {
+                if ($outputLines.Count -eq 0) {
+                    Write-LaunchMessage @("$Name nije uspeo i nije vratio dodatni izlaz.")
+                }
                 Set-WorkerStatus -State "Error" -Detail "$Name nije uspeo"
+                $script:ActiveWorkerName = $null
+                $script:ActiveWorkerStartedAt = $null
             }
 
             if ($OnFinally) {
@@ -309,36 +336,60 @@ function Format-EtaText {
 
 function Refresh-ModelDownloadProgressView {
     $progress = Get-ModelDownloadProgressData
-    if (-not $progress) {
-        return
-    }
-
     $lines = New-Object System.Collections.Generic.List[string]
-    $lines.Add("MODEL DOWNLOAD STATUS") | Out-Null
-    $lines.Add("Status: $($progress.status)") | Out-Null
-    if ($progress.modelId) {
-        $lines.Add("Model: $($progress.modelId)") | Out-Null
-    }
-    if ($progress.source) {
-        $lines.Add("Izvor: $($progress.source)") | Out-Null
-    }
-    if ($progress.totalBytes -and [int64]$progress.totalBytes -gt 0) {
-        $downloadedText = Format-BytesText -Bytes ([double]$progress.downloadedBytes)
-        $totalText = Format-BytesText -Bytes ([double]$progress.totalBytes)
-        $percentText = if ($null -ne $progress.percent -and "$($progress.percent)" -ne "") { "$($progress.percent)%" } else { "--" }
-        $lines.Add("Napredak: $downloadedText / $totalText ($percentText)") | Out-Null
-    } elseif ($progress.downloadedBytes) {
-        $lines.Add("Preuzeto: $(Format-BytesText -Bytes ([double]$progress.downloadedBytes))") | Out-Null
-    }
-    if ($progress.speedMBps) {
-        $lines.Add("Brzina: $($progress.speedMBps) MB/s") | Out-Null
-    }
-    $lines.Add((Format-EtaText -Seconds $progress.etaSeconds)) | Out-Null
-    if ($progress.message) {
-        $lines.Add("Poruka: $($progress.message)") | Out-Null
+    $browserSummaryText = $null
+    if (-not $progress) {
+        $lines.Add("MODEL DOWNLOAD STATUS") | Out-Null
+        $lines.Add("Status: Nema aktivnog preuzimanja") | Out-Null
+        $lines.Add("Kada pokrenes 'Preuzmi / osvezi', ovde ces videti model, procenat, brzinu i ETA.") | Out-Null
+        $browserSummaryText = "Model browser je spreman. Nema aktivnog preuzimanja."
+    } else {
+        $lines.Add("MODEL DOWNLOAD STATUS") | Out-Null
+        $lines.Add("Status: $($progress.status)") | Out-Null
+        if ($progress.modelId) {
+            $lines.Add("Model: $($progress.modelId)") | Out-Null
+        }
+        if ($progress.source) {
+            $lines.Add("Izvor: $($progress.source)") | Out-Null
+        }
+        if ($progress.totalBytes -and [int64]$progress.totalBytes -gt 0) {
+            $downloadedText = Format-BytesText -Bytes ([double]$progress.downloadedBytes)
+            $totalText = Format-BytesText -Bytes ([double]$progress.totalBytes)
+            $percentText = if ($null -ne $progress.percent -and "$($progress.percent)" -ne "") { "$($progress.percent)%" } else { "--" }
+            $lines.Add("Napredak: $downloadedText / $totalText ($percentText)") | Out-Null
+        } elseif ($progress.downloadedBytes) {
+            $lines.Add("Preuzeto: $(Format-BytesText -Bytes ([double]$progress.downloadedBytes))") | Out-Null
+        }
+        if ($progress.speedMBps) {
+            $lines.Add("Brzina: $($progress.speedMBps) MB/s") | Out-Null
+        }
+        $lines.Add((Format-EtaText -Seconds $progress.etaSeconds)) | Out-Null
+        if ($progress.message) {
+            $lines.Add("Poruka: $($progress.message)") | Out-Null
+        }
+
+        $browserSummaryText = switch ($progress.status) {
+            "downloading" { "Download u toku za $($progress.modelId) | $($progress.percent)% | $($progress.speedMBps) MB/s | $(Format-EtaText -Seconds $progress.etaSeconds)" }
+            "completed" { "Download zavrsen za $($progress.modelId)." }
+            "failed" { "Download nije uspeo za $($progress.modelId)." }
+            default { "Status downloada: $($progress.status)" }
+        }
     }
 
     $launchOutput.Text = $lines -join [Environment]::NewLine
+    if ($modelDownloadStatusBox) {
+        $modelDownloadStatusBox.Text = $lines -join [Environment]::NewLine
+    }
+    if ($script:BrowserDownloadStatusBox) {
+        $script:BrowserDownloadStatusBox.Text = $lines -join [Environment]::NewLine
+    }
+    if ($script:BrowserSummaryLabel -and -not [string]::IsNullOrWhiteSpace($browserSummaryText)) {
+        $script:BrowserSummaryLabel.Text = $browserSummaryText
+    }
+
+    if (-not $progress) {
+        return
+    }
 
     if ($progress.status -eq "downloading") {
         $statusDetail = if ($null -ne $progress.percent -and "$($progress.percent)" -ne "") {
@@ -395,7 +446,7 @@ function Get-AgentAuditSummary {
 }
 
 function Get-AgentMetaPath {
-    return Join-Path $root "state\agent-launch-settings.json"
+    return Join-Path (Get-LocalQwenStateRoot) "state\agent-launch-settings.json"
 }
 
 function Load-AgentMeta {
@@ -470,6 +521,8 @@ $workerStatusLabel.Spring = $true
 $workerStatusLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 $workerStatusLabel.Text = "Status: Idle"
 $statusStrip.Items.Add($workerStatusLabel) | Out-Null
+$script:ActiveWorkerName = $null
+$script:ActiveWorkerStartedAt = $null
 
 $quickPanel = New-Object System.Windows.Forms.GroupBox
 $quickPanel.Text = "Quick status / Quick actions"
@@ -931,7 +984,7 @@ $diagnosticsTab.Controls.Add($exportDiagnosticsButton)
 
 $diagnosticsMeta = New-Object System.Windows.Forms.TextBox
 $diagnosticsMeta.Location = New-Object System.Drawing.Point(18, 48)
-$diagnosticsMeta.Size = New-Object System.Drawing.Size(648, 112)
+$diagnosticsMeta.Size = New-Object System.Drawing.Size(648, 124)
 $diagnosticsMeta.Multiline = $true
 $diagnosticsMeta.ScrollBars = "Vertical"
 $diagnosticsMeta.ReadOnly = $true
@@ -939,8 +992,8 @@ $diagnosticsMeta.BackColor = [System.Drawing.Color]::White
 $diagnosticsTab.Controls.Add($diagnosticsMeta)
 
 $diagnosticsContent = New-Object System.Windows.Forms.TextBox
-$diagnosticsContent.Location = New-Object System.Drawing.Point(18, 170)
-$diagnosticsContent.Size = New-Object System.Drawing.Size(648, 350)
+$diagnosticsContent.Location = New-Object System.Drawing.Point(18, 180)
+$diagnosticsContent.Size = New-Object System.Drawing.Size(648, 340)
 $diagnosticsContent.Multiline = $true
 $diagnosticsContent.ScrollBars = "Vertical"
 $diagnosticsContent.ReadOnly = $true
@@ -962,7 +1015,7 @@ $healthTab.Controls.Add($refreshHealthButton)
 $healthSummaryLabel = New-Object System.Windows.Forms.TextBox
 $healthSummaryLabel.Text = "Stanje: --"
 $healthSummaryLabel.Location = New-Object System.Drawing.Point(18, 48)
-$healthSummaryLabel.Size = New-Object System.Drawing.Size(648, 56)
+$healthSummaryLabel.Size = New-Object System.Drawing.Size(648, 78)
 $healthSummaryLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $healthSummaryLabel.Multiline = $true
 $healthSummaryLabel.ScrollBars = "Vertical"
@@ -972,7 +1025,7 @@ $healthSummaryLabel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingl
 $healthTab.Controls.Add($healthSummaryLabel)
 
 $healthActionPanel = New-Object System.Windows.Forms.Panel
-$healthActionPanel.Location = New-Object System.Drawing.Point(18, 112)
+$healthActionPanel.Location = New-Object System.Drawing.Point(18, 136)
 $healthActionPanel.Size = New-Object System.Drawing.Size(648, 42)
 $healthTab.Controls.Add($healthActionPanel)
 
@@ -1007,7 +1060,7 @@ $guidedRepairButton.Size = New-Object System.Drawing.Size(120, 30)
 $healthActionPanel.Controls.Add($guidedRepairButton)
 
 $healthMeta = New-Object System.Windows.Forms.TextBox
-$healthMeta.Location = New-Object System.Drawing.Point(18, 164)
+$healthMeta.Location = New-Object System.Drawing.Point(18, 188)
 $healthMeta.Size = New-Object System.Drawing.Size(648, 104)
 $healthMeta.Multiline = $true
 $healthMeta.ScrollBars = "Vertical"
@@ -1016,8 +1069,8 @@ $healthMeta.BackColor = [System.Drawing.Color]::White
 $healthTab.Controls.Add($healthMeta)
 
 $healthContent = New-Object System.Windows.Forms.TextBox
-$healthContent.Location = New-Object System.Drawing.Point(18, 280)
-$healthContent.Size = New-Object System.Drawing.Size(648, 274)
+$healthContent.Location = New-Object System.Drawing.Point(18, 304)
+$healthContent.Size = New-Object System.Drawing.Size(648, 250)
 $healthContent.Multiline = $true
 $healthContent.ScrollBars = "Vertical"
 $healthContent.ReadOnly = $true
@@ -1053,15 +1106,16 @@ $onboardingTab.Controls.Add($nextActionLabel)
 
 $nextActionBox = New-Object System.Windows.Forms.TextBox
 $nextActionBox.Location = New-Object System.Drawing.Point(18, 514)
-$nextActionBox.Size = New-Object System.Drawing.Size(490, 50)
+$nextActionBox.Size = New-Object System.Drawing.Size(490, 64)
 $nextActionBox.Multiline = $true
+$nextActionBox.ScrollBars = "Vertical"
 $nextActionBox.ReadOnly = $true
 $nextActionBox.BackColor = [System.Drawing.Color]::White
 $onboardingTab.Controls.Add($nextActionBox)
 
 $runNextActionButton = New-Object System.Windows.Forms.Button
 $runNextActionButton.Text = "Pokreni sledeci korak"
-$runNextActionButton.Location = New-Object System.Drawing.Point(520, 520)
+$runNextActionButton.Location = New-Object System.Drawing.Point(520, 527)
 $runNextActionButton.Size = New-Object System.Drawing.Size(146, 38)
 $onboardingTab.Controls.Add($runNextActionButton)
 
@@ -1185,7 +1239,11 @@ function Refresh-HealthCenterView {
     $payload = Get-HealthCenterData
     $repairSummary = Get-RepairSummaryData
 
-    $healthSummaryLabel.Text = "Stanje: $($payload.title) | Ozbiljnost: $($payload.severityLabel) ($($payload.severityScore)) | Profil: $($payload.profile) | Model: $($payload.modelId)"
+    $healthSummaryLabel.Text = @(
+        "Stanje: $($payload.title)"
+        "Ozbiljnost: $($payload.severityLabel) ($($payload.severityScore)) | Profil: $($payload.profile)"
+        "Model: $($payload.modelId)"
+    ) -join [Environment]::NewLine
     $healthSummaryLabel.ForeColor = switch ([string]$payload.overallState) {
         "healthy" { [System.Drawing.Color]::FromArgb(20, 120, 50) }
         "warming" { [System.Drawing.Color]::FromArgb(176, 120, 18) }
@@ -1251,12 +1309,17 @@ function Invoke-HealthRepairAction {
         [Parameter(Mandatory = $true)][string]$ScriptPath
     )
 
+    Write-LaunchMessage @(
+        "Pokrecem health akciju: $Name",
+        "Health, logs i diagnostics ce se osveziti cim akcija zavrsi."
+    )
     Invoke-BackgroundShellScript -Name $Name -ScriptPath $ScriptPath -OnSuccess {
         Refresh-HealthCenterView
         Refresh-LaunchStatus
         Refresh-LogsView
         Refresh-DiagnosticsView
         Refresh-OnboardingView
+        Write-LaunchMessage @("Health akcija je zavrsena: $Name")
     }
 }
 
@@ -2021,8 +2084,8 @@ function Show-ModelBrowserDialog {
     $browserForm = New-Object System.Windows.Forms.Form
     $browserForm.Text = "Model browser"
     $browserForm.StartPosition = "CenterParent"
-    $browserForm.Size = New-Object System.Drawing.Size(1120, 720)
-    $browserForm.MinimumSize = New-Object System.Drawing.Size(980, 640)
+    $browserForm.Size = New-Object System.Drawing.Size(1120, 760)
+    $browserForm.MinimumSize = New-Object System.Drawing.Size(980, 680)
     $browserForm.BackColor = [System.Drawing.Color]::WhiteSmoke
     $browserForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
     if (Test-Path $iconPath) {
@@ -2091,19 +2154,31 @@ function Show-ModelBrowserDialog {
 
     $refreshBrowserButton = New-Object System.Windows.Forms.Button
     $refreshBrowserButton.Text = "Osvezi"
-    $refreshBrowserButton.Location = New-Object System.Drawing.Point(930, 56)
-    $refreshBrowserButton.Size = New-Object System.Drawing.Size(90, 30)
+    $refreshBrowserButton.Location = New-Object System.Drawing.Point(930, 18)
+    $refreshBrowserButton.Size = New-Object System.Drawing.Size(156, 28)
     $browserForm.Controls.Add($refreshBrowserButton)
+
+    $addLocalButton = New-Object System.Windows.Forms.Button
+    $addLocalButton.Text = "Dodaj lokalni GGUF"
+    $addLocalButton.Location = New-Object System.Drawing.Point(930, 52)
+    $addLocalButton.Size = New-Object System.Drawing.Size(156, 28)
+    $browserForm.Controls.Add($addLocalButton)
+
+    $addHfButton = New-Object System.Windows.Forms.Button
+    $addHfButton.Text = "Dodaj HF model"
+    $addHfButton.Location = New-Object System.Drawing.Point(930, 84)
+    $addHfButton.Size = New-Object System.Drawing.Size(156, 28)
+    $browserForm.Controls.Add($addHfButton)
 
     $summaryLabel = New-Object System.Windows.Forms.Label
     $summaryLabel.Text = "Ucitavam model browser..."
-    $summaryLabel.Location = New-Object System.Drawing.Point(18, 80)
+    $summaryLabel.Location = New-Object System.Drawing.Point(18, 114)
     $summaryLabel.Size = New-Object System.Drawing.Size(1000, 22)
     $browserForm.Controls.Add($summaryLabel)
 
     $grid = New-Object System.Windows.Forms.DataGridView
-    $grid.Location = New-Object System.Drawing.Point(18, 108)
-    $grid.Size = New-Object System.Drawing.Size(1068, 360)
+    $grid.Location = New-Object System.Drawing.Point(18, 142)
+    $grid.Size = New-Object System.Drawing.Size(1068, 326)
     $grid.ReadOnly = $true
     $grid.AllowUserToAddRows = $false
     $grid.AllowUserToDeleteRows = $false
@@ -2160,32 +2235,48 @@ function Show-ModelBrowserDialog {
     $useRecommendedButton.Size = New-Object System.Drawing.Size(266, 34)
     $browserForm.Controls.Add($useRecommendedButton)
 
-    $addLocalButton = New-Object System.Windows.Forms.Button
-    $addLocalButton.Text = "Dodaj lokalni GGUF"
-    $addLocalButton.Location = New-Object System.Drawing.Point(820, 566)
-    $addLocalButton.Size = New-Object System.Drawing.Size(128, 34)
-    $browserForm.Controls.Add($addLocalButton)
-
-    $addHfButton = New-Object System.Windows.Forms.Button
-    $addHfButton.Text = "Dodaj HF model"
-    $addHfButton.Location = New-Object System.Drawing.Point(958, 566)
-    $addHfButton.Size = New-Object System.Drawing.Size(128, 34)
-    $browserForm.Controls.Add($addHfButton)
-
     $compareButton = New-Object System.Windows.Forms.Button
     $compareButton.Text = "Uporedi izabrani"
-    $compareButton.Location = New-Object System.Drawing.Point(820, 608)
+    $compareButton.Location = New-Object System.Drawing.Point(820, 624)
     $compareButton.Size = New-Object System.Drawing.Size(266, 34)
     $browserForm.Controls.Add($compareButton)
 
+    $browserDownloadStatusBox = New-Object System.Windows.Forms.TextBox
+    $browserDownloadStatusBox.Location = New-Object System.Drawing.Point(820, 564)
+    $browserDownloadStatusBox.Size = New-Object System.Drawing.Size(266, 52)
+    $browserDownloadStatusBox.Multiline = $true
+    $browserDownloadStatusBox.ScrollBars = "Vertical"
+    $browserDownloadStatusBox.ReadOnly = $true
+    $browserDownloadStatusBox.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 235)
+    $browserDownloadStatusBox.Text = "Nema aktivnog preuzimanja.`r`nOvde ce se pojaviti procenat, brzina i ETA."
+    $browserForm.Controls.Add($browserDownloadStatusBox)
+
     $closeBrowserButton = New-Object System.Windows.Forms.Button
     $closeBrowserButton.Text = "Zatvori"
-    $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 646)
+    $closeBrowserButton.Location = New-Object System.Drawing.Point(976, 662)
     $closeBrowserButton.Size = New-Object System.Drawing.Size(110, 34)
     $closeBrowserButton.Add_Click({ $browserForm.Close() })
     $browserForm.Controls.Add($closeBrowserButton)
 
     $browserModels = @()
+
+    $selectBrowserModelById = {
+        param([string]$ModelId)
+
+        if ([string]::IsNullOrWhiteSpace($ModelId)) {
+            return
+        }
+        foreach ($row in @($grid.Rows)) {
+            if ($row.Tag -and [string]$row.Tag.id -eq $ModelId) {
+                $grid.ClearSelection()
+                $row.Selected = $true
+                if ($row.Index -ge 0) {
+                    $grid.FirstDisplayedScrollingRowIndex = $row.Index
+                }
+                return
+            }
+        }
+    }.GetNewClosure()
 
     $updateBrowserDetails = {
         if ($grid.SelectedRows.Count -eq 0) {
@@ -2203,15 +2294,30 @@ function Show-ModelBrowserDialog {
         if ($selected.active) { $statusText += "AKTIVAN" }
         if ($selected.installed) { $statusText += "INSTALLED" }
         if ($selected.recommended) { $statusText += "PREPORUCEN" }
-        if ($selected.fitGroup -eq "recommended") { $statusText += "DOBAR FIT" }
+        if ($selected.recommended -and $selected.fitGroup -eq "canRun") { $statusText += "PREPORUCENI FIT" }
+        elseif ($selected.fitGroup -eq "recommended") { $statusText += "DOBAR FIT" }
         elseif ($selected.fitGroup -eq "canRun") { $statusText += "MOZE DA RADI" }
         else { $statusText += "NIJE PREPORUCEN" }
+
+        $sourceType = switch ([string]$selected.customSource) {
+            "local-file" { "Lokalni GGUF" }
+            "huggingface" { "Hugging Face" }
+            default { if ($selected.curationLevel -eq "custom") { "Rucno dodat model" } else { "Kurirani katalog" } }
+        }
+        $sourceValue = if ($selected.customSource -eq "huggingface" -and $selected.source) {
+            "$sourceType | Repo: $($selected.source) | Fajl: $($selected.filename)"
+        } elseif ($selected.customSource -eq "local-file" -and $selected.originalPath) {
+            "$sourceType | Original: $($selected.originalPath)"
+        } else {
+            $sourceType
+        }
 
         $detailBox.Text = @(
             "Status: $($statusText -join ' | ')",
             "Lokalni status: $(if ($selected.installed) { 'SKINUT' } else { 'NIJE SKINUT' })$(if ($selected.active) { ' | AKTIVAN' } else { '' })",
             "Model: $($selected.id)",
             "Family: $($selected.family) | Use case: $($selected.useCase)",
+            "Izvor modela: $sourceValue",
             "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
             "Velicina: $(Format-ModelInfoValue -Value $selected.approxSizeGiB -Suffix 'GiB') | GPU: $(Format-ModelInfoValue -Value $selected.minimumGpuMiB)/$(Format-ModelInfoValue -Value $selected.recommendedGpuMiB) MiB | RAM: $(Format-ModelInfoValue -Value $selected.minimumRamGiB -Suffix 'GiB')",
             "Installed: $(Format-ModelInfoValue -Value $selected.installedSizeGiB -Suffix 'GiB') | Need disk: $(Format-ModelInfoValue -Value $selected.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selected.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selected.hasEnoughDisk) { '--' } elseif ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
@@ -2240,11 +2346,18 @@ function Show-ModelBrowserDialog {
                 if ($item.active) { $status += "AKTIVAN" }
                 if ($item.installed) { $status += "INSTALLED" }
                 if (-not $item.installed) { $status += "NIJE SKINUT" }
+                if ($item.curationLevel -eq "custom") {
+                    $status += switch ([string]$item.customSource) {
+                        "local-file" { "LOKALNI" }
+                        "huggingface" { "HF" }
+                        default { "CUSTOM" }
+                    }
+                }
                 if ($item.recommended) { $status += "PREPORUKA" }
                 if ($item.useCaseBadges -and @($item.useCaseBadges).Count -gt 0) { $status += ((@($item.useCaseBadges) | Select-Object -First 1) -join '') }
                 $status += switch ($item.fitGroup) {
+                    "canRun" { if ($item.recommended) { "PREPORUCENI FIT" } else { "KOMPROMIS" } }
                     "recommended" { "FIT" }
-                    "canRun" { "KOMPROMIS" }
                     default { "SLAB FIT" }
                 }
                 $rowIndex = $grid.Rows.Add(
@@ -2273,7 +2386,10 @@ function Show-ModelBrowserDialog {
         }
     }.GetNewClosure()
 
-    $refreshBrowserHandler = { & $refreshBrowserGrid }.GetNewClosure()
+    $refreshBrowserHandler = {
+        $summaryLabel.Text = "Osvezavam model browser..."
+        & $refreshBrowserGrid
+    }.GetNewClosure()
     $refreshBrowserButton.Add_Click($refreshBrowserHandler)
     $searchBox.Add_TextChanged($refreshBrowserHandler)
     $familyCombo.Add_SelectedIndexChanged($refreshBrowserHandler)
@@ -2290,6 +2406,7 @@ function Show-ModelBrowserDialog {
         }
         $selected = $grid.SelectedRows[0].Tag
         try {
+            $summaryLabel.Text = "Aktiviram model $($selected.id)..."
             $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $manageModelsScript -ModelId ([string]$selected.id) 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw ($result -join [Environment]::NewLine)
@@ -2298,7 +2415,9 @@ function Show-ModelBrowserDialog {
             Refresh-ModelUiFromInstallState
             Refresh-LaunchStatus
             & $refreshBrowserGrid
+            $summaryLabel.Text = "Model je aktiviran: $($selected.id)"
         } catch {
+            $summaryLabel.Text = "Aktivacija modela nije uspela."
             Write-LaunchMessage @($_.Exception.Message)
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
         }
@@ -2329,11 +2448,12 @@ function Show-ModelBrowserDialog {
                 return
             }
             $model = Import-LocalGgufModel -SourcePath $picker.FileName
-            Write-LaunchMessage @("Lokalni model je dodat: $($model.id)")
+            Write-LaunchMessage @("Lokalni model je dodat: $($model.id)", "Izvor: $($picker.FileName)")
             Refresh-ModelUiFromInstallState
             Refresh-LaunchStatus
             & $refreshBrowserGrid
-            $summaryLabel.Text = "Dodat lokalni model: $($model.id)"
+            & $selectBrowserModelById $model.id
+            $summaryLabel.Text = "Dodat lokalni model: $($model.id) | spreman za aktivaciju ili download refresh."
         } catch {
             Write-LaunchMessage @($_.Exception.Message)
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
@@ -2347,11 +2467,12 @@ function Show-ModelBrowserDialog {
                 return
             }
             $model = Add-HuggingFaceCustomModel -Repo $dialogResult.Repo -FileName $dialogResult.FileName -Label $dialogResult.Label -Family $dialogResult.Family
-            Write-LaunchMessage @("HF model je dodat u katalog: $($model.id)")
+            Write-LaunchMessage @("HF model je dodat u katalog: $($model.id)", "Repo: $($dialogResult.Repo)", "Fajl: $($dialogResult.FileName)")
             Refresh-ModelUiFromInstallState
             Refresh-LaunchStatus
             & $refreshBrowserGrid
-            $summaryLabel.Text = "Dodat HF model u katalog: $($model.id)"
+            & $selectBrowserModelById $model.id
+            $summaryLabel.Text = "Dodat HF model: $($model.id) | spreman za download i aktivaciju."
         } catch {
             Write-LaunchMessage @($_.Exception.Message)
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
@@ -2360,6 +2481,7 @@ function Show-ModelBrowserDialog {
 
     $useRecommendedButton.Add_Click({
         try {
+            $summaryLabel.Text = "Aktiviram preporuceni model za ovu masinu..."
             $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File $manageModelsScript -UseRecommended 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw ($result -join [Environment]::NewLine)
@@ -2368,7 +2490,9 @@ function Show-ModelBrowserDialog {
             Refresh-ModelUiFromInstallState
             Refresh-LaunchStatus
             & $refreshBrowserGrid
+            $summaryLabel.Text = "Preporuceni model je aktiviran."
         } catch {
+            $summaryLabel.Text = "Aktivacija preporuke nije uspela."
             Write-LaunchMessage @($_.Exception.Message)
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
         }
@@ -2380,6 +2504,7 @@ function Show-ModelBrowserDialog {
         }
         try {
             $selected = $grid.SelectedRows[0].Tag
+            $summaryLabel.Text = "Uporedjujem model $($selected.id) sa aktivnim i preporucenim izborom..."
             $recommendedId = if ($recommendationBundle -and $recommendationBundle.recommendedModel) { [string]$recommendationBundle.recommendedModel.id } else { $null }
             $activeId = [string](Get-InstallState).modelId
             $ids = @($selected.id, $activeId, $recommendedId) | Where-Object { $_ } | Select-Object -Unique
@@ -2393,16 +2518,27 @@ function Show-ModelBrowserDialog {
             foreach ($item in @($compare.models)) {
                 $lines.Add("$($item.id)") | Out-Null
                 $lines.Add("  Family: $($item.family) | Speed: $($item.speedEstimateLabel) | Agentic: $($item.agenticScore)/10 | OpenCode: $($item.opencodeFit)/10") | Out-Null
-                $lines.Add("  Size: $($item.approxSizeGiB) GiB | Fit: $($item.fitGroup) | Badge: $((@($item.useCaseBadges) -join ', '))") | Out-Null
+                $fitLabel = if ($item.recommended -and $item.fitGroup -eq "canRun") { "recommended-canRun" } else { [string]$item.fitGroup }
+                $lines.Add("  Size: $($item.approxSizeGiB) GiB | Fit: $fitLabel | Badge: $((@($item.useCaseBadges) -join ', '))") | Out-Null
             }
             $detailBox.Text = $lines -join [Environment]::NewLine
+            $summaryLabel.Text = "Poredenje je spremno za model $($selected.id)."
         } catch {
+            $summaryLabel.Text = "Poredenje modela nije uspelo."
             $detailBox.Text = $_.Exception.Message
         }
     }.GetNewClosure())
 
+    $script:BrowserDownloadStatusBox = $browserDownloadStatusBox
+    $script:BrowserSummaryLabel = $summaryLabel
+    Refresh-ModelDownloadProgressView
     & $refreshBrowserGrid
-    [void]$browserForm.ShowDialog($form)
+    try {
+        [void]$browserForm.ShowDialog($form)
+    } finally {
+        $script:BrowserDownloadStatusBox = $null
+        $script:BrowserSummaryLabel = $null
+    }
 }
 
 function Show-AboutDialog {
@@ -2644,9 +2780,19 @@ $modelInfoBox.ReadOnly = $true
 $modelInfoBox.BackColor = [System.Drawing.Color]::White
 $settingsPanel.Controls.Add($modelInfoBox)
 
+$modelDownloadStatusBox = New-Object System.Windows.Forms.TextBox
+$modelDownloadStatusBox.Location = New-Object System.Drawing.Point(18, 262)
+$modelDownloadStatusBox.Size = New-Object System.Drawing.Size(567, 90)
+$modelDownloadStatusBox.Multiline = $true
+$modelDownloadStatusBox.ScrollBars = "Vertical"
+$modelDownloadStatusBox.ReadOnly = $true
+$modelDownloadStatusBox.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 235)
+$modelDownloadStatusBox.Text = "Download status ce se prikazati ovde cim pokrenes preuzimanje modela."
+$settingsPanel.Controls.Add($modelDownloadStatusBox)
+
 $presetGroup = New-Object System.Windows.Forms.GroupBox
 $presetGroup.Text = "Quick presets"
-$presetGroup.Location = New-Object System.Drawing.Point(18, 262)
+$presetGroup.Location = New-Object System.Drawing.Point(18, 362)
 $presetGroup.Size = New-Object System.Drawing.Size(567, 248)
 $settingsPanel.Controls.Add($presetGroup)
 
@@ -2703,23 +2849,23 @@ $presetCompareBox.ReadOnly = $true
 $presetCompareBox.BackColor = [System.Drawing.Color]::White
 $presetGroup.Controls.Add($presetCompareBox)
 
-$contextRow = Add-ContextRow -Parent $settingsPanel -Y 522 -SelectedValue ([int]$settings.llama.contextSize)
-$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 610 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
-$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 698 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
-$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 786 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
-$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 874 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
-$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 962 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
+$contextRow = Add-ContextRow -Parent $settingsPanel -Y 622 -SelectedValue ([int]$settings.llama.contextSize)
+$outputRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Max output tokens" -Y 710 -Minimum 1024 -Maximum 16384 -TickFrequency 1024 -Value ([int]$settings.llama.maxOutputTokens) -Increment 256
+$buildRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Build steps" -Y 798 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.buildSteps)
+$planRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Plan steps" -Y 886 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.planSteps)
+$generalRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "General steps" -Y 974 -Minimum 20 -Maximum 200 -TickFrequency 10 -Value ([int]$settings.opencode.generalSteps)
+$exploreRow = Add-TrackFieldRow -Parent $settingsPanel -LabelText "Explore steps" -Y 1062 -Minimum 10 -Maximum 150 -TickFrequency 10 -Value ([int]$settings.opencode.exploreSteps)
 
 $settingsStatus = New-Object System.Windows.Forms.Label
 $settingsStatus.Text = "Promene vaze za buduca pokretanja."
-$settingsStatus.Location = New-Object System.Drawing.Point(18, 1052)
+$settingsStatus.Location = New-Object System.Drawing.Point(18, 1152)
 $settingsStatus.Size = New-Object System.Drawing.Size(300, 24)
 $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $settingsPanel.Controls.Add($settingsStatus)
 
 $saveSettingsButton = New-Object System.Windows.Forms.Button
 $saveSettingsButton.Text = "Sacuvaj podesavanja"
-$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 1046)
+$saveSettingsButton.Location = New-Object System.Drawing.Point(430, 1146)
 $saveSettingsButton.Size = New-Object System.Drawing.Size(155, 34)
 $saveSettingsButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $saveSettingsButton.ForeColor = [System.Drawing.Color]::White
@@ -2728,7 +2874,7 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(265, 1046)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(265, 1146)
 $resetSettingsButton.Size = New-Object System.Drawing.Size(152, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
 
@@ -3177,11 +3323,16 @@ $runNextActionButton.Add_Click({
     }
 })
 $openFolderButton.Add_Click({
-    Start-Process explorer.exe $root
-    Write-LaunchMessage @("Otvoren install folder: $root")
+    $installRoot = Get-LocalQwenStateRoot
+    Start-Process explorer.exe $installRoot
+    Write-LaunchMessage @("Otvoren install folder: $installRoot")
 })
 $repairInstallButton.Add_Click({
     try {
+        Write-LaunchMessage @(
+            "Pokrecem Repair install.",
+            "Status linija i output panel ce se osvezavati dok repair traje."
+        )
         Invoke-BackgroundShellScript -Name "Repair install" -ScriptPath $repairInstallScript -OnSuccess {
             Refresh-LaunchStatus
             Refresh-LogsView
@@ -3223,6 +3374,7 @@ $repairAllHealthButton.Add_Click({
 $guidedRepairButton.Add_Click({
     try {
         $payload = Get-HealthCenterData
+        Write-LaunchMessage @("Pokrecem guided repair: $([string]$payload.primaryAction.id)")
         Invoke-HealthActionById -ActionId ([string]$payload.primaryAction.id)
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
@@ -3231,6 +3383,10 @@ $guidedRepairButton.Add_Click({
 $testPromptButton.Add_Click({
     try {
         $profile = [string](Get-Settings).profile
+        Write-LaunchMessage @(
+            "Pokrecem test prompt za profil '$profile'.",
+            "Cim zahtev zavrsi, odgovor i benchmark ce se pojaviti u output panelu."
+        )
         Invoke-BackgroundShellScript -Name "Test prompt" -ScriptPath (Join-Path $PSScriptRoot "test-prompt.ps1") -ArgumentList @("-Profile", $profile) -OnSuccess {
             Refresh-LogsView
             Refresh-DiagnosticsView
@@ -3266,6 +3422,10 @@ $modelManagerButton.Add_Click({
 })
 $diagnosticsButton.Add_Click({
     try {
+        Write-LaunchMessage @(
+            "Pokrecem diagnostics export.",
+            "Bundle i summary ce se pojaviti cim izvoz bude gotov."
+        )
         Invoke-BackgroundShellScript -Name "Diagnostics export" -ScriptPath $exportDiagnosticsScript -OnSuccess {
             Refresh-DiagnosticsView
         }
@@ -3280,6 +3440,10 @@ $refreshDiagnosticsButton.Add_Click({
 })
 $exportDiagnosticsButton.Add_Click({
     try {
+        Write-LaunchMessage @(
+            "Pokrecem diagnostics export iz Diagnostics taba.",
+            "Prati status liniju dok se bundle pravi."
+        )
         Invoke-BackgroundShellScript -Name "Diagnostics export" -ScriptPath $exportDiagnosticsScript -OnSuccess {
             Refresh-DiagnosticsView
         }
@@ -3289,6 +3453,10 @@ $exportDiagnosticsButton.Add_Click({
 })
 $updatesButton.Add_Click({
     try {
+        Write-LaunchMessage @(
+            "Proveravam da li postoji noviji javni release.",
+            "Rezultat ce se pojaviti u output panelu cim provera zavrsi."
+        )
         Invoke-BackgroundShellScript -Name "Check updates" -ScriptPath $checkUpdatesScript
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
@@ -3296,6 +3464,10 @@ $updatesButton.Add_Click({
 })
 $installUpdateButton.Add_Click({
     try {
+        Write-LaunchMessage @(
+            "Pokrecem install update tok.",
+            "Ako postoji noviji javni release, installer ce biti preuzet i pokrenut."
+        )
         Invoke-BackgroundShellScript -Name "Install update" -ScriptPath $installUpdateScript
     } catch {
         Write-LaunchMessage @($_.Exception.Message)

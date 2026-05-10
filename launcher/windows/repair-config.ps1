@@ -9,7 +9,7 @@ if ($restored.Count -gt 0) {
 }
 
 Save-Settings -Settings $settings
-$messages.Add("Settings: $(Join-Path (Get-LocalQwenRoot) 'state\settings.json')") | Out-Null
+$messages.Add("Settings: $(Join-Path (Get-LocalQwenStateRoot) 'state\settings.json')") | Out-Null
 $messages.Add("OpenCode config: $(Update-OpenCodeConfig)") | Out-Null
 $messages.Add("Install report: $(Write-InstallReport)") | Out-Null
 

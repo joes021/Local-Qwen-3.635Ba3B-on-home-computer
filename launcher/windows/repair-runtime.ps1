@@ -8,7 +8,7 @@ if ($restored.Count -gt 0) {
     $messages.Add("Obnovljeni bundled fajlovi: $($restored -join ', ')") | Out-Null
 }
 
-Ensure-Directory (Join-Path (Get-LocalQwenRoot) "launchers")
+Ensure-Directory (Join-Path (Get-LocalQwenStateRoot) "launchers")
 Repair-DesktopShortcuts
 $messages.Add("Desktop shortcuts su obnovljeni.") | Out-Null
 

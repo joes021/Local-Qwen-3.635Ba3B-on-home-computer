@@ -1,4 +1,8 @@
+import json
 import pathlib
+import os
+import subprocess
+import tempfile
 import unittest
 
 
@@ -9,6 +13,22 @@ INSTALL_PS1_PATH = REPO_ROOT / "install" / "windows" / "install.ps1"
 RELEASE_ALL_PATH = REPO_ROOT / "packaging" / "release-all.ps1"
 WINDOWS_LAUNCHER_DIR = REPO_ROOT / "launcher" / "windows"
 WINDOWS_COMMON_PATH = WINDOWS_LAUNCHER_DIR / "local-qwen-common.ps1"
+
+
+def run_powershell_snippet(snippet: str, *, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            snippet,
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
 
 
 class WindowsInstallerPackagingTests(unittest.TestCase):
@@ -86,12 +106,23 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         install_content = INSTALL_PS1_PATH.read_text(encoding="utf-8")
         iss_content = ISS_PATH.read_text(encoding="utf-8")
         uninstall_content = (WINDOWS_LAUNCHER_DIR / "uninstall.ps1").read_text(encoding="utf-8")
+        install_update_content = (WINDOWS_LAUNCHER_DIR / "install-update.ps1").read_text(encoding="utf-8")
+        dump_ui_content = (WINDOWS_LAUNCHER_DIR / "dump-ui-text.ps1").read_text(encoding="utf-8")
         self.assertIn("uninstall.ps1", install_content)
         self.assertIn("Uninstall Local Qwen.lnk", install_content)
         self.assertIn("install-update.ps1", install_content)
         self.assertIn("Update Local Qwen.lnk", install_content)
         self.assertIn("Uninstallable=yes", iss_content)
         self.assertIn("Get-DesktopShortcutNames", uninstall_content)
+        self.assertIn("$root = Get-LocalQwenStateRoot", uninstall_content)
+        self.assertIn('Write-Host "Trenutna verzija: v$($info.currentVersion)"', install_update_content)
+        self.assertIn('Write-Host ("Preuzet installer: {0:N2} MiB" -f ($downloadedFile.Length / 1MB))', install_update_content)
+        self.assertIn('Start-Process -FilePath $targetPath -PassThru', install_update_content)
+        self.assertIn("$codeRoot = Get-LocalQwenCodeRoot", dump_ui_content)
+        self.assertIn("function Get-PreferredDumpStateRoot", dump_ui_content)
+        self.assertIn('$installedRoot = Join-Path $env:USERPROFILE "LocalQwenHome"', dump_ui_content)
+        self.assertIn("$stateRoot = Get-PreferredDumpStateRoot", dump_ui_content)
+        self.assertIn('$controlCenterPath = Join-Path $stateRoot "launchers\\control-center.ps1"', dump_ui_content)
 
     def test_release_script_attaches_full_fix_log_asset_and_short_summary(self):
         content = RELEASE_ALL_PATH.read_text(encoding="utf-8")
@@ -124,6 +155,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         start_opencode = (WINDOWS_LAUNCHER_DIR / "start-opencode.ps1").read_text(encoding="utf-8")
         launch_agent = (WINDOWS_LAUNCHER_DIR / "launch-agent.ps1").read_text(encoding="utf-8")
         verify_install = (WINDOWS_LAUNCHER_DIR / "verify-install.ps1").read_text(encoding="utf-8")
+        configure_settings = (WINDOWS_LAUNCHER_DIR / "configure-settings.ps1").read_text(encoding="utf-8")
+        repair_config = (WINDOWS_LAUNCHER_DIR / "repair-config.ps1").read_text(encoding="utf-8")
 
         self.assertIn("function Get-OpenCodeExecutable", common)
         self.assertIn("function Test-OpenCodeAvailable", common)
@@ -134,6 +167,13 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("OPENCODE_ENABLE_EXA", launch_agent)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", start_opencode)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", launch_agent)
+        self.assertIn("$root = Get-LocalQwenStateRoot", launch_agent)
+        self.assertIn("Write-Utf8NoBomText -Path $sessionConfigPath", launch_agent)
+        self.assertIn("Write-Utf8NoBomText -Path $sessionMetaPath", launch_agent)
+        self.assertIn('$settingsPath = Join-Path (Get-LocalQwenStateRoot) "state\\settings.json"', configure_settings)
+        self.assertIn("Join-Path (Get-LocalQwenStateRoot) 'state\\settings.json'", repair_config)
+        self.assertIn("$modelPath = Get-StateModelFilePath -State $state", verify_install)
+        self.assertIn("Join-Path (Get-LocalQwenStateRoot) \"state\\install-report.json\"", verify_install)
 
     def test_opencode_config_enables_websearch_and_webfetch(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
@@ -157,31 +197,46 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
     def test_model_browser_omits_empty_search_and_family_arguments(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
         self.assertIn('if (-not [string]::IsNullOrWhiteSpace($Search)) {', common)
-        self.assertIn('$arguments += @("--search", $Search)', common)
+        self.assertIn('$arguments.Add("--search") | Out-Null', common)
+        self.assertIn('$arguments.Add($Search) | Out-Null', common)
         self.assertIn('if (-not [string]::IsNullOrWhiteSpace($Family)) {', common)
-        self.assertIn('$arguments += @("--family", $Family)', common)
+        self.assertIn('$arguments.Add("--family") | Out-Null', common)
+        self.assertIn('$arguments.Add($Family) | Out-Null', common)
+        self.assertIn('$arguments = [System.Collections.Generic.List[string]]::new()', common)
+        self.assertIn('return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())', common)
+        self.assertIn('Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--installed-model-ids"', common)
 
     def test_model_browser_reconciles_installed_size_locally(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
         self.assertIn("$sizeMap = Get-InstalledModelSizeMap", common)
+        self.assertIn('$arguments = [System.Collections.Generic.List[string]]::new()', common)
         self.assertIn("if ($sizeMap.Contains($modelId)) {", common)
         self.assertIn("$model.installedSizeBytes = $installedBytes", common)
         self.assertIn("$model.installedSizeGiB = [math]::Round(($installedBytes / 1GB), 2)", common)
         self.assertIn("function Get-CustomModelsRegistryPath", common)
         self.assertIn("function Get-EffectiveDefaultsPath", common)
+        self.assertIn("function Get-InstallSummaryPath", common)
         self.assertIn("function Import-LocalGgufModel", common)
         self.assertIn("function Add-HuggingFaceCustomModel", common)
+        self.assertIn('$payload = Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())', common)
+
+    def test_manage_models_groups_recommended_choice_ahead_of_can_run_bucket(self):
+        content = (WINDOWS_LAUNCHER_DIR / "manage-models.ps1").read_text(encoding="utf-8")
+        self.assertIn('"Preporuceni za ovu masinu" = @($browser.models | Where-Object { $_.recommended -or $_.fitGroup -eq "recommended" })', content)
+        self.assertIn('"Moze da radi uz kompromis" = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" -and -not $_.recommended })', content)
 
     def test_runtime_helpers_skip_empty_optional_arguments(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
         self.assertIn("function Add-OptionalRuntimeArgument", common)
         self.assertIn("function Convert-CollectionToJsonArrayString", common)
+        self.assertIn("function Convert-CollectionToCliListArgument", common)
         self.assertIn('if (-not [string]::IsNullOrWhiteSpace($Value)) {', common)
         self.assertIn('Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile"', common)
         self.assertIn('Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id"', common)
-        self.assertIn('Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--lifecycle-state"', common)
+        self.assertIn('$arguments.Add("--lifecycle-state") | Out-Null', common)
+        self.assertIn('return Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())', common)
         self.assertIn('return "[]"', common)
-        self.assertIn('$warningsJson = Convert-CollectionToJsonArrayString -Collection $warnings', common)
+        self.assertIn('$warningsJson = Convert-CollectionToCliListArgument -Collection $warnings', common)
 
     def test_background_worker_uses_explicit_powershell_path_inside_job(self):
         control_center = (WINDOWS_LAUNCHER_DIR / "control-center.ps1").read_text(encoding="utf-8")
@@ -241,7 +296,191 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('@{ Source = (Join-Path $baseDir "launcher\\windows"); Destination = (Join-Path $root "launchers"); Label = "launchers" }', common)
         self.assertIn('@{ Source = (Join-Path $baseDir "release-notes.txt"); Destination = (Join-Path $root "release-notes.txt"); Label = "release-notes-root" }', common)
         self.assertIn("$restoredSupport = @(Restore-BundledSupportFiles)", repair)
-        self.assertIn('Convert-CollectionToJsonArrayString -Collection $found', repair)
+        self.assertIn('Convert-CollectionToCliListArgument -Collection $found', repair)
+
+    def test_windows_common_can_fall_back_to_installed_localqwenhome_when_repo_has_no_state(self):
+        common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
+        self.assertIn("function Get-LocalQwenCodeRoot", common)
+        self.assertIn("function Get-LocalQwenStateRoot", common)
+        self.assertIn("function Get-StateModelFilePath", common)
+        self.assertIn("return Get-LocalQwenCodeRoot", common)
+        self.assertIn('$installedRoot = Join-Path $env:USERPROFILE "LocalQwenHome"', common)
+        self.assertIn('if (Test-Path (Join-Path $codeRoot "state\\install-state.json")) {', common)
+        self.assertIn("return $codeRoot", common)
+        self.assertIn('if (Test-Path (Join-Path $installedRoot "state\\install-state.json")) {', common)
+        self.assertIn('return (Resolve-Path $installedRoot).Path', common)
+        self.assertIn('if ($State.PSObject.Properties["modelPath"] -and -not [string]::IsNullOrWhiteSpace([string]$State.modelPath)) {', common)
+        self.assertIn('$state.modelPath = $resolvedModelPath', common)
+
+    def test_import_local_gguf_model_registers_custom_model_without_touching_real_profile(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            (install_root / "state").mkdir(parents=True)
+            (install_root / "models").mkdir(parents=True)
+            (install_root / "state" / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "modelFile": str(install_root / "models" / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            local_model = temp_path / "sample.gguf"
+            local_model.write_text("GGUFTEST", encoding="ascii")
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            $model = Import-LocalGgufModel -SourcePath '{local_model}' -Label 'Imported sample' -Family 'Custom'
+            $catalog = @(Get-ModelCatalog)
+            $found = $catalog | Where-Object {{ $_.id -eq 'sample.gguf' }} | Select-Object -First 1
+            [pscustomobject]@{{
+              imported = [bool]$model
+              found = [bool]$found
+              label = if ($found) {{ $found.label }} else {{ $null }}
+              copied = Test-Path '{install_root / "models" / "sample.gguf"}'
+            }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertTrue(payload["imported"])
+            self.assertTrue(payload["found"])
+            self.assertEqual(payload["label"], "Imported sample")
+            self.assertTrue(payload["copied"])
+
+    def test_add_huggingface_custom_model_registers_entry_without_touching_real_profile(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            (install_root / "state").mkdir(parents=True)
+            (install_root / "state" / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "modelFile": str(install_root / "models" / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            $model = Add-HuggingFaceCustomModel -Repo 'Qwen/Qwen3-8B-GGUF' -FileName 'Qwen3-8B-Q4_K_M.gguf' -Label 'HF sample' -Family 'Qwen'
+            $catalog = @(Get-ModelCatalog)
+            $found = $catalog | Where-Object {{ $_.label -eq 'HF sample' }} | Select-Object -First 1
+            [pscustomobject]@{{
+              added = [bool]$model
+              found = [bool]$found
+              modelId = if ($found) {{ $found.id }} else {{ $null }}
+              source = if ($found) {{ $found.source }} else {{ $null }}
+            }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertTrue(payload["added"])
+            self.assertTrue(payload["found"])
+            self.assertEqual(payload["modelId"], "Qwen3-8B-Q4_K_M.gguf")
+            self.assertEqual(payload["source"], "Qwen/Qwen3-8B-GGUF")
+
+    def test_model_browser_supports_install_state_with_model_path_without_model_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            (install_root / "state").mkdir(parents=True)
+            (install_root / "models").mkdir(parents=True)
+            (install_root / "state" / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "modelPath": str(install_root / "models" / "Qwen3-8B-Q4_K_M.gguf"),
+                        "modelId": "Qwen3-8B-Q4_K_M.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            Add-HuggingFaceCustomModel -Repo 'repo/demo' -FileName 'demo.gguf' -Label 'Demo HF' -Family 'Custom' | Out-Null
+            $payload = Get-ModelBrowserPayload
+            [pscustomobject]@{{
+              hasCustom = [bool](@($payload.models | Where-Object {{ $_.id -eq 'demo.gguf' }}).Count)
+              currentModelPath = Get-StateModelFilePath -State (Get-InstallState)
+            }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertTrue(payload["hasCustom"])
+            self.assertTrue(payload["currentModelPath"].endswith("Qwen3-8B-Q4_K_M.gguf"))
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            Add-HuggingFaceCustomModel -Repo 'repo/demo' -FileName 'demo.gguf' -Label 'Demo HF' -Family 'Custom' | Out-Null
+            $payload = Get-ModelBrowserPayload
+            $found = $payload.models | Where-Object {{ $_.id -eq 'demo.gguf' }} | Select-Object -First 1
+            [pscustomobject]@{{
+              fitGroup = $found.fitGroup
+              speed = $found.speedEstimateLabel
+              diskNeeded = $found.diskNeededGiB
+              hasEnoughDisk = $found.hasEnoughDisk
+            }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["fitGroup"], "unknown")
+            self.assertEqual(payload["speed"], "nepoznato")
+            self.assertIsNone(payload["diskNeeded"])
+            self.assertIsNone(payload["hasEnoughDisk"])
+            self.assertNotIn("best-for-speed", completed.stdout)
+
+    def test_repair_runtime_uses_state_root_for_launchers(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "repair-runtime.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("Get-LocalQwenStateRoot", text)
+        self.assertNotIn('Join-Path (Get-LocalQwenRoot) "launchers"', text)
+
+    def test_uninstall_keep_models_does_not_emit_raw_boolean_lines(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "uninstall.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("[void](Remove-PathIfExists", text)
+
+    def test_windows_installer_excludes_pycache_and_pyc(self):
+        iss_path = REPO_ROOT / "packaging" / "windows" / "LocalQwenSetup.iss"
+        text = iss_path.read_text(encoding="utf-8")
+
+        self.assertIn('Excludes: "__pycache__\\*,*.pyc"', text)
+
+    def test_dump_ui_text_prefers_installed_release_notes_and_version(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "dump-ui-text.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('Join-Path $stateRoot "release-notes.txt"', text)
+        self.assertIn('Join-Path $stateRoot "version.json"', text)
+
+    def test_export_diagnostics_includes_repair_summary_and_token_history(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "local-qwen-common.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('state\\repair-summary.json', text)
+        self.assertIn('state\\token-metrics-history.json', text)
+        self.assertIn('release-notes.txt', text)
 
 
 if __name__ == "__main__":

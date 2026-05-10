@@ -11,7 +11,7 @@ param(
 
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
-$root = Get-LocalQwenRoot
+$root = Get-LocalQwenStateRoot
 $sessionRoot = Join-Path $root "state\agent-session-config"
 $sessionConfigPath = Join-Path $sessionRoot "opencode.json"
 $sessionMetaPath = Join-Path $root "state\agent-launch-settings.json"
@@ -167,7 +167,7 @@ function Save-SessionConfig {
         "permission" = (Build-PermissionConfig -Security $Security -Capability $Capability)
     }
 
-    $config | ConvertTo-Json -Depth 20 | Set-Content -Path $sessionConfigPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $sessionConfigPath -Content ($config | ConvertTo-Json -Depth 20)
 
     $meta = [ordered]@{
         securityMode = $Security
@@ -178,7 +178,7 @@ function Save-SessionConfig {
         generatedAt = (Get-Date).ToString("s")
     }
 
-    $meta | ConvertTo-Json -Depth 5 | Set-Content -Path $sessionMetaPath -Encoding UTF8
+    Write-Utf8NoBomText -Path $sessionMetaPath -Content ($meta | ConvertTo-Json -Depth 5)
 }
 
 if (-not (Test-Path $WorkingFolder)) {

@@ -36,8 +36,8 @@ Write-Host ""
 
 $browser = Get-ModelBrowserPayload -FitOnly
 $groups = [ordered]@{
-    "Preporuceni za ovu masinu" = @($browser.models | Where-Object { $_.fitGroup -eq "recommended" })
-    "Moze da radi uz kompromis" = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" })
+    "Preporuceni za ovu masinu" = @($browser.models | Where-Object { $_.recommended -or $_.fitGroup -eq "recommended" })
+    "Moze da radi uz kompromis" = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" -and -not $_.recommended })
     "Nije preporuceno za ovu konfiguraciju" = @((Get-ModelBrowserPayload).models | Where-Object { $_.fitGroup -eq "notRecommended" })
 }
 

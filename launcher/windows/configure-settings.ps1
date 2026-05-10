@@ -36,7 +36,8 @@ if ($ExploreSteps) { $settings.opencode.exploreSteps = $ExploreSteps }
 
 Save-Settings -Settings $settings
 $configPath = Update-OpenCodeConfig
+$settingsPath = Join-Path (Get-LocalQwenStateRoot) "state\settings.json"
 
 Write-Host "Sacuvano."
-Write-Host "Settings: $(Join-Path (Get-LocalQwenRoot) 'state\settings.json')"
+Write-Host "Settings: $settingsPath"
 Write-Host "OpenCode config: $configPath"

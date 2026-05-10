@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.4
+- `Health`, `Onboarding` i `Diagnostics` Windows tabovi sada imaju cistiji raspored za duge tekstove: `Stanje` u `Health` tabu vise nije jedna predugacka slepljena linija, `Sledeci korak` u `Onboarding` ima vise prostora i vertikalni skrol, a `Diagnostics` meta blok je prosiren da primi vise runtime i release informacija bez zbijanja
+- `Health` pregled sada razdvaja kljucne informacije po redovima (`Stanje`, `Ozbiljnost / profil`, `Model`), pa su severity, profil i aktivni model citljivi i kada je poruka duza ili kada health centar vrati vise detalja
+- `Diagnostics` bundle i live prikazi ostaju poravnati sa instaliranom kopijom i instaliranim stanjem, a novi Windows installer kandidat `2.10.4` je izgradjen i proveren posle ovih layout i UX popravki
+
 v2.10.3
 - Windows `Model library 2.0` sada jasno prikazuje lokalni status modela (`SKINUT`, `NIJE SKINUT`, `AKTIVAN`) i ne ostavlja utisak da je katalog samo spisak preporuka bez stvarnog stanja na disku
 - `Preuzmi izabrani model` i `Preuzmi / osvezi` sada daju vidljiv progress kroz status liniju i output panel: procenat, preuzeto/ukupno, brzinu i ETA, pa download vise ne deluje kao da se nista ne desava

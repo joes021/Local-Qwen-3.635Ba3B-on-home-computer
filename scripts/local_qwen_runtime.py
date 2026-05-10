@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import json
 import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+
+GPU_THRESHOLD_TOLERANCE_MIB = 128
 
 
 def load_defaults(path: str) -> dict:
@@ -98,7 +101,7 @@ def score_model(model: dict, gpu_mib: int | None, ram_gib: int | None, profile: 
         score -= 4
         reasons.append("Model je oznacen kao eksperimentalni izbor.")
 
-    if gpu_mib and minimum_gpu and gpu_mib < minimum_gpu:
+    if gpu_mib and minimum_gpu and gpu_mib + GPU_THRESHOLD_TOLERANCE_MIB < minimum_gpu:
         score -= 60
         reasons.append(f"GPU je ispod minimalnog praga za {model['label']}.")
     elif gpu_mib and recommended_gpu:
@@ -143,7 +146,7 @@ def classify_download_group(model: dict, gpu_mib: int | None, ram_gib: int | Non
     agentic_score = int(model.get("agenticScore", 5) or 5)
     opencode_fit = int(model.get("opencodeFit", 5) or 5)
 
-    if minimum_gpu and gpu_mib and gpu_mib < minimum_gpu:
+    if minimum_gpu and gpu_mib and gpu_mib + GPU_THRESHOLD_TOLERANCE_MIB < minimum_gpu:
         reasons.append("GPU je ispod minimalnog praga.")
         return "notRecommended", reasons
     if minimum_ram and ram_gib and ram_gib < minimum_ram:
@@ -354,6 +357,13 @@ def build_model_browser(
         use_case_lower = use_case.lower()
         installed_size_bytes = int(installed_model_sizes.get(model_id, 0))
         approx_size_bytes = int(float(model.get("approxSizeGiB", 0) or 0) * (1024 ** 3))
+        has_unknown_custom_metadata = (
+            str(model.get("curationLevel", "")).lower() == "custom"
+            and approx_size_bytes <= 0
+            and int(model.get("minExpectedBytes", 0) or 0) <= 0
+            and int(model.get("minimumGpuMiB", 0) or 0) <= 0
+            and int(model.get("recommendedGpuMiB", 0) or 0) <= 0
+        )
         disk_needed_bytes = max(0, approx_size_bytes - installed_size_bytes)
         disk_needed_gib = round(disk_needed_bytes / (1024 ** 3), 2) if disk_needed_bytes > 0 else 0.0
 
@@ -363,7 +373,11 @@ def build_model_browser(
         if quality_tier == "quality":
             badges.append("best-quality")
             badges.append("best-quality-model")
-        if quality_tier == "compact" and int(model.get("recommendedGpuMiB", 0) or 0) <= 8192:
+        if (
+            not has_unknown_custom_metadata
+            and quality_tier == "compact"
+            and int(model.get("recommendedGpuMiB", 0) or 0) <= 8192
+        ):
             badges.append("best-for-speed")
         if model.get("primaryRecommendation"):
             badges.append("balanced-agentic")
@@ -371,18 +385,30 @@ def build_model_browser(
         if "reason" in use_case_lower:
             badges.append("reasoning")
 
-        if fit_group == "recommended":
+        if has_unknown_custom_metadata:
+            fit_group = "unknown"
+            speed_label = "nepoznato"
+            speed_reason = "Nema dovoljno metadata da se procene brzina, fit i potreban prostor."
+            disk_needed_bytes = None
+            disk_needed_gib = None
+            has_enough_disk = None
+        elif fit_group == "recommended":
             speed_label = "brzo" if quality_tier == "compact" and (not gpu_mib or gpu_mib <= 8192) else "stabilno"
+            has_enough_disk = True if free_disk_gib is None else bool(float(free_disk_gib) >= disk_needed_gib)
         elif fit_group == "canRun":
             speed_label = "umereno"
+            has_enough_disk = True if free_disk_gib is None else bool(float(free_disk_gib) >= disk_needed_gib)
         else:
             speed_label = "sporo / rizicno"
+            has_enough_disk = True if free_disk_gib is None else bool(float(free_disk_gib) >= disk_needed_gib)
 
         speed_reason = (
             "Dobar fit za ovu masinu i mali kvant."
             if speed_label == "brzo"
             else "Treba malo vise prostora ili VRAM-a, ali deluje upotrebljivo."
             if speed_label == "umereno"
+            else "Nema dovoljno metadata da se procene brzina, fit i potreban prostor."
+            if speed_label == "nepoznato"
             else "Ovaj izbor je veci ili tezi od idealnog fit-a za ovu masinu."
         )
 
@@ -396,7 +422,7 @@ def build_model_browser(
         entry["diskNeededBytes"] = disk_needed_bytes
         entry["diskNeededGiB"] = disk_needed_gib
         entry["freeDiskGiB"] = round(float(free_disk_gib), 2) if free_disk_gib is not None else None
-        entry["hasEnoughDisk"] = True if free_disk_gib is None else bool(float(free_disk_gib) >= disk_needed_gib)
+        entry["hasEnoughDisk"] = has_enough_disk
         entry["speedEstimateLabel"] = speed_label
         entry["speedEstimateReason"] = speed_reason
         entry["statusTags"] = [
@@ -407,6 +433,7 @@ def build_model_browser(
                 ("recommended", recommended),
                 ("fit", fit_group in {"recommended", "canRun"}),
                 ("verified", str(model.get("curationLevel", "")).lower() == "verified"),
+                ("unknown-metadata", has_unknown_custom_metadata),
             )
             if enabled
         ]
@@ -782,6 +809,16 @@ def command_repair_summary(args: argparse.Namespace) -> int:
     def parse_json_list(raw: str) -> list[str]:
         if not raw:
             return []
+        if raw.startswith("b64:"):
+            try:
+                decoded = base64.b64decode(raw[4:]).decode("utf-8")
+                data = json.loads(decoded)
+                if isinstance(data, list):
+                    return [str(item) for item in data if str(item).strip()]
+            except Exception:
+                pass
+        if "\x1f" in raw:
+            return [item for item in (part.strip() for part in raw.split("\x1f")) if item]
         try:
             data = json.loads(raw)
             if isinstance(data, list):
@@ -871,16 +908,31 @@ def command_latest_release(args: argparse.Namespace) -> int:
     tag_name = payload.get("tag_name", "").lstrip("v")
     current_tuple = _coerce_semver_tuple(args.current_version)
     latest_tuple = _coerce_semver_tuple(tag_name)
+    ahead_of_public_release = False
+    version_relation = "unknown"
     if current_tuple is not None and latest_tuple is not None:
         update_available = latest_tuple > current_tuple
+        ahead_of_public_release = current_tuple > latest_tuple
+        if update_available:
+            version_relation = "behind"
+        elif ahead_of_public_release:
+            version_relation = "ahead"
+        else:
+            version_relation = "equal"
     else:
         update_available = bool(tag_name and tag_name != args.current_version)
+        if tag_name and tag_name == args.current_version:
+            version_relation = "equal"
+        elif update_available:
+            version_relation = "behind"
     print(
         json.dumps(
             {
                 "currentVersion": args.current_version,
                 "latestVersion": tag_name,
                 "updateAvailable": update_available,
+                "aheadOfPublicRelease": ahead_of_public_release,
+                "versionRelation": version_relation,
                 "releaseUrl": payload.get("html_url"),
             },
             indent=2,
@@ -1202,10 +1254,19 @@ def build_health_center(
 def command_health_center(args: argparse.Namespace) -> int:
     warnings = []
     if args.warnings_json:
-        try:
-            warnings = json.loads(args.warnings_json)
-        except json.JSONDecodeError:
-            warnings = [args.warnings_json]
+        if args.warnings_json.startswith("b64:"):
+            try:
+                decoded = base64.b64decode(args.warnings_json[4:]).decode("utf-8")
+                warnings = json.loads(decoded)
+            except Exception:
+                warnings = [args.warnings_json]
+        elif "\x1f" in args.warnings_json:
+            warnings = [item for item in (part.strip() for part in args.warnings_json.split("\x1f")) if item]
+        else:
+            try:
+                warnings = json.loads(args.warnings_json)
+            except json.JSONDecodeError:
+                warnings = [args.warnings_json]
     payload = build_health_center(
         has_server=parse_bool(args.has_server),
         has_model=parse_bool(args.has_model),
@@ -1309,10 +1370,19 @@ def build_repair_plan(
 def command_repair_plan(args: argparse.Namespace) -> int:
     warnings = []
     if args.warnings_json:
-        try:
-            warnings = json.loads(args.warnings_json)
-        except json.JSONDecodeError:
-            warnings = [args.warnings_json]
+        if args.warnings_json.startswith("b64:"):
+            try:
+                decoded = base64.b64decode(args.warnings_json[4:]).decode("utf-8")
+                warnings = json.loads(decoded)
+            except Exception:
+                warnings = [args.warnings_json]
+        elif "\x1f" in args.warnings_json:
+            warnings = [item for item in (part.strip() for part in args.warnings_json.split("\x1f")) if item]
+        else:
+            try:
+                warnings = json.loads(args.warnings_json)
+            except json.JSONDecodeError:
+                warnings = [args.warnings_json]
     payload = build_repair_plan(
         has_server=parse_bool(args.has_server),
         has_model=parse_bool(args.has_model),

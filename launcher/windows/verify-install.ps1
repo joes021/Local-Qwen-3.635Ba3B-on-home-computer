@@ -3,7 +3,8 @@
 $state = Get-InstallState
 $checks = @()
 $healthOk = Test-LlamaHealth
-$reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
+$reportPath = Join-Path (Get-LocalQwenStateRoot) "state\install-report.json"
+$modelPath = Get-StateModelFilePath -State $state
 
 try {
     $reportPath = Write-InstallReport
@@ -12,10 +13,10 @@ try {
 
 $checks += [pscustomobject]@{ Name = "Install root"; Ok = (Test-Path $state.installRoot); Value = $state.installRoot }
 $checks += [pscustomobject]@{ Name = "llama server"; Ok = (Test-Path (Get-LlamaServerExe)); Value = (Get-LlamaServerExe) }
-$modelOk = (Test-Path $state.modelFile) -and (Test-ModelFileLooksComplete -Path $state.modelFile)
-$modelValue = $state.modelFile
-if (Test-Path $state.modelFile) {
-    $modelValue = "$($state.modelFile) ($((Get-Item $state.modelFile).Length) bytes)"
+$modelOk = (Test-Path $modelPath) -and (Test-ModelFileLooksComplete -Path $modelPath)
+$modelValue = $modelPath
+if (Test-Path $modelPath) {
+    $modelValue = "$modelPath ($((Get-Item $modelPath).Length) bytes)"
 }
 $checks += [pscustomobject]@{ Name = "Model file"; Ok = $modelOk; Value = $modelValue }
 $openCodeValue = "--"

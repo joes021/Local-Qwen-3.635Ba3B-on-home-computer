@@ -300,7 +300,7 @@ foreach ($dllName in $defaults.turboquant.dllNames) {
 Set-StatePropertyValue -StateObject $state -Name "turboBuildDir" -Value $buildRoot
 Set-StatePropertyValue -StateObject $state -Name "turboBinDir" -Value $binOut
 Set-StatePropertyValue -StateObject $state -Name "turboServerExe" -Value $serverExe.FullName
-$state | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $state.installRoot "state\install-state.json") -Encoding UTF8
+Write-Utf8NoBomText -Path (Join-Path $state.installRoot "state\install-state.json") -Content ($state | ConvertTo-Json -Depth 10)
 
 Write-Host "TurboQuant build zavrsen."
 Write-Host "Server: $($serverExe.FullName)"
