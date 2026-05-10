@@ -59,6 +59,43 @@ ensure_cmd() {
   return 1
 }
 
+copy_tree_if_distinct() {
+  local source_dir="$1"
+  local target_dir="$2"
+  local source_real target_real
+  source_real="$(cd "$source_dir" && pwd)"
+  mkdir -p "$target_dir"
+  target_real="$(cd "$target_dir" && pwd)"
+  if [ "$source_real" = "$target_real" ]; then
+    return 0
+  fi
+  cp -R "$source_real/." "$target_dir/"
+}
+
+copy_file_if_distinct() {
+  local source_path="$1"
+  local target_path="$2"
+  local source_real target_real target_dir
+  source_real="$(python3 - <<'PY' "$source_path"
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+)"
+  target_dir="$(dirname "$target_path")"
+  mkdir -p "$target_dir"
+  if [ -e "$target_path" ]; then
+    target_real="$(python3 - <<'PY' "$target_path"
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+)"
+    if [ "$source_real" = "$target_real" ]; then
+      return 0
+    fi
+  fi
+  cp "$source_path" "$target_path"
+}
+
 is_windows_interop_opencode() {
   local path="${1:-}"
   case "$path" in
@@ -177,16 +214,16 @@ elif ! resolve_linux_opencode >/dev/null 2>&1; then
   npm install -g opencode-ai
 fi
 
-cp -R "$SOURCE_LAUNCHERS_DIR/." "$LAUNCHERS_DIR/"
-cp -R "$SOURCE_INSTALL_LINUX_DIR/." "$INSTALL_ROOT/install/linux/"
-cp -R "$SOURCE_PROFILES_DIR/." "$CONFIG_DIR/profiles/"
+copy_tree_if_distinct "$SOURCE_LAUNCHERS_DIR" "$LAUNCHERS_DIR"
+copy_tree_if_distinct "$SOURCE_INSTALL_LINUX_DIR" "$INSTALL_ROOT/install/linux"
+copy_tree_if_distinct "$SOURCE_PROFILES_DIR" "$CONFIG_DIR/profiles"
 mkdir -p "$INSTALL_ROOT/scripts"
-cp -R "$SOURCE_SCRIPTS_DIR/." "$INSTALL_ROOT/scripts/"
+copy_tree_if_distinct "$SOURCE_SCRIPTS_DIR" "$INSTALL_ROOT/scripts"
 mkdir -p "$ASSETS_DIR/icons"
-cp -R "$SOURCE_ASSETS_DIR/." "$ASSETS_DIR/icons/"
-cp "$SOURCE_VERSION_PATH" "$INSTALL_ROOT/version.json"
+copy_tree_if_distinct "$SOURCE_ASSETS_DIR" "$ASSETS_DIR/icons"
+copy_file_if_distinct "$SOURCE_VERSION_PATH" "$INSTALL_ROOT/version.json"
 if [ -f "$SOURCE_RELEASE_NOTES_PATH" ]; then
-  cp "$SOURCE_RELEASE_NOTES_PATH" "$INSTALL_ROOT/docs/release-notes.txt"
+  copy_file_if_distinct "$SOURCE_RELEASE_NOTES_PATH" "$INSTALL_ROOT/docs/release-notes.txt"
 else
   printf 'Release notes nisu dostupne u ovom payload-u.\n' > "$INSTALL_ROOT/docs/release-notes.txt"
 fi

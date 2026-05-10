@@ -198,7 +198,6 @@ PY
 
 case "$ACTION" in
   list)
-    local model_browser_json
     current_id="$(python3 - <<'PY' "$STATE_PATH"
 import json, sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
@@ -240,7 +239,6 @@ PY
     ;;
   compare)
     [ -n "$MODEL_ID" ] || { echo "Prosledi model id za compare."; exit 1; }
-    local compare_json
     gpu_mib="0"
     if command -v nvidia-smi >/dev/null 2>&1; then
       gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"

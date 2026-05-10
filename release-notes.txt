@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.13
+- Linux `manage-models` je dodatno ociscen za shell stabilnost: vise nema `local` promenljivih u top-level `case` granama, pa `Pregled modela` ne puca na `local: can only be used in a function`
+- Linux installed `install.sh` sada razlikuje izvorni payload i vec instaliranu kopiju, a copy koraci su otporni na self-copy slucaj; `Preuzmi model` vise ne pada na `launchers/. are the same file` kada se pokrene iz postojece instalacije
+- Installer regresija sada cuva i installed-layout tok kroz helpere `copy_tree_if_distinct` i `copy_file_if_distinct`, tako da Linux update/download putanje ostaju bezbedne i kada se isti installer vrti preko postojeceg `local-qwen-home`
+
 v2.10.12
 - Linux `manage-models list` i `compare` tokovi vise ne koriste polomljeni `pipe + here-doc` obrazac zbog kog je Python dobijao prazan stdin i rusio `Modeli -> Pregled modela`; JSON payload se sada prosledjuje eksplicitno i browser prikaz radi stabilno
 - Linux installed `install.sh` sada ume da radi i iz vec instalirane kopije `local-qwen-home`, ne samo iz repo/payload layout-a, pa `Preuzmi model` vise ne trazi nepostojeci `launcher/linux/.` kada ga pokrenes kroz vec instalirani Control Center

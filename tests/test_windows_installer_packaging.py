@@ -204,8 +204,13 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('if [ -d "$PAYLOAD_ROOT/launcher/linux" ]; then', install_script)
         self.assertIn('elif [ -d "$PAYLOAD_ROOT/launchers" ]; then', install_script)
         self.assertIn('SOURCE_LAUNCHERS_DIR="$REPO_ROOT/launchers"', install_script)
+        self.assertIn('copy_tree_if_distinct()', install_script)
+        self.assertIn('copy_file_if_distinct()', install_script)
+        self.assertIn('copy_tree_if_distinct "$SOURCE_LAUNCHERS_DIR" "$LAUNCHERS_DIR"', install_script)
+        self.assertIn('copy_tree_if_distinct "$SOURCE_INSTALL_LINUX_DIR" "$INSTALL_ROOT/install/linux"', install_script)
+        self.assertIn('copy_file_if_distinct "$SOURCE_VERSION_PATH" "$INSTALL_ROOT/version.json"', install_script)
         self.assertIn('mkdir -p "$INSTALL_ROOT/install/linux"', install_script)
-        self.assertIn('cp -R "$SOURCE_INSTALL_LINUX_DIR/." "$INSTALL_ROOT/install/linux/"', install_script)
+        self.assertIn('copy_tree_if_distinct "$SOURCE_INSTALL_LINUX_DIR" "$INSTALL_ROOT/install/linux"', install_script)
         self.assertIn('resolve_linux_opencode()', install_script)
         self.assertIn('is_windows_interop_opencode()', install_script)
         self.assertIn('get_local_qwen_install_script_path()', (REPO_ROOT / "launcher" / "linux" / "local_qwen_common.sh").read_text(encoding="utf-8"))
@@ -215,6 +220,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('recommendation_json="$(get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('model_browser_json="$(get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('compare_json="$(python3 "$(get_runtime_engine_path)" model-compare', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertNotIn('local model_browser_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertNotIn('local compare_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
 
     def test_linux_tui_validates_inputs_and_runs_target_script(self):
         script_path = REPO_ROOT / "install" / "linux" / "installer-tui.sh"
@@ -318,7 +325,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('if [ "$LOCAL_QWEN_SKIP_OPENCODE_INSTALL" = "1" ]; then', install_script)
         self.assertIn('if [ "$LOCAL_QWEN_SKIP_PREREQ_CHECKS" != "1" ]; then', install_script)
         self.assertIn('mkdir -p "$INSTALL_ROOT/scripts"', install_script)
-        self.assertIn('cp -R "$SOURCE_SCRIPTS_DIR/." "$INSTALL_ROOT/scripts/"', install_script)
+        self.assertIn('copy_tree_if_distinct "$SOURCE_SCRIPTS_DIR" "$INSTALL_ROOT/scripts"', install_script)
         self.assertIn('if [ -f "$SOURCE_RELEASE_NOTES_PATH" ]; then', install_script)
         self.assertIn("Release notes nisu dostupne u ovom payload-u.", install_script)
 
