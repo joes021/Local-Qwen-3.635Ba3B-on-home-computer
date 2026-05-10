@@ -15,8 +15,85 @@ get_install_state_path() {
   echo "$(get_local_qwen_root)/state/install-state.json"
 }
 
+get_custom_models_registry_path() {
+  echo "$(get_local_qwen_root)/state/custom-models.json"
+}
+
+save_custom_models_json() {
+  local models_json="$1"
+  local path
+  path="$(get_custom_models_registry_path)"
+  mkdir -p "$(dirname "$path")"
+  python3 - <<'PY' "$path" "$models_json"
+import json, sys
+from datetime import datetime, timezone
+path, models_json = sys.argv[1:3]
+payload = {
+    "updatedAt": datetime.now(timezone.utc).isoformat(),
+    "models": json.loads(models_json),
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False, indent=2)
+PY
+}
+
+get_custom_models_json() {
+  local path
+  path="$(get_custom_models_registry_path)"
+  python3 - <<'PY' "$path"
+import json, os, sys
+path = sys.argv[1]
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            payload = json.load(f)
+        print(json.dumps(payload.get("models", []), ensure_ascii=False))
+        raise SystemExit(0)
+    except Exception:
+        pass
+print("[]")
+PY
+}
+
+convert_custom_model_token() {
+  local value="${1:-custom}"
+  python3 - <<'PY' "$value"
+import re, sys
+value = sys.argv[1].strip() or "custom"
+print(re.sub(r"[^a-zA-Z0-9_-]+", "_", value))
+PY
+}
+
+build_effective_defaults_path() {
+  local defaults_path custom_json state_dir
+  defaults_path="$(get_local_qwen_root)/config/profiles/defaults.json"
+  custom_json="$(get_custom_models_json)"
+  state_dir="$(get_local_qwen_root)/state"
+  python3 - <<'PY' "$defaults_path" "$custom_json" "$state_dir"
+import json, os, sys
+defaults_path, custom_json, state_dir = sys.argv[1:4]
+custom_models = json.loads(custom_json)
+if not custom_models:
+    print(defaults_path)
+    raise SystemExit(0)
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+defaults.setdefault("modelChoices", {})
+for item in custom_models:
+    if not item:
+        continue
+    key = str(item.get("key") or item.get("id") or "custom").replace(" ", "_")
+    defaults["modelChoices"][key] = item
+path = os.path.join(state_dir, "effective-defaults.json")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(defaults, f, ensure_ascii=False, indent=2)
+print(path)
+PY
+}
+
 get_defaults_path() {
-  echo "$(get_local_qwen_root)/config/profiles/defaults.json"
+  build_effective_defaults_path
 }
 
 get_runtime_engine_path() {

@@ -46,8 +46,20 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('"Preuzmi model"', dashboard)
         self.assertIn('"Dodaj lokalni GGUF"', dashboard)
         self.assertIn('"Dodaj HF model"', dashboard)
-        self.assertIn("[AKTIVAN]", dashboard)
-        self.assertIn("[SKINUT]", dashboard)
+        self.assertIn("Status: AKTIVAN | SKINUT | NIJE SKINUT | HF | LOKALNI | PREPORUKA", dashboard)
+
+    def test_models_screen_uses_picker_and_custom_model_actions(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('run_action_with_result_screen "Dodaj lokalni GGUF" "$SCRIPT_DIR/manage-models.sh" add-local', dashboard)
+        self.assertIn('run_action_with_result_screen "Dodaj HF model" "$SCRIPT_DIR/manage-models.sh" add-hf', dashboard)
+        self.assertIn('pick_model_id "Pregled modela" "Izaberi model za detalje."', dashboard)
+
+    def test_dashboard_handles_back_without_exiting(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('6|"__BACK__") return ;;', dashboard)
+        self.assertIn('"__BACK__") continue ;;', dashboard)
 
     def test_diagnostics_screen_contains_logs_export_and_benchmark_entries(self):
         dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")

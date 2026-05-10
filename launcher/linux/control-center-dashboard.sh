@@ -121,7 +121,7 @@ import json, sys
 health = json.loads(sys.argv[1])
 repair = json.loads(sys.argv[2]) if sys.argv[2] != "null" else None
 title = health.get("title", "Stanje nije poznato")
-summary = health.get("summary", "Nema dodatnog sažetka.")
+summary = health.get("summary", "Nema dodatnog sazetka.")
 primary = health.get("primaryActionTitle", "Nema preporucene akcije")
 if repair:
     fixed = len(repair.get("fixed", []) or [])
@@ -130,6 +130,22 @@ else:
     repair_line = "Poslednji repair: jos nema summary-ja"
 print(f"{title}\\n{summary}\\nSledece: {primary}\\n{repair_line}")
 PY
+}
+
+prompt_nonempty_input() {
+  local title="$1"
+  local prompt_text="$2"
+  local default_value="${3:-}"
+  local value
+  value="$(prompt_input "$title" "$prompt_text" "$default_value")"
+  if [ "$value" = "__CANCEL__" ]; then
+    return 1
+  fi
+  if [ -z "${value// }" ]; then
+    show_warning_screen "$title" "Polje je obavezno."
+    return 1
+  fi
+  printf '%s' "$value"
 }
 
 prompt_model_id() {
@@ -255,7 +271,7 @@ installed = [item for item in installed_csv.split(",") if item]
 print(f"Aktivni model: {state.get('modelId', 'n/a')}")
 print(f"Skinuti modeli: {len(installed)}")
 print("Download: nema aktivnog preuzimanja")
-print("Status oznake: [AKTIVAN] [SKINUT] [NIJE SKINUT] [HF] [LOKALNI] [PREPORUKA]")
+print("Status: AKTIVAN | SKINUT | NIJE SKINUT | HF | LOKALNI | PREPORUKA")
 PY
 }
 
@@ -288,9 +304,11 @@ for item in payload.get("models", []):
     else:
         flags.append("NIJE SKINUT")
     fit = item.get("fitGroup") or "unknown"
-    label = f"{item.get('label', item.get('id'))} | {'/'.join(flags)} | {fit}"
+    left = item.get('label', item.get('id'))[:28].ljust(28)
+    right = f"{'/'.join(flags)} | {fit}"[:40]
+    label = f"{left} {right}"
     print(item.get("id", ""))
-    print(label[:72])
+    print(label[:72].rstrip())
 PY
 }
 
@@ -309,6 +327,7 @@ for item in payload.get("models", []):
             f"Porodica: {item.get('family', 'nepoznato')}",
             f"Fit: {item.get('fitGroup', 'unknown')}",
             f"Brzina: {item.get('speedEstimateLabel', 'nepoznato')}",
+            f"Instalirano: {item.get('installedSizeGiB', 'nepoznato')} GiB",
             f"Disk potrebno: {item.get('diskNeededGiB', 'nepoznato')} GiB",
             f"Disk slobodno: {item.get('freeDiskGiB', 'nepoznato')} GiB",
             f"Enough disk: {'da' if item.get('hasEnoughDisk') else 'ne' if item.get('hasEnoughDisk') is not None else 'nepoznato'}",
@@ -373,9 +392,24 @@ show_models_menu() {
           run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" recommend
         fi
         ;;
-      4) show_info_screen "Dodaj lokalni GGUF" "Linux import lokalnog GGUF modela je sledeci korak ovog TUI plana." ;;
-      5) show_info_screen "Dodaj HF model" "Linux Hugging Face custom model tok je sledeci korak ovog TUI plana." ;;
-      6) return ;;
+      4)
+        local_path="$(prompt_nonempty_input "Dodaj lokalni GGUF" "Unesi punu putanju do .gguf fajla:")" || continue
+        local_label="$(prompt_input "Dodaj lokalni GGUF" "Opcioni prikazni naziv modela:" "")"
+        [ "$local_label" = "__CANCEL__" ] && local_label=""
+        local_family="$(prompt_input "Dodaj lokalni GGUF" "Porodica modela (npr. Qwen, Gemma, Custom):" "Custom")"
+        [ "$local_family" = "__CANCEL__" ] && local_family="Custom"
+        run_action_with_result_screen "Dodaj lokalni GGUF" "$SCRIPT_DIR/manage-models.sh" add-local "$local_path" "$local_label" "$local_family"
+        ;;
+      5)
+        hf_repo="$(prompt_nonempty_input "Dodaj HF model" "Unesi Hugging Face repo, npr. Qwen/Qwen3-8B-GGUF:")" || continue
+        hf_file="$(prompt_nonempty_input "Dodaj HF model" "Unesi GGUF filename, npr. Qwen3-8B-Q4_K_M.gguf:")" || continue
+        hf_label="$(prompt_input "Dodaj HF model" "Opcioni prikazni naziv modela:" "")"
+        [ "$hf_label" = "__CANCEL__" ] && hf_label=""
+        hf_family="$(prompt_input "Dodaj HF model" "Porodica modela (npr. Qwen, Gemma, Custom):" "Custom")"
+        [ "$hf_family" = "__CANCEL__" ] && hf_family="Custom"
+        run_action_with_result_screen "Dodaj HF model" "$SCRIPT_DIR/manage-models.sh" add-hf "$hf_repo" "$hf_file" "$hf_label" "$hf_family"
+        ;;
+      6|"__BACK__") return ;;
       *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 6." ;;
     esac
   done
@@ -452,6 +486,7 @@ while true; do
     4) show_diagnostics_menu ;;
     5) show_settings_menu ;;
     6) exit 0 ;;
+    "__BACK__") continue ;;
     *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 6." ;;
   esac
 done

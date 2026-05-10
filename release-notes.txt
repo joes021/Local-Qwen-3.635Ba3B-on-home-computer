@@ -1,5 +1,12 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.14
+- Linux `Control Center` TUI sada koristi sire `whiptail` prozore, uvucen i prelomljen tekst, kao i result/details ekrane sa skrolovanjem, pa poruke vise ne deluju zalepljeno uz levu ivicu niti seku pocetke reci kada su duze
+- Linux `Modeli` ekran je ociscen: status oznake su pojednostavljene u jednu jasnu liniju, lista modela koristi kompaktniji dvokolonski raspored `naziv | status/fit`, a detalji modela sada prikazuju i `Instalirano` pored potrebnog i slobodnog prostora
+- Linux TUI sada stvarno podrzava `Dodaj lokalni GGUF` i `Dodaj HF model` kroz novi custom-model registry i efektivni defaults tok, umesto ranijih placeholder poruka; isti tokovi prolaze kroz installer/update putanju, ne kroz rucne live zakrpe
+- Navigacija nazad je ojacana: `ESC/Cancel` u `whiptail` menijima se sada prevodi u interni `__BACK__` signal, pa povratak iz podmenija vise ne izbacuje korisnika iz `Control Center` nazad u terminal
+- Linux test suite je poravnat na novi dashboard i custom-model tokove, pa `2.10.14` zakljucava novih `100` testova uz Bash syntax proveru Linux launcher sloja
+
 v2.10.13
 - Linux `manage-models` je dodatno ociscen za shell stabilnost: vise nema `local` promenljivih u top-level `case` granama, pa `Pregled modela` ne puca na `local: can only be used in a function`
 - Linux installed `install.sh` sada razlikuje izvorni payload i vec instaliranu kopiju, a copy koraci su otporni na self-copy slucaj; `Preuzmi model` vise ne pada na `launchers/. are the same file` kada se pokrene iz postojece instalacije
