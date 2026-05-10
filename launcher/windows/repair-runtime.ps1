@@ -20,4 +20,4 @@ if (-not (Test-Path (Join-Path $state.llamaBinDir "llama-server.exe"))) {
 }
 
 $messages.Add("Install report: $(Write-InstallReport)") | Out-Null
-$messages | ForEach-Object { Write-Host $_ }
+$messages | ForEach-Object { Write-Output $_ }

@@ -3,6 +3,7 @@ import pathlib
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -13,6 +14,7 @@ INSTALL_PS1_PATH = REPO_ROOT / "install" / "windows" / "install.ps1"
 RELEASE_ALL_PATH = REPO_ROOT / "packaging" / "release-all.ps1"
 WINDOWS_LAUNCHER_DIR = REPO_ROOT / "launcher" / "windows"
 WINDOWS_COMMON_PATH = WINDOWS_LAUNCHER_DIR / "local-qwen-common.ps1"
+LINUX_BUILD_WRAPPER_PATH = REPO_ROOT / "packaging" / "linux" / "build-run-package.ps1"
 
 
 def run_powershell_snippet(snippet: str, *, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -107,7 +109,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         iss_content = ISS_PATH.read_text(encoding="utf-8")
         uninstall_content = (WINDOWS_LAUNCHER_DIR / "uninstall.ps1").read_text(encoding="utf-8")
         install_update_content = (WINDOWS_LAUNCHER_DIR / "install-update.ps1").read_text(encoding="utf-8")
+        start_server_content = (WINDOWS_LAUNCHER_DIR / "start-server.ps1").read_text(encoding="utf-8")
         dump_ui_content = (WINDOWS_LAUNCHER_DIR / "dump-ui-text.ps1").read_text(encoding="utf-8")
+        export_diagnostics_content = (WINDOWS_LAUNCHER_DIR / "export-diagnostics.ps1").read_text(encoding="utf-8")
+        common_content = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
         self.assertIn("uninstall.ps1", install_content)
         self.assertIn("Uninstall Local Qwen.lnk", install_content)
         self.assertIn("install-update.ps1", install_content)
@@ -115,17 +120,105 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("Uninstallable=yes", iss_content)
         self.assertIn("Get-DesktopShortcutNames", uninstall_content)
         self.assertIn("$root = Get-LocalQwenStateRoot", uninstall_content)
-        self.assertIn('Write-Host "Trenutna verzija: v$($info.currentVersion)"', install_update_content)
-        self.assertIn('Write-Host ("Preuzet installer: {0:N2} MiB" -f ($downloadedFile.Length / 1MB))', install_update_content)
+        self.assertIn('Write-Output "Trenutna verzija: v$($info.currentVersion)"', install_update_content)
+        self.assertIn('Write-Output ("Preuzet installer: {0:N2} MiB" -f ($downloadedFile.Length / 1MB))', install_update_content)
         self.assertIn('Start-Process -FilePath $targetPath -PassThru', install_update_content)
         self.assertIn("$codeRoot = Get-LocalQwenCodeRoot", dump_ui_content)
         self.assertIn("function Get-PreferredDumpStateRoot", dump_ui_content)
         self.assertIn('$installedRoot = Join-Path $env:USERPROFILE "LocalQwenHome"', dump_ui_content)
         self.assertIn("$stateRoot = Get-PreferredDumpStateRoot", dump_ui_content)
         self.assertIn('$controlCenterPath = Join-Path $stateRoot "launchers\\control-center.ps1"', dump_ui_content)
+        self.assertIn('Write-Output "llama.cpp je pokrenut na http://127.0.0.1:$($state.port)"', start_server_content)
+        self.assertIn('Write-Output "Pokretanje nije potvrdjeno u roku od $WaitSeconds sekundi. Pogledaj log:"', start_server_content)
+        self.assertIn('throw "Diagnostics bundle nije pronadjen posle export-a: $bundle"', export_diagnostics_content)
+        self.assertIn('Write-Output ("Velicina bundle-a: {0:N2} MiB" -f ($bundleInfo.Length / 1MB))', export_diagnostics_content)
+        self.assertIn('Remove-Item -LiteralPath $bundleDir -Recurse -Force -ErrorAction SilentlyContinue', common_content)
+
+    def test_linux_packaging_has_powershell_wrapper_for_windows_hosts(self):
+        content = LINUX_BUILD_WRAPPER_PATH.read_text(encoding="utf-8")
+        self.assertIn('Join-Path $scriptRoot "build-run-installer.sh"', content)
+        self.assertIn('$shellRelativeScript = "packaging/linux/build-run-installer.sh"', content)
+        self.assertIn('Get-Content (Join-Path $repoRoot "version.json") -Raw | ConvertFrom-Json', content)
+        self.assertIn('Push-Location $repoRoot', content)
+        self.assertIn('& bash @arguments', content)
+        self.assertIn('throw "Linux installer build nije uspeo (exit $LASTEXITCODE)."', content)
+
+    def test_check_updates_hides_raw_json_unless_requested(self):
+        content = (WINDOWS_LAUNCHER_DIR / "check-updates.ps1").read_text(encoding="utf-8")
+        self.assertIn("param(", content)
+        self.assertIn("[switch]$Json", content)
+        self.assertIn("if ($Json) {", content)
+        self.assertIn("$info | ConvertTo-Json -Depth 10", content)
+        self.assertIn('Write-Output "Instalacija je vec na latest verziji: v$($info.currentVersion)"', content)
+
+    def test_write_utf8_no_bom_text_retries_when_file_is_temporarily_locked(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_path = pathlib.Path(temp_dir) / "locked.json"
+            target_path.write_text("old", encoding="utf-8")
+            locker = subprocess.Popen(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    (
+                        "$fs = [System.IO.File]::Open("
+                        f"'{target_path}',"
+                        "[System.IO.FileMode]::Open,"
+                        "[System.IO.FileAccess]::ReadWrite,"
+                        "[System.IO.FileShare]::None"
+                        "); "
+                        "Start-Sleep -Milliseconds 500; "
+                        "$fs.Dispose()"
+                    ),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            try:
+                time.sleep(0.1)
+                result = run_powershell_snippet(
+                    (
+                        f". '{WINDOWS_COMMON_PATH}'; "
+                        f"Write-Utf8NoBomText -Path '{target_path}' -Content 'new-value'; "
+                        "Write-Host 'WRITE_OK'"
+                    )
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn("WRITE_OK", result.stdout)
+                locker.wait(timeout=5)
+                self.assertEqual(target_path.read_text(encoding="utf-8"), "new-value")
+            finally:
+                if locker.poll() is None:
+                    locker.wait(timeout=5)
+
+    def test_manage_models_script_supports_browser_filters(self):
+        content = (WINDOWS_LAUNCHER_DIR / "manage-models.ps1").read_text(encoding="utf-8")
+        self.assertIn("[switch]$InstalledOnly", content)
+        self.assertIn("[switch]$RecommendedOnly", content)
+        self.assertIn("[switch]$FitOnly", content)
+        self.assertIn("[switch]$CoderOnly", content)
+        self.assertIn("[switch]$VerifiedOnly", content)
+        self.assertIn("-InstalledOnly:$InstalledOnly", content)
+        self.assertIn("-RecommendedOnly:$RecommendedOnly", content)
+        self.assertIn("-FitOnly:$effectiveFitOnly", content)
+        self.assertIn("-CoderOnly:$CoderOnly", content)
+        self.assertIn("-VerifiedOnly:$VerifiedOnly", content)
+        self.assertIn("function Format-ModelBrowserValue", content)
+        self.assertIn("function Format-EnoughDiskLabel", content)
+        self.assertIn("function Format-InstalledSizeLabel", content)
+        self.assertIn('return "nepoznato"', content)
+        self.assertIn("[switch]$TreatZeroAsUnknown", content)
+        self.assertIn('$unknownFitModels = @($browser.models | Where-Object { $_.fitGroup -notin @("recommended", "canRun", "notRecommended") -and -not $_.recommended })', content)
+        self.assertIn('$groups["Rucno dodati / nepoznat fit"] = $unknownFitModels', content)
+        self.assertIn('Write-Host "Nema modela za zadate filtere."', content)
 
     def test_release_script_attaches_full_fix_log_asset_and_short_summary(self):
         content = RELEASE_ALL_PATH.read_text(encoding="utf-8")
+        self.assertIn('$linuxBuildScript = Join-Path $repoRoot "packaging\\linux\\build-run-package.ps1"', content)
+        self.assertIn('& powershell -ExecutionPolicy Bypass -File $linuxBuildScript -Version $Version', content)
         self.assertIn("Local-Qwen-Full-Fix-Log-v$Version.txt", content)
         self.assertIn("--notes-file $releaseSummaryPath", content)
         self.assertIn("Full fix log is attached below in Assets", content)
@@ -133,6 +226,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
     def test_parameterized_windows_scripts_start_with_param_block(self):
         expected = {
             "uninstall.ps1",
+            "check-updates.ps1",
             "manage-models.ps1",
             "configure-settings.ps1",
             "build-turboquant.ps1",
@@ -157,6 +251,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         verify_install = (WINDOWS_LAUNCHER_DIR / "verify-install.ps1").read_text(encoding="utf-8")
         configure_settings = (WINDOWS_LAUNCHER_DIR / "configure-settings.ps1").read_text(encoding="utf-8")
         repair_config = (WINDOWS_LAUNCHER_DIR / "repair-config.ps1").read_text(encoding="utf-8")
+        repair_install = (WINDOWS_LAUNCHER_DIR / "repair-install.ps1").read_text(encoding="utf-8")
+        repair_model = (WINDOWS_LAUNCHER_DIR / "repair-model.ps1").read_text(encoding="utf-8")
+        repair_runtime = (WINDOWS_LAUNCHER_DIR / "repair-runtime.ps1").read_text(encoding="utf-8")
+        test_prompt = (WINDOWS_LAUNCHER_DIR / "test-prompt.ps1").read_text(encoding="utf-8")
 
         self.assertIn("function Get-OpenCodeExecutable", common)
         self.assertIn("function Test-OpenCodeAvailable", common)
@@ -165,15 +263,46 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("Test-OpenCodeAvailable", verify_install)
         self.assertIn("OPENCODE_ENABLE_EXA", start_opencode)
         self.assertIn("OPENCODE_ENABLE_EXA", launch_agent)
+        self.assertIn('Write-Output "OpenCode executable: $openCodeExe"', start_opencode)
+        self.assertIn('Write-Output "OpenCode je pokrenut u novom PowerShell prozoru."', start_opencode)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", start_opencode)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", launch_agent)
         self.assertIn("$root = Get-LocalQwenStateRoot", launch_agent)
         self.assertIn("Write-Utf8NoBomText -Path $sessionConfigPath", launch_agent)
         self.assertIn("Write-Utf8NoBomText -Path $sessionMetaPath", launch_agent)
         self.assertIn('$settingsPath = Join-Path (Get-LocalQwenStateRoot) "state\\settings.json"', configure_settings)
+        self.assertIn('Write-Output "Sacuvano."', configure_settings)
         self.assertIn("Join-Path (Get-LocalQwenStateRoot) 'state\\settings.json'", repair_config)
+        self.assertIn('$messages | ForEach-Object { Write-Output $_ }', repair_config)
+        self.assertIn('$messages | ForEach-Object { Write-Output $_ }', repair_install)
+        self.assertIn('Write-Output "Repair summary json: $repairSummaryPath"', repair_install)
+        self.assertIn('$messages | ForEach-Object { Write-Output $_ }', repair_model)
+        self.assertIn('$messages | ForEach-Object { Write-Output $_ }', repair_runtime)
+        self.assertIn('Write-Output "Smoke test odgovor:"', test_prompt)
+        self.assertIn('reasoning_content', test_prompt)
+        self.assertIn('Napomena: model nije vratio finalni tekst, pa je prikazan kratak reasoning izvod.', test_prompt)
+        self.assertIn('Write-Output "Finish reason: $($choice.finish_reason)"', test_prompt)
         self.assertIn("$modelPath = Get-StateModelFilePath -State $state", verify_install)
         self.assertIn("Join-Path (Get-LocalQwenStateRoot) \"state\\install-report.json\"", verify_install)
+
+    def test_launch_agent_reuses_shared_agent_mode_alias_mapping(self):
+        common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
+        launch_agent = (WINDOWS_LAUNCHER_DIR / "launch-agent.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("function Resolve-AgentSecurityMode", common)
+        self.assertIn("workspace-write", common)
+        self.assertIn("benchmark", common)
+        self.assertIn("$SecurityMode = Resolve-AgentSecurityMode -Mode $SecurityMode", launch_agent)
+        self.assertIn("$CapabilityMode = Resolve-AgentCapabilityMode -Mode $CapabilityMode", launch_agent)
+        self.assertNotIn("function Resolve-AgentSecurityMode", launch_agent)
+        self.assertNotIn("function Resolve-AgentCapabilityMode", launch_agent)
+
+    def test_repair_app_control_reports_empty_policy_state_clearly(self):
+        content = (WINDOWS_LAUNCHER_DIR / "repair-app-control.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Show-SmartAppControlStatus", content)
+        self.assertIn("Nije pronadjena aktivna VerifiedAndReputableDesktop politika.", content)
+        self.assertIn("Smart App Control trenutno ne blokira Local Qwen tok.", content)
+        self.assertIn("Pronadjeno politika: {0}", content)
 
     def test_opencode_config_enables_websearch_and_webfetch(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
@@ -216,14 +345,27 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("function Get-CustomModelsRegistryPath", common)
         self.assertIn("function Get-EffectiveDefaultsPath", common)
         self.assertIn("function Get-InstallSummaryPath", common)
+        self.assertIn("function Copy-FileWithRetry", common)
+        self.assertIn("function Copy-DirectoryContentsWithRetry", common)
+        self.assertIn("function Get-OpenCodeModelDisplayName", common)
         self.assertIn("function Import-LocalGgufModel", common)
         self.assertIn("function Add-HuggingFaceCustomModel", common)
         self.assertIn('$payload = Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())', common)
+        self.assertIn("Copy-FileWithRetry -SourcePath $file.FullName -DestinationPath $targetPath", common)
+        self.assertIn("Copy-DirectoryContentsWithRetry -SourceDir $entry.Source -DestinationDir $entry.Destination", common)
+        self.assertIn('[switch]$ForceRedownload', common)
+        self.assertIn('if ((-not $ForceRedownload) -and (Test-ModelFileLooksComplete -Path $targetModelPath -ModelId $ModelId)) {', common)
+        self.assertIn('return "already-installed"', common)
+        self.assertIn('$selectedModelDisplayName = Get-OpenCodeModelDisplayName -Label $selectedModelLabel', common)
+        self.assertIn('if ($ageSeconds -gt $maxAgeSeconds) {', common)
+        self.assertIn('if ($source -eq "local-cache") { 10 } else { 120 }', common)
 
     def test_manage_models_groups_recommended_choice_ahead_of_can_run_bucket(self):
         content = (WINDOWS_LAUNCHER_DIR / "manage-models.ps1").read_text(encoding="utf-8")
-        self.assertIn('"Preporuceni za ovu masinu" = @($browser.models | Where-Object { $_.recommended -or $_.fitGroup -eq "recommended" })', content)
-        self.assertIn('"Moze da radi uz kompromis" = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" -and -not $_.recommended })', content)
+        self.assertIn('$recommendedModels = @($browser.models | Where-Object { $_.recommended -or $_.fitGroup -eq "recommended" })', content)
+        self.assertIn('$canRunModels = @($browser.models | Where-Object { $_.fitGroup -eq "canRun" -and -not $_.recommended })', content)
+        self.assertIn('$groups["Preporuceni za ovu masinu"] = $recommendedModels', content)
+        self.assertIn('$groups["Moze da radi uz kompromis"] = $canRunModels', content)
 
     def test_runtime_helpers_skip_empty_optional_arguments(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
@@ -311,6 +453,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('return (Resolve-Path $installedRoot).Path', common)
         self.assertIn('if ($State.PSObject.Properties["modelPath"] -and -not [string]::IsNullOrWhiteSpace([string]$State.modelPath)) {', common)
         self.assertIn('$state.modelPath = $resolvedModelPath', common)
+        self.assertIn('"Repair Windows App Control.lnk"', common)
 
     def test_import_local_gguf_model_registers_custom_model_without_touching_real_profile(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -390,7 +533,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
             payload = json.loads(completed.stdout)
             self.assertTrue(payload["added"])
             self.assertTrue(payload["found"])
-            self.assertEqual(payload["modelId"], "Qwen3-8B-Q4_K_M.gguf")
+            self.assertEqual(payload["modelId"], "hf-Qwen_Qwen3-8B-GGUF-Qwen3-8B-Q4_K_M.gguf")
             self.assertEqual(payload["source"], "Qwen/Qwen3-8B-GGUF")
 
     def test_model_browser_supports_install_state_with_model_path_without_model_file(self):
@@ -418,7 +561,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
             Add-HuggingFaceCustomModel -Repo 'repo/demo' -FileName 'demo.gguf' -Label 'Demo HF' -Family 'Custom' | Out-Null
             $payload = Get-ModelBrowserPayload
             [pscustomobject]@{{
-              hasCustom = [bool](@($payload.models | Where-Object {{ $_.id -eq 'demo.gguf' }}).Count)
+              hasCustom = [bool](@($payload.models | Where-Object {{ $_.id -eq 'hf-repo_demo-demo.gguf' }}).Count)
               currentModelPath = Get-StateModelFilePath -State (Get-InstallState)
             }} | ConvertTo-Json -Depth 5
             """
@@ -431,7 +574,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
             . '{WINDOWS_COMMON_PATH}'
             Add-HuggingFaceCustomModel -Repo 'repo/demo' -FileName 'demo.gguf' -Label 'Demo HF' -Family 'Custom' | Out-Null
             $payload = Get-ModelBrowserPayload
-            $found = $payload.models | Where-Object {{ $_.id -eq 'demo.gguf' }} | Select-Object -First 1
+            $found = $payload.models | Where-Object {{ $_.id -eq 'hf-repo_demo-demo.gguf' }} | Select-Object -First 1
             [pscustomobject]@{{
               fitGroup = $found.fitGroup
               speed = $found.speedEstimateLabel
@@ -447,6 +590,232 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
             self.assertIsNone(payload["diskNeeded"])
             self.assertIsNone(payload["hasEnoughDisk"])
             self.assertNotIn("best-for-speed", completed.stdout)
+
+    def test_huggingface_custom_models_with_same_filename_do_not_overwrite_each_other(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            (install_root / "state").mkdir(parents=True)
+            (install_root / "state" / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "modelFile": str(install_root / "models" / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            Add-HuggingFaceCustomModel -Repo 'repo/one' -FileName 'same.gguf' -Label 'One' -Family 'Qwen' | Out-Null
+            Add-HuggingFaceCustomModel -Repo 'repo/two' -FileName 'same.gguf' -Label 'Two' -Family 'Qwen' | Out-Null
+            $models = @(Get-CustomModels)
+            [pscustomobject]@{{
+              count = $models.Count
+              ids = @($models | ForEach-Object {{ $_.id }})
+              labels = @($models | ForEach-Object {{ $_.label }})
+            }} | ConvertTo-Json -Depth 10
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["count"], 2)
+            self.assertIn("hf-repo_one-same.gguf", payload["ids"])
+            self.assertIn("hf-repo_two-same.gguf", payload["ids"])
+            self.assertIn("One", payload["labels"])
+            self.assertIn("Two", payload["labels"])
+
+    def test_custom_local_label_does_not_duplicate_local_in_opencode_provider_name(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            state_dir = install_root / "state"
+            models_dir = install_root / "models"
+            config_dir = fake_user / ".config" / "opencode"
+            downloads_dir = fake_user / "Downloads"
+            for p in [state_dir, models_dir, config_dir, downloads_dir]:
+                p.mkdir(parents=True, exist_ok=True)
+            source_model = downloads_dir / "alpha.gguf"
+            source_model.write_bytes(b"x" * 4096)
+            (state_dir / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "launchersDir": str(install_root / "launchers"),
+                        "desktopTargetDir": str(fake_user / "Desktop" / "Local Qwen Home Computer"),
+                        "modelFile": str(models_dir / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (state_dir / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "profile": "balanced",
+                        "llama": {"contextSize": 4096, "maxOutputTokens": 1024},
+                        "opencode": {"buildSteps": 60, "planSteps": 40, "generalSteps": 60, "exploreSteps": 30},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (config_dir / "opencode.json").write_text(
+                json.dumps({"agent": {"build": {}, "plan": {}, "general": {}, "explore": {}}}),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            Import-LocalGgufModel -SourcePath '{source_model}' -Label 'Alpha Local' -Family 'Custom' | Out-Null
+            Set-SelectedModel -ModelId 'alpha.gguf' | Out-Null
+            Update-OpenCodeConfig | Out-Null
+            $config = Get-Content -Raw '{config_dir / "opencode.json"}' | ConvertFrom-Json
+            $provider = $config.provider.'local-llamacpp'.models.'alpha.gguf'
+            [pscustomobject]@{{ name = $provider.name }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["name"], "Alpha Local (llama.cpp)")
+
+    def test_model_download_progress_ignores_stale_local_cache_completion(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            state_dir = install_root / "state"
+            state_dir.mkdir(parents=True)
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            stale_payload = {
+                "status": "completed",
+                "modelId": "demo.gguf",
+                "source": "local-cache",
+                "updatedAt": 1,
+                "message": "stale",
+            }
+            (state_dir / "model-download-progress.json").write_text(json.dumps(stale_payload), encoding="utf-8")
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            $progress = Get-ModelDownloadProgressData
+            if ($null -eq $progress) {{
+              'null'
+            }} else {{
+              $progress | ConvertTo-Json -Depth 5
+            }}
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            self.assertEqual(completed.stdout.strip(), "null")
+
+    def test_set_selected_model_adds_missing_model_path_property_for_older_install_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            (install_root / "state").mkdir(parents=True)
+            (install_root / "models").mkdir(parents=True)
+            (install_root / "state" / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "modelFile": str(install_root / "models" / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            snippet = f"""
+            . '{WINDOWS_COMMON_PATH}'
+            $state = Set-SelectedModel -ModelId 'Qwen3-8B-Q4_K_M.gguf'
+            [pscustomobject]@{{
+              modelId = $state.modelId
+              modelFile = $state.modelFile
+              modelPath = $state.modelPath
+            }} | ConvertTo-Json -Depth 5
+            """
+            completed = run_powershell_snippet(snippet, env=env)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["modelId"], "Qwen3-8B-Q4_K_M.gguf")
+            self.assertTrue(payload["modelFile"].endswith("Qwen3-8B-Q4_K_M.gguf"))
+            self.assertTrue(payload["modelPath"].endswith("Qwen3-8B-Q4_K_M.gguf"))
+
+    def test_manage_models_updates_opencode_config_even_when_agent_steps_nodes_are_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            fake_user = temp_path / "fake-user"
+            install_root = fake_user / "LocalQwenHome"
+            state_dir = install_root / "state"
+            models_dir = install_root / "models"
+            config_dir = fake_user / ".config" / "opencode"
+            state_dir.mkdir(parents=True)
+            models_dir.mkdir(parents=True)
+            config_dir.mkdir(parents=True)
+            (state_dir / "install-state.json").write_text(
+                json.dumps(
+                    {
+                        "installRoot": str(install_root),
+                        "launchersDir": str(install_root / "launchers"),
+                        "desktopTargetDir": str(fake_user / "Desktop" / "Local Qwen Home Computer"),
+                        "modelFile": str(models_dir / "baseline.gguf"),
+                        "modelId": "baseline.gguf",
+                        "port": 8091,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (state_dir / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "profile": "balanced",
+                        "llama": {"contextSize": 4096, "maxOutputTokens": 1024},
+                        "opencode": {"buildSteps": 60, "planSteps": 40, "generalSteps": 60, "exploreSteps": 30},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (config_dir / "opencode.json").write_text(
+                json.dumps({"agent": {"build": {}, "plan": {}, "general": {}, "explore": {}}}),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["USERPROFILE"] = str(fake_user)
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(REPO_ROOT / "launcher" / "windows" / "manage-models.ps1"),
+                    "-ModelId",
+                    "Qwen3-8B-Q4_K_M.gguf",
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            config = json.loads((config_dir / "opencode.json").read_text(encoding="utf-8-sig"))
+            self.assertEqual(config["agent"]["build"]["steps"], 60)
+            self.assertEqual(config["agent"]["plan"]["steps"], 40)
+            self.assertEqual(config["agent"]["general"]["steps"], 60)
+            self.assertEqual(config["agent"]["explore"]["steps"], 30)
+            provider = config["provider"]["local-llamacpp"]
+            self.assertIn("Qwen3-8B-Q4_K_M.gguf", provider["models"])
+            self.assertEqual(provider["models"]["Qwen3-8B-Q4_K_M.gguf"]["name"], "Qwen 3 8B Q4_K_M Local (llama.cpp)")
 
     def test_repair_runtime_uses_state_root_for_launchers(self):
         script_path = REPO_ROOT / "launcher" / "windows" / "repair-runtime.ps1"
@@ -473,6 +842,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
 
         self.assertIn('Join-Path $stateRoot "release-notes.txt"', text)
         self.assertIn('Join-Path $stateRoot "version.json"', text)
+        self.assertIn('Uses launch primary group layout', text)
+        self.assertIn('Uses tools tab layout', text)
 
     def test_export_diagnostics_includes_repair_summary_and_token_history(self):
         script_path = REPO_ROOT / "launcher" / "windows" / "local-qwen-common.ps1"
@@ -481,6 +852,32 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('state\\repair-summary.json', text)
         self.assertIn('state\\token-metrics-history.json', text)
         self.assertIn('release-notes.txt', text)
+
+    def test_repair_install_reports_json_and_text_summary_paths_separately(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "repair-install.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("$summaryPath = Get-InstallSummaryPath", text)
+        self.assertIn('Write-Output "Repair summary json: $repairSummaryPath"', text)
+        self.assertIn('Write-Output "Repair summary text: $summaryPath"', text)
+
+    def test_repair_model_skips_download_when_active_model_is_already_complete(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "repair-model.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('$source = Download-RecommendedModel -ModelId ([string]$state.modelId)', text)
+        self.assertIn('$source -eq "already-installed"', text)
+        self.assertIn('$modelPath = Get-StateModelFilePath -State $state', text)
+        self.assertIn('Model je vec prisutan i deluje kompletno, pa download nije bio potreban.', text)
+
+    def test_manage_models_fit_only_does_not_append_not_recommended_group(self):
+        script_path = REPO_ROOT / "launcher" / "windows" / "manage-models.ps1"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('$effectiveFitOnly = if ($hasExplicitBrowserFilter) { [bool]$FitOnly } else { $true }', text)
+        self.assertIn('-FitOnly:$effectiveFitOnly', text)
+        self.assertIn('if ((-not $effectiveFitOnly) -and $notRecommendedModels.Count -gt 0) {', text)
+        self.assertNotIn('"Nije preporuceno za ovu konfiguraciju" = @((Get-ModelBrowserPayload).models', text)
 
 
 if __name__ == "__main__":

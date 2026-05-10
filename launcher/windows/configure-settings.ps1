@@ -38,6 +38,6 @@ Save-Settings -Settings $settings
 $configPath = Update-OpenCodeConfig
 $settingsPath = Join-Path (Get-LocalQwenStateRoot) "state\settings.json"
 
-Write-Host "Sacuvano."
-Write-Host "Settings: $settingsPath"
-Write-Host "OpenCode config: $configPath"
+Write-Output "Sacuvano."
+Write-Output "Settings: $settingsPath"
+Write-Output "OpenCode config: $configPath"

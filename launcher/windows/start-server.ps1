@@ -130,11 +130,11 @@ do {
 
 if (Test-LlamaHealth) {
     Set-ServiceLifecycleState -State "active" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Health endpoint returned OK."
-    Write-Host "llama.cpp je pokrenut na http://127.0.0.1:$($state.port)"
-    Write-Host "Profil: $Profile"
-    Write-Host "Model: $modelPath"
+    Write-Output "llama.cpp je pokrenut na http://127.0.0.1:$($state.port)"
+    Write-Output "Profil: $Profile"
+    Write-Output "Model: $modelPath"
 } else {
     Set-ServiceLifecycleState -State "timeout" -Profile $Profile -StdOut $stdoutLog -StdErr $stderrLog -Reason "Health endpoint nije postao dostupan u roku od $WaitSeconds sekundi."
-    Write-Host "Pokretanje nije potvrdjeno u roku od $WaitSeconds sekundi. Pogledaj log:"
-    Write-Host $stderrLog
+    Write-Output "Pokretanje nije potvrdjeno u roku od $WaitSeconds sekundi. Pogledaj log:"
+    Write-Output $stderrLog
 }

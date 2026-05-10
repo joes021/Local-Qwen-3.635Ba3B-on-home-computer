@@ -174,7 +174,7 @@ if (-not [string]::IsNullOrWhiteSpace($notesArgument)) {
 $repairSummary = Invoke-RuntimeEngineJson -Arguments @($repairSummaryArguments.ToArray())
 Write-Utf8NoBomText -Path $repairSummaryPath -Content ($repairSummary | ConvertTo-Json -Depth 20)
 
-$summaryPath = Join-Path $root "state\install-summary.txt"
+$summaryPath = Get-InstallSummaryPath
 $summary = @(
     "Repair completed at $(Get-Date -Format s)",
     "Install root: $root",
@@ -203,7 +203,8 @@ $summary = @(
 ) -join [Environment]::NewLine
 Write-Utf8NoBomText -Path $summaryPath -Content $summary
 
-$messages | ForEach-Object { Write-Host $_ }
-Write-Host "Repair found: $($repairSummary.counts.found) | fixed: $($repairSummary.counts.fixed) | manual: $($repairSummary.counts.manual)"
-Write-Host "Repair next step: $($repairSummary.nextStep)"
-Write-Host "Repair summary: $summaryPath"
+$messages | ForEach-Object { Write-Output $_ }
+Write-Output "Repair found: $($repairSummary.counts.found) | fixed: $($repairSummary.counts.fixed) | manual: $($repairSummary.counts.manual)"
+Write-Output "Repair next step: $($repairSummary.nextStep)"
+Write-Output "Repair summary json: $repairSummaryPath"
+Write-Output "Repair summary text: $summaryPath"

@@ -767,7 +767,7 @@ $benchmarkChartHintLabel = New-Object System.Windows.Forms.Label
 $benchmarkChartHintLabel.Location = New-Object System.Drawing.Point(18, 24)
 $benchmarkChartHintLabel.Size = New-Object System.Drawing.Size(830, 18)
 $benchmarkChartHintLabel.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
-$benchmarkChartHintLabel.Text = "Plavo = input tok/s, crveno = output tok/s, ljubicastо = ukupno tok/s kroz regularne zahteve i testove."
+$benchmarkChartHintLabel.Text = "Plavo = input tok/s, crveno = output tok/s, ljubicasto = ukupno tok/s kroz regularne zahteve i testove."
 $benchmarkChartPanel.Controls.Add($benchmarkChartHintLabel)
 
 $benchmarkChart = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
@@ -1220,6 +1220,8 @@ function Refresh-LogsView {
 function Refresh-OnboardingView {
     $checklist = Get-OnboardingChecklist
     $nextAction = Get-NextActionRecommendation
+    $nextActionId = if ($nextAction -and $nextAction.PSObject.Properties["actionId"]) { [string]$nextAction.actionId } else { "" }
+    $isRunnableNextAction = @("repair-install", "start-server", "write-opencode-config", "open-opencode") -contains $nextActionId
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("Spremno za rad: $(if ($checklist.ready) { 'DA' } else { 'NE' })") | Out-Null
     $lines.Add("Profil: $($checklist.profile)") | Out-Null
@@ -1233,6 +1235,7 @@ function Refresh-OnboardingView {
     $lines.Add("Preporuka: ako nesto nije gotovo, idi redom od vrha na dole.") | Out-Null
     $onboardingBox.Text = ($lines -join [Environment]::NewLine)
     $nextActionBox.Text = "$($nextAction.title)$([Environment]::NewLine)$($nextAction.reason)"
+    $runNextActionButton.Enabled = $isRunnableNextAction
 }
 
 function Refresh-HealthCenterView {
@@ -1300,7 +1303,9 @@ function Refresh-HealthCenterView {
         $lines.Add("Next step: $($repairSummary.nextStep)") | Out-Null
     }
     $healthContent.Text = $lines -join [Environment]::NewLine
-    $guidedRepairButton.Text = if ($payload.primaryAction -and $payload.primaryAction.title) { "Guided: $($payload.primaryAction.title)" } else { "Guided repair" }
+    $guidedActionId = if ($payload.primaryAction -and $payload.primaryAction.id) { [string]$payload.primaryAction.id } else { "" }
+    $guidedRepairButton.Text = if ($payload.primaryAction -and $payload.primaryAction.title -and $guidedActionId -ne "none") { "Guided: $($payload.primaryAction.title)" } else { "Guided repair" }
+    $guidedRepairButton.Enabled = ($guidedActionId -ne "none")
 }
 
 function Invoke-HealthRepairAction {
@@ -1327,6 +1332,9 @@ function Invoke-HealthActionById {
     param([Parameter(Mandatory = $true)][string]$ActionId)
 
     switch ($ActionId) {
+        "none" {
+            Write-LaunchMessage @("Sistem izgleda zdravo i trenutno nema potrebe za guided repair korakom.")
+        }
         "repair-runtime" { Invoke-HealthRepairAction -Name "Repair runtime" -ScriptPath $repairRuntimeScript }
         "repair-model" { Invoke-HealthRepairAction -Name "Repair model" -ScriptPath $repairModelScript }
         "repair-config" { Invoke-HealthRepairAction -Name "Repair config" -ScriptPath $repairConfigScript }
@@ -1408,6 +1416,7 @@ function Refresh-DiagnosticsView {
 
     $metaLines = @(
         "Version: v$(Get-AppVersion)",
+        "Public relation: $($latestRelease.versionRelation)",
         "Lifecycle: $($statusBundle.Lifecycle.state)",
         "Effective state: $($statusBundle.Summary.state)",
         "Reason: $($statusBundle.Summary.reason)",
@@ -1423,7 +1432,16 @@ function Refresh-DiagnosticsView {
     $lines.Add("Latest release") | Out-Null
     $lines.Add("Current: v$(Get-AppVersion)") | Out-Null
     $lines.Add("GitHub latest: $($latestRelease.latestVersion)") | Out-Null
+    if ($latestRelease.aheadOfPublicRelease) {
+        $lines.Add("Lokalni build je noviji od javnog latest release-a.") | Out-Null
+    }
+    if ($latestRelease.versionRelation) {
+        $lines.Add("Version relation: $($latestRelease.versionRelation)") | Out-Null
+    }
     $lines.Add("Update available: $(if ($latestRelease.updateAvailable) { 'da' } else { 'ne' })") | Out-Null
+    if ($latestRelease.releaseUrl) {
+        $lines.Add("Release URL: $($latestRelease.releaseUrl)") | Out-Null
+    }
     $lines.Add("") | Out-Null
     $lines.Add("Lifecycle details") | Out-Null
     $lines.Add("Updated: $($statusBundle.Lifecycle.updatedAt)") | Out-Null
@@ -1441,7 +1459,7 @@ function Refresh-DiagnosticsView {
             $lines.Add("- $($item.measuredAt): in $($item.promptTokensPerSecond) tok/s | out $($item.completionTokensPerSecond) tok/s") | Out-Null
         }
     } else {
-        $lines.Add("Jos nema benchmark merenja. Pokreni 'Test prompt'.") | Out-Null
+        $lines.Add("Jos nema benchmark merenja. Pokreni 'Test prompt' ili 'Test throughput'.") | Out-Null
     }
     $lines.Add("") | Out-Null
     $lines.Add("Onboarding") | Out-Null
@@ -1578,9 +1596,11 @@ function Refresh-ThroughputView {
     $quickSignalLabel.Text = "Signal: $ageText"
     $usageCountLabel.Text = "Zahtevi: $($tokenMetrics.requestCount)"
     $usageLastMsLabel.Text = "Avg odgovor: $($tokenMetrics.activity.averageTotalMs) ms"
-    $usageSourceLabel.Text = "Izvor: $($tokenMetrics.activity.lastSource) | Label: $($tokenMetrics.lastLabel)"
+    $lastSourceDisplay = Get-UsageSourceDisplayName -Source ([string]$tokenMetrics.activity.lastSource)
+    $lastLabelDisplay = Format-UsageLabelValue -Value ([string]$tokenMetrics.lastLabel)
+    $usageSourceLabel.Text = "Izvor: $lastSourceDisplay | Label: $lastLabelDisplay"
     $sourceBreakdown = $tokenMetrics.activity.sourceBreakdown
-    $usageSourceBreakdownLabel.Text = "Izvori: test $($sourceBreakdown.testPrompt.count) [$($sourceBreakdown.testPrompt.lastLabel)] | opencode $($sourceBreakdown.opencode.count) [$($sourceBreakdown.opencode.lastLabel)] | other $($sourceBreakdown.other.count) [$($sourceBreakdown.other.lastLabel)]"
+    $usageSourceBreakdownLabel.Text = "Izvori: test $($sourceBreakdown.testPrompt.count) [$(Format-UsageLabelValue -Value ([string]$sourceBreakdown.testPrompt.lastLabel))] | OpenCode $($sourceBreakdown.opencode.count) [$(Format-UsageLabelValue -Value ([string]$sourceBreakdown.opencode.lastLabel))] | ostalo $($sourceBreakdown.other.count) [$(Format-UsageLabelValue -Value ([string]$sourceBreakdown.other.lastLabel))]"
     $usageSourceDetailTestLabel.Text = "TEST: zahtevi $($sourceBreakdown.testPrompt.count) | avg $($sourceBreakdown.testPrompt.averageTotalMs) ms | avg $($sourceBreakdown.testPrompt.averageTotalTokensPerSecond) tok/s"
     $usageSourceDetailOpencodeLabel.Text = "OPENCODE: zahtevi $($sourceBreakdown.opencode.count) | avg $($sourceBreakdown.opencode.averageTotalMs) ms | avg $($sourceBreakdown.opencode.averageTotalTokensPerSecond) tok/s"
     $usageSourceDetailOtherLabel.Text = "OTHER: zahtevi $($sourceBreakdown.other.count) | avg $($sourceBreakdown.other.averageTotalMs) ms | avg $($sourceBreakdown.other.averageTotalTokensPerSecond) tok/s"
@@ -1595,7 +1615,7 @@ function Refresh-ThroughputView {
 
     $recentLines = @()
     foreach ($item in @($tokenMetrics.activity.recentActivities)) {
-        $recentLines += "$($item.measuredAt) | $($item.source) | $($item.label) | $($item.totalMs) ms | $($item.status)"
+        $recentLines += "$($item.measuredAt) | $(Get-UsageSourceDisplayName -Source ([string]$item.source)) | $(Format-UsageLabelValue -Value ([string]$item.label)) | $($item.totalMs) ms | $($item.status)"
     }
     if ($recentLines.Count -eq 0) {
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
@@ -1872,7 +1892,8 @@ function Apply-ModelFilters {
 function Format-ModelInfoValue {
     param(
         [AllowNull()][object]$Value,
-        [string]$Suffix = ""
+        [string]$Suffix = "",
+        [switch]$TreatZeroAsUnknown
     )
 
     if ($null -eq $Value) {
@@ -1882,6 +1903,15 @@ function Format-ModelInfoValue {
     $text = ([string]$Value).Trim()
     if ([string]::IsNullOrWhiteSpace($text)) {
         return "--"
+    }
+
+    if ($TreatZeroAsUnknown) {
+        try {
+            if ([double]$text -le 0) {
+                return "--"
+            }
+        } catch {
+        }
     }
 
     if ($Suffix) {
@@ -1911,6 +1941,28 @@ function Get-SelectedModelSpeedText {
     }
 
     return "--"
+}
+
+function Get-UsageSourceDisplayName {
+    param([string]$Source)
+
+    switch (([string]$Source).Trim()) {
+        "testPrompt" { return "test" }
+        "opencode" { return "OpenCode" }
+        "other" { return "ostalo" }
+        "" { return "--" }
+        default { return [string]$Source }
+    }
+}
+
+function Format-UsageLabelValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "--"
+    }
+
+    return $Value
 }
 
 function Refresh-ModelSelectionInfo {
@@ -2319,8 +2371,8 @@ function Show-ModelBrowserDialog {
             "Family: $($selected.family) | Use case: $($selected.useCase)",
             "Izvor modela: $sourceValue",
             "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
-            "Velicina: $(Format-ModelInfoValue -Value $selected.approxSizeGiB -Suffix 'GiB') | GPU: $(Format-ModelInfoValue -Value $selected.minimumGpuMiB)/$(Format-ModelInfoValue -Value $selected.recommendedGpuMiB) MiB | RAM: $(Format-ModelInfoValue -Value $selected.minimumRamGiB -Suffix 'GiB')",
-            "Installed: $(Format-ModelInfoValue -Value $selected.installedSizeGiB -Suffix 'GiB') | Need disk: $(Format-ModelInfoValue -Value $selected.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selected.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selected.hasEnoughDisk) { '--' } elseif ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
+            "Velicina: $(Format-ModelInfoValue -Value $selected.approxSizeGiB -Suffix 'GiB' -TreatZeroAsUnknown) | GPU: $(Format-ModelInfoValue -Value $selected.minimumGpuMiB -TreatZeroAsUnknown)/$(Format-ModelInfoValue -Value $selected.recommendedGpuMiB -TreatZeroAsUnknown) MiB | RAM: $(Format-ModelInfoValue -Value $selected.minimumRamGiB -Suffix 'GiB' -TreatZeroAsUnknown)",
+            "Installed: $(if ($selected.installed) { Format-ModelInfoValue -Value $selected.installedSizeGiB -Suffix 'GiB' } else { 'nije skinut' }) | Need disk: $(Format-ModelInfoValue -Value $selected.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selected.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selected.hasEnoughDisk) { '--' } elseif ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
             "Procena brzine: $speedText | $($selected.speedEstimateReason)",
             "Agentic: $($selected.agenticScore)/10 | OpenCode: $($selected.opencodeFit)/10 | Curation: $($selected.curationLevel)",
             "Opis: $($selected.description)"
@@ -2365,9 +2417,9 @@ function Show-ModelBrowserDialog {
                     [string]$item.id,
                     [string]$item.family,
                     [string]$item.fitGroup,
-                    ("{0} GiB" -f $item.approxSizeGiB),
+                    (Format-ModelInfoValue -Value $item.approxSizeGiB -Suffix 'GiB' -TreatZeroAsUnknown),
                     [string]$item.speedEstimateLabel,
-                    ("need {0}G" -f $item.diskNeededGiB),
+                    ("need {0}" -f (Format-ModelInfoValue -Value $item.diskNeededGiB -Suffix 'GiB')),
                     ("{0}/10" -f $item.agenticScore),
                     ("{0}/10" -f $item.opencodeFit)
                 )
@@ -3291,6 +3343,7 @@ $refreshHealthButton.Add_Click({
 $runNextActionButton.Add_Click({
     try {
         $nextAction = Get-NextActionRecommendation
+        $handled = $true
         switch ($nextAction.actionId) {
             "repair-install" {
                 $result = & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "repair-install.ps1") 2>&1
@@ -3312,12 +3365,18 @@ $runNextActionButton.Add_Click({
                 )
                 Write-LaunchMessage @("Otvaram OpenCode kao sledeci korak.")
             }
+            default {
+                $handled = $false
+                Write-LaunchMessage @("Sledeci korak trenutno nema pokretljivu akciju: $([string]$nextAction.actionId)")
+            }
         }
-        Refresh-LaunchStatus
-        Refresh-LogsView
-        Refresh-OnboardingView
-        Refresh-DiagnosticsView
-        Refresh-ThroughputView
+        if ($handled) {
+            Refresh-LaunchStatus
+            Refresh-LogsView
+            Refresh-OnboardingView
+            Refresh-DiagnosticsView
+            Refresh-ThroughputView
+        }
     } catch {
         Write-LaunchMessage @($_.Exception.Message)
     }
@@ -3495,7 +3554,7 @@ $healthMeta.Text = "Health pregled nije jos ucitan."
 $healthContent.Text = "Otvori Health tab ili klikni osvezavanje da se ucita objedinjeni repair i health pregled."
 $diagnosticsMeta.Text = "Diagnostics nisu jos ucitani."
 $diagnosticsContent.Text = "Otvori Diagnostics tab ili klikni osvezavanje da se ucita detaljan pregled."
-$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
+$throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
 $modelInfoBox.Text = "Model info ce se ucitati kada otvoris Podesavanja tab."
 $agentWarning.Text = "Risk audit ce se ucitati kada otvoris Agent tab."
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)

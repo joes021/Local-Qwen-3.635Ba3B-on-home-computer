@@ -2,13 +2,13 @@
 
 $info = Get-LatestReleaseInfo
 if ($info.aheadOfPublicRelease) {
-    Write-Host "Lokalna instalacija je novija od javnog latest release-a: v$($info.currentVersion) > v$($info.latestVersion)"
-    Write-Host "Javni release: $($info.releaseUrl)"
+    Write-Output "Lokalna instalacija je novija od javnog latest release-a: v$($info.currentVersion) > v$($info.latestVersion)"
+    Write-Output "Javni release: $($info.releaseUrl)"
     exit 0
 }
 
 if (-not $info.updateAvailable) {
-    Write-Host "Instalacija je vec na latest verziji: v$($info.currentVersion)"
+    Write-Output "Instalacija je vec na latest verziji: v$($info.currentVersion)"
     exit 0
 }
 
@@ -20,10 +20,10 @@ New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 if (Test-Path $targetPath) {
     Remove-Item -LiteralPath $targetPath -Force -ErrorAction SilentlyContinue
 }
-Write-Host "Trenutna verzija: v$($info.currentVersion)"
-Write-Host "Nova verzija: v$($info.latestVersion)"
-Write-Host "Release: $($info.releaseUrl)"
-Write-Host "Preuzimam latest installer u: $targetPath"
+Write-Output "Trenutna verzija: v$($info.currentVersion)"
+Write-Output "Nova verzija: v$($info.latestVersion)"
+Write-Output "Release: $($info.releaseUrl)"
+Write-Output "Preuzimam latest installer u: $targetPath"
 Invoke-WebRequest -UseBasicParsing -Uri $downloadUrl -OutFile $targetPath
 if (-not (Test-Path $targetPath)) {
     throw "Update installer nije pronadjen posle preuzimanja: $targetPath"
@@ -32,10 +32,10 @@ $downloadedFile = Get-Item $targetPath
 if ($downloadedFile.Length -le 0) {
     throw "Update installer je preuzet kao prazan fajl: $targetPath"
 }
-Write-Host ("Preuzet installer: {0:N2} MiB" -f ($downloadedFile.Length / 1MB))
+Write-Output ("Preuzet installer: {0:N2} MiB" -f ($downloadedFile.Length / 1MB))
 Unblock-File -Path $targetPath -ErrorAction SilentlyContinue
 $process = Start-Process -FilePath $targetPath -PassThru
 
-Write-Host "Pokrenut je update installer za v$($info.latestVersion)"
-Write-Host "Installer PID: $($process.Id)"
-Write-Host "Ako se installer ne pojavi odmah, proveri: $targetPath"
+Write-Output "Pokrenut je update installer za v$($info.latestVersion)"
+Write-Output "Installer PID: $($process.Id)"
+Write-Output "Ako se installer ne pojavi odmah, proveri: $targetPath"

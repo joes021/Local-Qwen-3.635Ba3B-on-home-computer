@@ -1679,14 +1679,14 @@ def summarize_history_payload(history: list[dict]) -> dict:
                     throughput_trend = {
                         "direction": "up",
                         "label": "raste",
-                        "signal": "↑",
+                        "signal": "^",
                         "reason": "Skorasnji throughput deluje bolji nego u prethodnom delu uzorka.",
                     }
                 elif tps_delta <= -1.5:
                     throughput_trend = {
                         "direction": "down",
                         "label": "pada",
-                        "signal": "↓",
+                        "signal": "v",
                         "reason": "Skorasnji throughput deluje slabiji nego ranije u uzorku.",
                     }
                 else:
@@ -1704,14 +1704,14 @@ def summarize_history_payload(history: list[dict]) -> dict:
                     latency_trend = {
                         "direction": "up",
                         "label": "sporiji",
-                        "signal": "↑",
+                        "signal": "^",
                         "reason": "Skorasnji response time je porastao.",
                     }
                 elif latency_delta <= -400:
                     latency_trend = {
                         "direction": "down",
                         "label": "brzi",
-                        "signal": "↓",
+                        "signal": "v",
                         "reason": "Skorasnji response time je opao.",
                     }
                 else:
@@ -1757,7 +1757,7 @@ def summarize_history_payload(history: list[dict]) -> dict:
         else:
             stability = {
                 "level": "warming",
-                "label": "zagrevа se",
+                "label": "zagreva se",
                 "score": 50,
                 "reason": "Treba jos nekoliko zahteva da bi procena stabilnosti bila pouzdanija.",
             }

@@ -13,4 +13,4 @@ $messages.Add("Settings: $(Join-Path (Get-LocalQwenStateRoot) 'state\settings.js
 $messages.Add("OpenCode config: $(Update-OpenCodeConfig)") | Out-Null
 $messages.Add("Install report: $(Write-InstallReport)") | Out-Null
 
-$messages | ForEach-Object { Write-Host $_ }
+$messages | ForEach-Object { Write-Output $_ }

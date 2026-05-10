@@ -23,12 +23,36 @@ if (-not (Test-LlamaHealth)) {
 }
 
 $result = Invoke-TestPrompt -Prompt $Prompt
-$content = $result.Response.choices[0].message.content
-Write-Host "Smoke test odgovor:"
-Write-Host $content
+$choice = $result.Response.choices[0]
+$message = $choice.message
+$content = [string]$message.content
+$usedReasoningFallback = $false
+if ([string]::IsNullOrWhiteSpace($content) -and $message.PSObject.Properties["reasoning_content"]) {
+    $reasoningExcerpt = (([string]$message.reasoning_content) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace([string]$reasoningExcerpt)) {
+        $content = [string]$reasoningExcerpt
+    } else {
+        $content = [string]$message.reasoning_content
+    }
+    if ($content.Length -gt 220) {
+        $content = $content.Substring(0, 220) + "..."
+    }
+    $usedReasoningFallback = $true
+}
+if ([string]::IsNullOrWhiteSpace($content)) {
+    $content = "[Prazan odgovor]"
+}
+Write-Output "Smoke test odgovor:"
+Write-Output $content
+if ($usedReasoningFallback) {
+    Write-Output "Napomena: model nije vratio finalni tekst, pa je prikazan kratak reasoning izvod."
+}
+if ($choice.PSObject.Properties["finish_reason"] -and -not [string]::IsNullOrWhiteSpace([string]$choice.finish_reason)) {
+    Write-Output "Finish reason: $($choice.finish_reason)"
+}
 if ($result.Metrics -and $result.Metrics.current) {
-    Write-Host "Benchmark:"
-    Write-Host "Prompt tok/s: $($result.Metrics.current.promptTokensPerSecond)"
-    Write-Host "Output tok/s: $($result.Metrics.current.completionTokensPerSecond)"
-    Write-Host "Ukupno ms: $($result.Metrics.current.totalMs)"
+    Write-Output "Benchmark:"
+    Write-Output "Prompt tok/s: $($result.Metrics.current.promptTokensPerSecond)"
+    Write-Output "Output tok/s: $($result.Metrics.current.completionTokensPerSecond)"
+    Write-Output "Ukupno ms: $($result.Metrics.current.totalMs)"
 }

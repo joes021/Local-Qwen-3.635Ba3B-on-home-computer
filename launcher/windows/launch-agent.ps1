@@ -1,7 +1,5 @@
 param(
-    [ValidateSet("strict", "blacklist", "open")]
     [string]$SecurityMode = "strict",
-    [ValidateSet("read-only", "read-write", "confirm-commands", "auto-commands")]
     [string]$CapabilityMode = "confirm-commands",
     [string]$WorkingFolder = $env:USERPROFILE,
     [ValidateSet("speed", "balanced", "video")]
@@ -186,6 +184,8 @@ if (-not (Test-Path $WorkingFolder)) {
 }
 
 $resolvedFolder = (Resolve-Path -LiteralPath $WorkingFolder).Path
+$SecurityMode = Resolve-AgentSecurityMode -Mode $SecurityMode
+$CapabilityMode = Resolve-AgentCapabilityMode -Mode $CapabilityMode
 $selectedProfile = if ($Profile) { $Profile } else { [string](Get-Settings).profile }
 $audit = Get-AgentAudit -SecurityMode $SecurityMode -CapabilityMode $CapabilityMode -WorkingFolder $resolvedFolder
 

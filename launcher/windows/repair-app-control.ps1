@@ -28,6 +28,26 @@ function Get-SmartAppControlPolicies {
     }
 }
 
+function Show-SmartAppControlStatus {
+    param(
+        $Policies = $null
+    )
+
+    Write-Host "Smart App Control / VerifiedAndReputableDesktop stanje:" -ForegroundColor Cyan
+    if (-not $Policies -or @($Policies).Count -eq 0) {
+        Write-Host "- Nije pronadjena aktivna VerifiedAndReputableDesktop politika." -ForegroundColor Green
+        Write-Host "- To obicno znaci da Smart App Control trenutno ne blokira Local Qwen tok." -ForegroundColor Green
+        return
+    }
+
+    $Policies |
+        Select-Object FriendlyName, PolicyID, IsEnforced, IsAuthorized, IsSignedPolicy |
+        Format-Table -AutoSize
+
+    Write-Host ""
+    Write-Host ("Pronadjeno politika: {0}" -f @($Policies).Count) -ForegroundColor Yellow
+}
+
 if (-not (Get-Command CiTool.exe -ErrorAction SilentlyContinue)) {
     throw "CiTool.exe nije dostupan na ovom sistemu."
 }
@@ -44,10 +64,7 @@ if ($RefreshPoliciesOnly) {
 
 $smartPolicies = Get-SmartAppControlPolicies
 
-Write-Host "Smart App Control / VerifiedAndReputableDesktop stanje:" -ForegroundColor Cyan
-$smartPolicies |
-    Select-Object FriendlyName, PolicyID, IsEnforced, IsAuthorized, IsSignedPolicy |
-    Format-Table -AutoSize
+Show-SmartAppControlStatus -Policies $smartPolicies
 
 if ($DisableSmartAppControl) {
     if (-not (Test-IsAdmin)) {
@@ -82,9 +99,7 @@ if ($DisableSmartAppControl) {
     Write-Host ""
     Write-Host "Novo stanje:" -ForegroundColor Cyan
     $smartPolicies = Get-SmartAppControlPolicies
-    $smartPolicies |
-        Select-Object FriendlyName, PolicyID, IsEnforced, IsAuthorized, IsSignedPolicy |
-        Format-Table -AutoSize
+    Show-SmartAppControlStatus -Policies $smartPolicies
 
     Write-Host ""
     Write-Host "Napomena:" -ForegroundColor Yellow

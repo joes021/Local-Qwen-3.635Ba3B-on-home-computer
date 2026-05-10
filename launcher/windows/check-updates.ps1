@@ -1,14 +1,22 @@
+param(
+    [switch]$Json
+)
+
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
 $info = Get-LatestReleaseInfo
-$info | ConvertTo-Json -Depth 10
+
+if ($Json) {
+    $info | ConvertTo-Json -Depth 10
+    exit 0
+}
 
 if ($info.aheadOfPublicRelease) {
-    Write-Host "Lokalna instalacija je novija od javnog latest release-a: v$($info.currentVersion) > v$($info.latestVersion)"
-    Write-Host "Poslednji javni release: $($info.releaseUrl)"
+    Write-Output "Lokalna instalacija je novija od javnog latest release-a: v$($info.currentVersion) > v$($info.latestVersion)"
+    Write-Output "Poslednji javni release: $($info.releaseUrl)"
 } elseif ($info.updateAvailable) {
-    Write-Host "Dostupan je noviji release: v$($info.latestVersion)"
-    Write-Host "Link: $($info.releaseUrl)"
+    Write-Output "Dostupan je noviji release: v$($info.latestVersion)"
+    Write-Output "Link: $($info.releaseUrl)"
 } else {
-    Write-Host "Instalacija je vec na latest verziji: v$($info.currentVersion)"
+    Write-Output "Instalacija je vec na latest verziji: v$($info.currentVersion)"
 }

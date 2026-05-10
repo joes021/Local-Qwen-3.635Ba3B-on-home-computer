@@ -1112,6 +1112,8 @@ class RuntimeEngineTests(unittest.TestCase):
             payload = json.loads(stdout)
             self.assertEqual(payload["activity"]["throughputTrend"]["direction"], "up")
             self.assertEqual(payload["activity"]["latencyTrend"]["direction"], "down")
+            self.assertEqual(payload["activity"]["throughputTrend"]["signal"], "^")
+            self.assertEqual(payload["activity"]["latencyTrend"]["signal"], "v")
 
     def test_token_metrics_trend_detects_falling_throughput_and_higher_latency(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1156,6 +1158,43 @@ class RuntimeEngineTests(unittest.TestCase):
             payload = json.loads(stdout)
             self.assertEqual(payload["activity"]["throughputTrend"]["direction"], "down")
             self.assertEqual(payload["activity"]["latencyTrend"]["direction"], "up")
+            self.assertEqual(payload["activity"]["throughputTrend"]["signal"], "v")
+            self.assertEqual(payload["activity"]["latencyTrend"]["signal"], "^")
+
+    def test_token_metrics_warming_state_uses_ascii_label(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            history_path = temp_path / "history.json"
+            response_path = temp_path / "warming.json"
+            response_path.write_text(
+                json.dumps(
+                    {
+                        "_elapsed_ms": 900,
+                        "usage": {
+                            "prompt_tokens": 12,
+                            "completion_tokens": 10,
+                        },
+                        "timings": {
+                            "prompt_ms": 400,
+                            "predicted_ms": 300,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            code, stdout, stderr = run_runtime_command(
+                "token-metrics",
+                "--response-file",
+                str(response_path),
+                "--history-file",
+                str(history_path),
+                "--label",
+                "warming-check",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["activity"]["stability"]["level"], "warming")
+            self.assertEqual(payload["activity"]["stability"]["label"], "zagreva se")
 
     def test_repair_summary_accepts_unit_separator_encoded_lists(self):
         code, stdout, stderr = run_runtime_command(

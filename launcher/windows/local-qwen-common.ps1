@@ -20,7 +20,59 @@ function Write-Utf8NoBomText {
     }
 
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+    $maxAttempts = 10
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+            return
+        } catch [System.IO.IOException] {
+            if ($attempt -ge $maxAttempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds (150 * $attempt)
+        }
+    }
+}
+
+function Copy-FileWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    Ensure-Directory (Split-Path -Parent $DestinationPath)
+    $maxAttempts = 10
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            Copy-Item -LiteralPath $SourcePath -Destination $DestinationPath -Force
+            return
+        } catch [System.IO.IOException] {
+            if ($attempt -ge $maxAttempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds (150 * $attempt)
+        }
+    }
+}
+
+function Copy-DirectoryContentsWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDir,
+        [Parameter(Mandatory = $true)][string]$DestinationDir
+    )
+
+    Ensure-Directory $DestinationDir
+    $sourceRoot = (Resolve-Path $SourceDir).Path
+    $sourceItem = Get-Item $sourceRoot
+    foreach ($item in Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force) {
+        $relativePath = $item.FullName.Substring($sourceRoot.Length).TrimStart('\')
+        $targetPath = Join-Path $DestinationDir $relativePath
+        if ($item.PSIsContainer) {
+            Ensure-Directory $targetPath
+            continue
+        }
+        Copy-FileWithRetry -SourcePath $item.FullName -DestinationPath $targetPath
+    }
 }
 
 function Get-LocalQwenCodeRoot {
@@ -397,6 +449,7 @@ function Get-DesktopShortcutNames {
         "Local Qwen Control Center.lnk",
         "OpenCode - Local Qwen.lnk",
         "Verify Local Qwen Install.lnk",
+        "Repair Windows App Control.lnk",
         "Repair Local Qwen Install.lnk",
         "Test Local Qwen Prompt.lnk",
         "Update Local Qwen.lnk",
@@ -523,7 +576,36 @@ function Get-ModelDownloadProgressData {
     $path = Get-ModelDownloadProgressPath
     if (Test-Path $path) {
         try {
-            return Get-Content -Raw $path | ConvertFrom-Json
+            $payload = Get-Content -Raw $path | ConvertFrom-Json
+            if (-not $payload) {
+                return $null
+            }
+            $status = if ($payload.PSObject.Properties["status"]) { [string]$payload.status } else { "" }
+            $source = if ($payload.PSObject.Properties["source"]) { [string]$payload.source } else { "" }
+            $updatedAt = $null
+            if ($payload.PSObject.Properties["updatedAt"] -and $payload.updatedAt) {
+                try {
+                    $updatedAt = [double]$payload.updatedAt
+                } catch {
+                    $updatedAt = $null
+                }
+            }
+            if ($updatedAt -ne $null) {
+                $ageSeconds = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $updatedAt
+                $maxAgeSeconds = switch ($status) {
+                    "downloading" { 86400 }
+                    "completed" {
+                        if ($source -eq "local-cache") { 10 } else { 120 }
+                    }
+                    "failed" { 120 }
+                    "retrying" { 120 }
+                    default { 120 }
+                }
+                if ($ageSeconds -gt $maxAgeSeconds) {
+                    return $null
+                }
+            }
+            return $payload
         } catch {
             return $null
         }
@@ -1438,10 +1520,13 @@ function Get-AgentAudit {
         [Parameter(Mandatory = $true)][string]$WorkingFolder
     )
 
+    $resolvedSecurity = Resolve-AgentSecurityMode -Mode $SecurityMode
+    $resolvedCapability = Resolve-AgentCapabilityMode -Mode $CapabilityMode
+
     return Invoke-RuntimeEngineJson -Arguments @(
         "agent-audit",
-        "--security-mode", $SecurityMode,
-        "--capability-mode", $CapabilityMode,
+        "--security-mode", $resolvedSecurity,
+        "--capability-mode", $resolvedCapability,
         "--working-folder", $WorkingFolder
     )
 }
@@ -1484,6 +1569,55 @@ function Add-OrUpdateCustomModel {
     return $Model
 }
 
+function ConvertTo-CustomModelToken {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $token = $Value -replace '[^a-zA-Z0-9_-]', '_'
+    $token = $token.Trim('_')
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        return "custom"
+    }
+    return $token
+}
+
+function Resolve-AgentSecurityMode {
+    param([Parameter(Mandatory = $true)][string]$Mode)
+
+    $normalized = $Mode.Trim().ToLowerInvariant()
+    switch ($normalized) {
+        "strict" { return "strict" }
+        "workspace-write" { return "blacklist" }
+        "blacklist" { return "blacklist" }
+        "open" { return "open" }
+        default { throw "Nepodrzan security mode: $Mode" }
+    }
+}
+
+function Resolve-AgentCapabilityMode {
+    param([Parameter(Mandatory = $true)][string]$Mode)
+
+    $normalized = $Mode.Trim().ToLowerInvariant()
+    switch ($normalized) {
+        "read-only" { return "read-only" }
+        "read-write" { return "read-write" }
+        "workspace-write" { return "read-write" }
+        "confirm-commands" { return "confirm-commands" }
+        "auto-commands" { return "auto-commands" }
+        "benchmark" { return "auto-commands" }
+        default { throw "Nepodrzan capability mode: $Mode" }
+    }
+}
+
+function Get-OpenCodeModelDisplayName {
+    param([Parameter(Mandatory = $true)][string]$Label)
+
+    $cleanLabel = $Label.Trim()
+    if ($cleanLabel -match '(?i)\blocal$') {
+        return "$cleanLabel (llama.cpp)"
+    }
+    return "$cleanLabel Local (llama.cpp)"
+}
+
 function Import-LocalGgufModel {
     param(
         [Parameter(Mandatory = $true)][string]$SourcePath,
@@ -1504,13 +1638,14 @@ function Import-LocalGgufModel {
     $fileName = $file.Name
     $targetPath = Join-Path $modelsDir $fileName
     if ($file.FullName -ne $targetPath) {
-        Copy-Item -LiteralPath $file.FullName -Destination $targetPath -Force
+        Copy-FileWithRetry -SourcePath $file.FullName -DestinationPath $targetPath
     }
 
     $friendlyLabel = if ([string]::IsNullOrWhiteSpace($Label)) { [System.IO.Path]::GetFileNameWithoutExtension($fileName) } else { $Label.Trim() }
     $sizeBytes = [int64](Get-Item $targetPath).Length
+    $localKey = ConvertTo-CustomModelToken -Value ([System.IO.Path]::GetFileNameWithoutExtension($fileName))
     $model = [pscustomobject]@{
-        key = ([System.IO.Path]::GetFileNameWithoutExtension($fileName) -replace '[^a-zA-Z0-9_-]', '_')
+        key = $localKey
         id = $fileName
         label = $friendlyLabel
         family = $(if ([string]::IsNullOrWhiteSpace($Family)) { "Custom" } else { $Family.Trim() })
@@ -1566,9 +1701,12 @@ function Add-HuggingFaceCustomModel {
 
     $friendlyLabel = if ([string]::IsNullOrWhiteSpace($Label)) { [System.IO.Path]::GetFileNameWithoutExtension($fileNameText) } else { $Label.Trim() }
     $approxGiB = if ($sizeBytes -gt 0) { [math]::Round(($sizeBytes / 1GB), 2) } else { 0.0 }
+    $repoToken = ConvertTo-CustomModelToken -Value $repoText
+    $fileToken = ConvertTo-CustomModelToken -Value ([System.IO.Path]::GetFileNameWithoutExtension($fileNameText))
+    $customId = "hf-$repoToken-$fileNameText"
     $model = [pscustomobject]@{
-        key = ([System.IO.Path]::GetFileNameWithoutExtension($fileNameText) -replace '[^a-zA-Z0-9_-]', '_')
-        id = $fileNameText
+        key = "hf-$repoToken-$fileToken"
+        id = $customId
         label = $friendlyLabel
         family = $(if ([string]::IsNullOrWhiteSpace($Family)) { "Custom" } else { $Family.Trim() })
         agenticScore = 6
@@ -1610,8 +1748,16 @@ function Set-SelectedModel {
     $currentModelPath = Get-StateModelFilePath -State $state
     $modelsDir = Split-Path -Parent $currentModelPath
     $resolvedModelPath = Join-Path $modelsDir ([string]$meta.filename)
-    $state.modelFile = $resolvedModelPath
-    $state.modelPath = $resolvedModelPath
+    if ($state.PSObject.Properties["modelFile"]) {
+        $state.modelFile = $resolvedModelPath
+    } else {
+        $state | Add-Member -NotePropertyName "modelFile" -NotePropertyValue $resolvedModelPath -Force
+    }
+    if ($state.PSObject.Properties["modelPath"]) {
+        $state.modelPath = $resolvedModelPath
+    } else {
+        $state | Add-Member -NotePropertyName "modelPath" -NotePropertyValue $resolvedModelPath -Force
+    }
     Save-InstallState -State $state
     return $state
 }
@@ -1659,7 +1805,10 @@ function Get-LlamaModelPath {
 }
 
 function Download-RecommendedModel {
-    param([string]$ModelId = $null)
+    param(
+        [string]$ModelId = $null,
+        [switch]$ForceRedownload
+    )
 
     $state = Get-InstallState
     if (-not $ModelId) {
@@ -1675,6 +1824,28 @@ function Download-RecommendedModel {
     $meta = Get-ModelMetadata -ModelId $ModelId
     if (-not $meta) {
         throw "Model metadata nije pronadjena za $ModelId"
+    }
+
+    $targetModelPath = Get-StateModelFilePath -State $state
+    if ((-not $ForceRedownload) -and (Test-ModelFileLooksComplete -Path $targetModelPath -ModelId $ModelId)) {
+        $existingLength = (Get-Item $targetModelPath).Length
+        $skipPayload = [ordered]@{
+            status = "completed"
+            modelId = $ModelId
+            fileName = [System.IO.Path]::GetFileName($targetModelPath)
+            source = "local-cache"
+            totalBytes = $existingLength
+            downloadedBytes = $existingLength
+            downloadedGiB = [math]::Round(($existingLength / 1GB), 2)
+            totalGiB = [math]::Round(($existingLength / 1GB), 2)
+            speedMBps = $null
+            etaSeconds = 0
+            percent = 100.0
+            message = "Model je vec prisutan i deluje kompletno."
+            updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        }
+        Write-Utf8NoBomText -Path (Get-ModelDownloadProgressPath) -Content ($skipPayload | ConvertTo-Json -Depth 10)
+        return "already-installed"
     }
 
     $python = Get-PythonLauncher
@@ -1898,9 +2069,9 @@ function Restore-BundledSupportFiles {
         }
         Ensure-Directory (Split-Path -Parent $entry.Destination)
         if ((Get-Item $entry.Source).PSIsContainer) {
-            Copy-Item -Path (Join-Path $entry.Source "*") -Destination $entry.Destination -Recurse -Force
+            Copy-DirectoryContentsWithRetry -SourceDir $entry.Source -DestinationDir $entry.Destination
         } else {
-            Copy-Item -LiteralPath $entry.Source -Destination $entry.Destination -Force
+            Copy-FileWithRetry -SourcePath $entry.Source -DestinationPath $entry.Destination
         }
         $copied.Add([string]$entry.Label) | Out-Null
     }
@@ -1960,6 +2131,13 @@ function Update-OpenCodeConfig {
     $state = Get-InstallState
     $settings = Get-Settings
     $defaults = Get-Defaults
+    $selectedModelMeta = Get-ModelMetadata -ModelId ([string]$state.modelId)
+    $selectedModelLabel = if ($selectedModelMeta -and $selectedModelMeta.PSObject.Properties["label"] -and -not [string]::IsNullOrWhiteSpace([string]$selectedModelMeta.label)) {
+        [string]$selectedModelMeta.label
+    } else {
+        [string]$state.modelId
+    }
+    $selectedModelDisplayName = Get-OpenCodeModelDisplayName -Label $selectedModelLabel
     $configPath = Get-OpenCodeConfigPath
     Ensure-Directory (Split-Path -Parent $configPath)
 
@@ -1987,7 +2165,7 @@ function Update-OpenCodeConfig {
         }
         models = [pscustomobject]@{
             ($state.modelId) = [pscustomobject]@{
-                name = "Qwen 3.6 35B A3B Local (llama.cpp)"
+                name = $selectedModelDisplayName
             }
         }
     })
@@ -2034,10 +2212,18 @@ function Update-OpenCodeConfig {
         }
     }
 
-    $existing.agent.build.steps = [int]$settings.opencode.buildSteps
-    $existing.agent.plan.steps = [int]$settings.opencode.planSteps
-    $existing.agent.general.steps = [int]$settings.opencode.generalSteps
-    $existing.agent.explore.steps = [int]$settings.opencode.exploreSteps
+    foreach ($entry in @(
+        @{ Node = $existing.agent.build; Value = [int]$settings.opencode.buildSteps },
+        @{ Node = $existing.agent.plan; Value = [int]$settings.opencode.planSteps },
+        @{ Node = $existing.agent.general; Value = [int]$settings.opencode.generalSteps },
+        @{ Node = $existing.agent.explore; Value = [int]$settings.opencode.exploreSteps }
+    )) {
+        if (-not $entry.Node.PSObject.Properties["steps"]) {
+            $entry.Node | Add-Member -NotePropertyName "steps" -NotePropertyValue $entry.Value
+        } else {
+            $entry.Node.steps = $entry.Value
+        }
+    }
 
     Write-Utf8NoBomText -Path $configPath -Content ($existing | ConvertTo-Json -Depth 20)
     return $configPath
@@ -2181,6 +2367,7 @@ function Export-DiagnosticsBundle {
         Remove-Item -LiteralPath $zipPath -Force
     }
     Compress-Archive -Path (Join-Path $bundleDir "*") -DestinationPath $zipPath -Force
+    Remove-Item -LiteralPath $bundleDir -Recurse -Force -ErrorAction SilentlyContinue
     return $zipPath
 }
 

@@ -34,8 +34,16 @@ function Get-OpenCodeLaunchCommand {
     return "`$env:OPENCODE_CONFIG_DIR='$escapedConfigPath'; `$env:OPENCODE_ENABLE_EXA='1'; & '$escapedExecutable'"
 }
 
+$configDir = Split-Path -Parent (Get-OpenCodeConfigPath)
+$healthUrl = Get-LlamaHealthUrl
+Write-Output "OpenCode executable: $openCodeExe"
+Write-Output "OpenCode config dir: $configDir"
+Write-Output "Llama health: $healthUrl"
+
 Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
     "-NoExit",
     "-Command",
     (Get-OpenCodeLaunchCommand -ExecutablePath $openCodeExe)
 )
+
+Write-Output "OpenCode je pokrenut u novom PowerShell prozoru."

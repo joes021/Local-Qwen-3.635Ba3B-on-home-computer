@@ -100,8 +100,8 @@ foreach ($text in (Get-Matches -Content $controlContent -Pattern '\$[A-Za-z0-9_]
 
 Add-Section -Lines $lines -Title "Quick checks"
 $lines.Add(("Uses new background worker path: {0}" -f ([bool]($controlContent -match '\$powerShellExe = Get-WindowsPowerShellExe')))) | Out-Null
-$lines.Add(("Uses quick actions layout: {0}" -f ([bool]($controlContent -match '\$launchPrimaryGroup\.Text = "Quick actions"')))) | Out-Null
-$lines.Add(("Uses tools column layout: {0}" -f ([bool]($controlContent -match '\$launchToolsGroup\.Text = "Tools"')))) | Out-Null
+$lines.Add(("Uses launch primary group layout: {0}" -f ([bool]($controlContent -match '\$launchPrimaryGroup\.Text = "Pokretanje"')))) | Out-Null
+$lines.Add(("Uses tools tab layout: {0}" -f ([bool]($controlContent -match '\$toolsTab\.Text = "Tools"')))) | Out-Null
 $lines.Add(("Has model download live progress view: {0}" -f ([bool]($controlContent -match 'Refresh-ModelDownloadProgressView')))) | Out-Null
 $lines.Add(("Has throughput test button: {0}" -f ([bool]($controlContent -match 'Test throughput')))) | Out-Null
 
@@ -113,4 +113,4 @@ if (Test-Path $releaseNotesPath) {
 }
 
 Write-Utf8NoBomText -Path $OutputPath -Content ($lines -join [Environment]::NewLine)
-Write-Host "UI dump sacuvan: $OutputPath"
+Write-Output "UI dump sacuvan: $OutputPath"
