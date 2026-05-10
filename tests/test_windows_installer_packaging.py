@@ -159,6 +159,13 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('echo "Nova verzija: v$LATEST_VERSION"', content)
         self.assertIn('curl -L "$DOWNLOAD_URL" -o "$TARGET_PATH"', content)
         self.assertIn('encoding="utf-8-sig"', content)
+        self.assertIn('echo "Pokrecem neinteraktivni update installer..."', content)
+        self.assertIn('SKIP_MODEL_DOWNLOAD=1', content)
+        self.assertIn('SKIP_RUNTIME_BUILD=1', content)
+        self.assertIn('LOCAL_QWEN_SKIP_PACKAGE_INSTALL=1', content)
+        self.assertIn('LOCAL_QWEN_SKIP_SOURCE_CLONE=1', content)
+        self.assertIn('LOCAL_QWEN_SKIP_OPENCODE_INSTALL=1', content)
+        self.assertIn('"$TARGET_PATH" --cli-install', content)
         self.assertNotIn('releases/latest/download/Local-Qwen-Setup-latest.run', content)
 
     def test_linux_check_updates_reads_version_json_with_bom_tolerance(self):

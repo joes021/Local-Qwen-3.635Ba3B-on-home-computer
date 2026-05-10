@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.21
+- Linux `install-update.sh` vise ne pokrece skinuti `.run` u interaktivnom TUI modu kada se update trazi iz vec instalirane kopije. Umesto toga koristi neinteraktivni `--cli-install` refresh sa trenutnim `InstallRoot`, profilom i modelom, uz preskakanje package/source/OpenCode/model/runtime koraka koji nisu potrebni za obican update launchera i skripti
+- Ovo direktno zatvara Ubuntu nalaz gde je update launcher uspeo da skine novu verziju, ali je onda pao na `sudo: a terminal is required` jer je uletao u puni interaktivni installer tok umesto u laki refresh/update put
+
 v2.10.20
 - Linux custom lokalni modeli sa veoma malim `.gguf` fajlovima vise ne deluju polomljeno kao `0.0 GiB` ili `nepoznato`; browser sada za nenulte sitne velicine zaokruzuje na minimalnih `0.01 GiB`, pa je status pregledniji i iskreniji i za test/import scenarije
 

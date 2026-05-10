@@ -3,11 +3,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
+ROOT="$(get_local_qwen_root)"
 
-CURRENT_VERSION="$(python3 - <<'PY' "$(get_local_qwen_root)/version.json"
+CURRENT_VERSION="$(python3 - <<'PY' "$ROOT/version.json"
 import json, sys
 with open(sys.argv[1], "r", encoding="utf-8-sig") as f:
     print(json.load(f).get("version", "unknown"))
+PY
+)"
+CURRENT_PROFILE="$(get_saved_profile)"
+CURRENT_MODEL_ID="$(python3 - <<'PY' "$(get_install_state_path)"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8-sig") as f:
+    print(json.load(f).get("modelId", ""))
 PY
 )"
 
@@ -48,5 +56,13 @@ echo "Preuzimam installer u: $TARGET_PATH"
 curl -L "$DOWNLOAD_URL" -o "$TARGET_PATH"
 chmod +x "$TARGET_PATH"
 
-echo "Pokrecem update installer..."
-"$TARGET_PATH"
+echo "Pokrecem neinteraktivni update installer..."
+INSTALL_ROOT="$ROOT" \
+PROFILE="${CURRENT_PROFILE:-balanced}" \
+MODEL_ID="$CURRENT_MODEL_ID" \
+SKIP_MODEL_DOWNLOAD=1 \
+SKIP_RUNTIME_BUILD=1 \
+LOCAL_QWEN_SKIP_PACKAGE_INSTALL=1 \
+LOCAL_QWEN_SKIP_SOURCE_CLONE=1 \
+LOCAL_QWEN_SKIP_OPENCODE_INSTALL=1 \
+"$TARGET_PATH" --cli-install
