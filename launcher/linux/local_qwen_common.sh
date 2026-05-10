@@ -23,8 +23,67 @@ get_runtime_engine_path() {
   echo "$(get_local_qwen_root)/scripts/local_qwen_runtime.py"
 }
 
+get_local_qwen_install_script_path() {
+  local root script_dir candidate
+  root="$(get_local_qwen_root)"
+  candidate="$root/install/linux/install.sh"
+  if [ -f "$candidate" ]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  candidate="$(cd "$script_dir/../../install/linux" 2>/dev/null && pwd)/install.sh"
+  if [ -f "$candidate" ]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
 get_settings_path() {
   echo "$(get_local_qwen_root)/state/settings.json"
+}
+
+is_windows_interop_path() {
+  local path="${1:-}"
+  case "$path" in
+    /mnt/*/Users/*/AppData/Roaming/npm/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_opencode_command() {
+  local candidate
+
+  if candidate="$(command -v opencode 2>/dev/null || true)"; then
+    if [ -n "$candidate" ] && ! is_windows_interop_path "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  fi
+
+  local prefix
+  prefix="$(npm config get prefix 2>/dev/null || true)"
+  if [ -n "$prefix" ] && [ -x "$prefix/bin/opencode" ] && ! is_windows_interop_path "$prefix/bin/opencode"; then
+    printf '%s\n' "$prefix/bin/opencode"
+    return 0
+  fi
+
+  for candidate in \
+    "$HOME/.local/bin/opencode" \
+    "$HOME/.npm-global/bin/opencode" \
+    "/usr/local/bin/opencode" \
+    "/usr/bin/opencode"
+  do
+    if [ -x "$candidate" ] && ! is_windows_interop_path "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 get_service_lifecycle_path() {

@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.11
+- Linux `Control Center` tokovi su dodatno poravnati kroz installer umesto kroz rucne live zakrpe: instalacija sada kopira i `install/linux` u `local-qwen-home`, pa `Preuzmi model` vise ne pada na `.../install/linux/install.sh: No such file or directory`
+- Linux `manage-models.sh download` sada trazi install skriptu preko zajednickog helpera, cuva eksplicitno izabrani `MODEL_ID` i pokrece samo model download tok bez nepotrebnog package/source/OpenCode polu-reinstall-a
+- Linux dashboard TUI je dodatno ociscen i zakljucan testovima: model browser helperi su prisutni u dashboard sloju, `Run OpenCode` iz centra ide preko desktop launcher toka, a installer payload i desktop launcheri ostaju konzistentni sa istom verzijom na Linux i Windows strani
+
 v2.10.10
 - Linux `Start server` sada prvo proverava da li je `llama.cpp` vec aktivan; ako jeste, ne pokusava novi start nego odmah javlja da je server vec ziv i poravnava lifecycle na `active`
 - Linux `Diagnostics` sada prikazuje i `Current version`, a zaglavljeni lifecycle tipa `starting` vise se ne prikazuje kao da je sistem u medjustanju kada je `health` vec potvrden; umesto toga ide jasniji status `active (health-confirmed)`

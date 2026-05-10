@@ -68,7 +68,7 @@ else:
 PY
 }
 
-render_status_header() {
+build_status_lines() {
   local profile model_id health_state server_title next_action summary_line version
   profile="$(get_saved_profile)"
   model_id="$(get_current_model_id)"
@@ -88,45 +88,129 @@ PY
   summary_line="$(get_last_activity_summary)"
   version="$(get_current_version)"
 
-  echo "Local Qwen Control Center"
-  echo "Verzija: $version"
-  echo "Server: $server_title | Health: $health_state | Model: $model_id | Profil: $profile"
-  echo "Next action: $next_action"
-  echo "Last activity: $summary_line"
+  printf '%s\n' \
+    "Local Qwen Control Center" \
+    "Verzija: $version" \
+    "Server: $server_title | Health: $health_state" \
+    "Model: $model_id | Profil: $profile" \
+    "Next: $next_action" \
+    "Aktivnost: $summary_line"
+}
+
+render_status_header() {
+  build_status_lines
   echo
 }
 
-render_home_screen() {
-  clear
-  render_status_header
+run_dashboard_menu() {
+  local title="$1"
+  local prompt="$2"
+  shift 2
+  local header
+  header="$(build_status_lines)"
+  if control_center_has_tui; then
+    run_menu "$title" "$header"$'\n\n'"$prompt" "$@"
+  else
+    run_menu "$title" "$prompt" "$@"
+  fi
 }
 
-show_main_menu() {
-  echo "1. Pokretanje"
-  echo "2. Modeli"
-  echo "3. Tools"
-  echo "4. Diagnostics"
-  echo "5. Settings"
-  echo "6. Exit"
+build_home_prompt() {
+  python3 - <<'PY' "$(get_health_center_json)" "$(get_repair_summary_json)"
+import json, sys
+health = json.loads(sys.argv[1])
+repair = json.loads(sys.argv[2]) if sys.argv[2] != "null" else None
+title = health.get("title", "Stanje nije poznato")
+summary = health.get("summary", "Nema dodatnog sažetka.")
+primary = health.get("primaryActionTitle", "Nema preporucene akcije")
+if repair:
+    fixed = len(repair.get("fixed", []) or [])
+    repair_line = f"Poslednji repair: {fixed} popravki"
+else:
+    repair_line = "Poslednji repair: jos nema summary-ja"
+print(f"{title}\\n{summary}\\nSledece: {primary}\\n{repair_line}")
+PY
+}
+
+prompt_model_id() {
+  local title="$1"
+  local prompt_text="$2"
+  prompt_input "$title" "$prompt_text"
+}
+
+get_installed_model_sizes_json() {
+  local defaults_path models_dir
+  defaults_path="$(get_defaults_path)"
+  models_dir="$(get_local_qwen_root)/models"
+  python3 - <<'PY' "$defaults_path" "$models_dir"
+import json, os, sys
+defaults_path, models_dir = sys.argv[1:3]
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+result = {}
+for item in defaults.get("modelChoices", {}).values():
+    path = os.path.join(models_dir, item.get("filename", ""))
+    if os.path.isfile(path):
+        result[item.get("id")] = os.path.getsize(path)
+print(json.dumps(result))
+PY
+}
+
+get_free_disk_gib() {
+  local models_dir
+  models_dir="$(get_local_qwen_root)/models"
+  python3 - <<'PY' "$models_dir"
+import os, shutil, sys
+path = sys.argv[1]
+os.makedirs(path, exist_ok=True)
+usage = shutil.disk_usage(path)
+print(round(usage.free / (1024 ** 3), 2))
+PY
+}
+
+get_model_browser_for_current_machine() {
+  local current_model_id="$1"
+  local installed_ids="$2"
+  local installed_sizes_json="$3"
+  local free_disk_gib="$4"
+  local gpu_mib="0" ram_gib="0" cpu_threads="0"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
+  fi
+  ram_gib="$(python3 - <<'PY'
+with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        if line.startswith("MemTotal:"):
+            print(round(int(line.split()[1]) / 1024 / 1024))
+            break
+    else:
+        print(0)
+PY
+)"
+  cpu_threads="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
+  get_model_browser_json "$gpu_mib" "$ram_gib" "$cpu_threads" "$current_model_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib" "" ""
+}
+
+launch_opencode_from_center() {
+  local profile
+  profile="$(get_saved_profile)"
+  "$SCRIPT_DIR/desktop-launch.sh" "$SCRIPT_DIR/start-opencode.sh" "$profile"
 }
 
 show_launch_menu() {
   while true; do
-    clear
-    render_status_header
-    echo "Pokretanje"
-    echo "1. Start llama.cpp server"
-    echo "2. Stop llama.cpp server"
-    echo "3. Run OpenCode"
-    echo "4. Run llama.cpp web"
-    echo "5. Test prompt"
-    echo "6. Test throughput"
-    echo "7. Nazad"
-    read -r -p "Izaberi broj i pritisni Enter: " choice
+    choice="$(run_dashboard_menu "Pokretanje" "Izaberi akciju." \
+      1 "Start llama.cpp server" \
+      2 "Stop llama.cpp server" \
+      3 "Run OpenCode" \
+      4 "Run llama.cpp web" \
+      5 "Test prompt" \
+      6 "Test throughput" \
+      7 "Nazad")" || return
     case "$choice" in
       1) run_action_with_result_screen "Start llama.cpp server" "$SCRIPT_DIR/start-server.sh" ;;
       2) run_action_with_result_screen "Stop llama.cpp server" "$SCRIPT_DIR/stop-server.sh" ;;
-      3) run_action_with_result_screen "Run OpenCode" "$SCRIPT_DIR/start-opencode.sh" ;;
+      3) run_action_with_result_screen "Run OpenCode" launch_opencode_from_center ;;
       4) show_info_screen "Run llama.cpp web" "Linux web launcher jos nije izdvojen kao poseban tok." ;;
       5) run_action_with_result_screen "Test prompt" "$SCRIPT_DIR/test-prompt.sh" ;;
       6) show_info_screen "Test throughput" "Benchmark TUI tok dolazi u sledecim zadacima." ;;
@@ -138,18 +222,15 @@ show_launch_menu() {
 
 show_tools_menu() {
   while true; do
-    clear
-    render_status_header
-    echo "Tools"
-    echo "1. Repair install"
-    echo "2. Repair model"
-    echo "3. Repair runtime"
-    echo "4. Repair config"
-    echo "5. Guided repair"
-    echo "6. Check updates"
-    echo "7. Install update"
-    echo "8. Nazad"
-    read -r -p "Izaberi broj i pritisni Enter: " choice
+    choice="$(run_dashboard_menu "Tools" "Izaberi maintenance ili update akciju." \
+      1 "Repair install" \
+      2 "Repair model" \
+      3 "Repair runtime" \
+      4 "Repair config" \
+      5 "Guided repair" \
+      6 "Check updates" \
+      7 "Install update" \
+      8 "Nazad")" || return
     case "$choice" in
       1) run_action_with_result_screen "Repair install" "$SCRIPT_DIR/repair-install.sh" ;;
       2) run_action_with_result_screen "Repair model" "$SCRIPT_DIR/repair-model.sh" ;;
@@ -178,31 +259,106 @@ print("Status oznake: [AKTIVAN] [SKINUT] [NIJE SKINUT] [HF] [LOKALNI] [PREPORUKA
 PY
 }
 
-prompt_model_id() {
-  local prompt_text="$1"
-  local model_id
-  read -r -p "$prompt_text" model_id
-  printf '%s' "$model_id"
+get_model_browser_payload_json() {
+  local current_id installed_ids installed_sizes_json free_disk_gib
+  current_id="$(python3 - <<'PY' "$(get_install_state_path)"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    print(json.load(f).get("modelId", ""))
+PY
+)"
+  installed_ids="$(get_installed_model_ids_csv)"
+  installed_sizes_json="$(get_installed_model_sizes_json)"
+  free_disk_gib="$(get_free_disk_gib)"
+  get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib"
+}
+
+build_model_menu_items() {
+  python3 - <<'PY' "$(get_model_browser_payload_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+for item in payload.get("models", []):
+    flags = []
+    if item.get("active"):
+        flags.append("AKTIVAN")
+    if item.get("recommended"):
+        flags.append("PREPORUKA")
+    if item.get("installed"):
+        flags.append("SKINUT")
+    else:
+        flags.append("NIJE SKINUT")
+    fit = item.get("fitGroup") or "unknown"
+    label = f"{item.get('label', item.get('id'))} | {'/'.join(flags)} | {fit}"
+    print(item.get("id", ""))
+    print(label[:72])
+PY
+}
+
+show_model_details_screen() {
+  local model_id="$1"
+  local details
+  details="$(python3 - <<'PY' "$(get_model_browser_payload_json)" "$model_id"
+import json, sys
+payload = json.loads(sys.argv[1])
+model_id = sys.argv[2]
+for item in payload.get("models", []):
+    if item.get("id") == model_id:
+        lines = [
+            f"Naziv: {item.get('label', item.get('id'))}",
+            f"Status: {'AKTIVAN ' if item.get('active') else ''}{'SKINUT' if item.get('installed') else 'NIJE SKINUT'}",
+            f"Porodica: {item.get('family', 'nepoznato')}",
+            f"Fit: {item.get('fitGroup', 'unknown')}",
+            f"Brzina: {item.get('speedEstimateLabel', 'nepoznato')}",
+            f"Disk potrebno: {item.get('diskNeededGiB', 'nepoznato')} GiB",
+            f"Disk slobodno: {item.get('freeDiskGiB', 'nepoznato')} GiB",
+            f"Enough disk: {'da' if item.get('hasEnoughDisk') else 'ne' if item.get('hasEnoughDisk') is not None else 'nepoznato'}",
+            f"Izvor: {item.get('source', 'nepoznato')}",
+            "",
+            item.get('description', 'Bez opisa.'),
+        ]
+        print("\\n".join(str(x) for x in lines))
+        break
+else:
+    print(f"Model nije pronadjen: {model_id}")
+PY
+)"
+  show_info_screen "Detalji modela" "$details"
+}
+
+pick_model_id() {
+  local title="$1"
+  local prompt="$2"
+  local menu_args=()
+  mapfile -t _model_lines < <(build_model_menu_items)
+  if [ "${#_model_lines[@]}" -eq 0 ]; then
+    show_warning_screen "$title" "Nema modela za prikaz."
+    return 1
+  fi
+  local i
+  for ((i = 0; i < ${#_model_lines[@]}; i += 2)); do
+    menu_args+=("${_model_lines[$i]}" "${_model_lines[$((i + 1))]}")
+  done
+  run_dashboard_menu "$title" "$prompt" "${menu_args[@]}"
 }
 
 show_models_menu() {
   while true; do
-    clear
-    render_status_header
-    echo "Modeli"
-    render_model_summary
-    echo
-    echo "1. Pregled modela"
-    echo "2. Aktiviraj model"
-    echo "3. Preuzmi model"
-    echo "4. Dodaj lokalni GGUF"
-    echo "5. Dodaj HF model"
-    echo "6. Nazad"
-    read -r -p "Izaberi broj i pritisni Enter: " choice
+    local prompt model_id
+    prompt="$(render_model_summary)"
+    choice="$(run_dashboard_menu "Modeli" "$prompt" \
+      1 "Pregled modela" \
+      2 "Aktiviraj model" \
+      3 "Preuzmi model" \
+      4 "Dodaj lokalni GGUF" \
+      5 "Dodaj HF model" \
+      6 "Nazad")" || return
     case "$choice" in
-      1) run_action_with_result_screen "Pregled modela" "$SCRIPT_DIR/manage-models.sh" list ;;
+      1)
+        model_id="$(pick_model_id "Pregled modela" "Izaberi model za detalje.")" || continue
+        show_model_details_screen "$model_id"
+        ;;
       2)
-        model_id="$(prompt_model_id "Unesi model id za aktivaciju: ")"
+        model_id="$(pick_model_id "Aktiviraj model" "Izaberi model za aktivaciju.")" || continue
         if [ -n "$model_id" ]; then
           run_action_with_result_screen "Aktiviraj model" "$SCRIPT_DIR/manage-models.sh" use "$model_id"
         else
@@ -210,7 +366,7 @@ show_models_menu() {
         fi
         ;;
       3)
-        model_id="$(prompt_model_id "Unesi model id za download (Enter za preporuceni): ")"
+        model_id="$(pick_model_id "Preuzmi model" "Izaberi model za preuzimanje.")" || continue
         if [ -n "$model_id" ]; then
           run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"
         else
@@ -227,15 +383,12 @@ show_models_menu() {
 
 show_diagnostics_menu() {
   while true; do
-    clear
-    render_status_header
-    echo "Diagnostics"
-    echo "1. Health details"
-    echo "2. View logs"
-    echo "3. Export diagnostics"
-    echo "4. Benchmark pregled"
-    echo "5. Nazad"
-    read -r -p "Izaberi broj i pritisni Enter: " choice
+    choice="$(run_dashboard_menu "Diagnostics" "Pregled zdravlja, logova i bundle exporta." \
+      1 "Health details" \
+      2 "View logs" \
+      3 "Export diagnostics" \
+      4 "Benchmark pregled" \
+      5 "Nazad")" || return
     case "$choice" in
       1) run_action_with_result_screen "Health details" "$SCRIPT_DIR/verify-install.sh" ;;
       2) run_action_with_result_screen "View logs" "$SCRIPT_DIR/show-logs.sh" ;;
@@ -259,17 +412,14 @@ PY
 
 show_settings_menu() {
   while true; do
-    clear
-    render_status_header
-    echo "Settings"
-    echo "1. Promeni profil"
-    echo "2. Promeni context"
-    echo "3. Promeni output"
-    echo "4. Promeni stepove"
-    echo "5. Promeni working dir"
-    echo "6. Quick presets"
-    echo "7. Nazad"
-    read -r -p "Izaberi broj i pritisni Enter: " choice
+    choice="$(run_dashboard_menu "Settings" "Promena profila i runtime podesavanja." \
+      1 "Promeni profil" \
+      2 "Promeni context" \
+      3 "Promeni output" \
+      4 "Promeni stepove" \
+      5 "Promeni working dir" \
+      6 "Quick presets" \
+      7 "Nazad")" || return
     case "$choice" in
       1) run_action_with_result_screen "Promeni profil" "$SCRIPT_DIR/settings-tui.sh" ;;
       2) run_action_with_result_screen "Promeni context" "$SCRIPT_DIR/settings-tui.sh" ;;
@@ -283,10 +433,18 @@ show_settings_menu() {
   done
 }
 
-render_home_screen
+show_home_menu() {
+  run_dashboard_menu "Home" "$(build_home_prompt)" \
+    1 "Pokretanje" \
+    2 "Modeli" \
+    3 "Tools" \
+    4 "Diagnostics" \
+    5 "Settings" \
+    6 "Exit"
+}
+
 while true; do
-  show_main_menu
-  read -r -p "Izaberi broj i pritisni Enter: " choice
+  choice="$(show_home_menu)" || exit 0
   case "$choice" in
     1) show_launch_menu ;;
     2) show_models_menu ;;
@@ -296,5 +454,4 @@ while true; do
     6) exit 0 ;;
     *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 6." ;;
   esac
-  render_home_screen
 done

@@ -287,12 +287,24 @@ PY
     "$SCRIPT_DIR/configure-settings.sh" >/dev/null
     ;;
   download)
+    install_script="$(get_local_qwen_install_script_path || true)"
+    if [ -z "${install_script:-}" ] || [ ! -f "$install_script" ]; then
+      echo "Linux install skripta nije pronadjena za model download tok."
+      echo "Ocekivana putanja: ~/local-qwen-home/install/linux/install.sh"
+      exit 1
+    fi
     if [ -n "$MODEL_ID" ]; then
       path="$(select_model "$MODEL_ID")"
       echo "Model postavljen na: $MODEL_ID"
       echo "Model path: $path"
     fi
-    INSTALL_ROOT="$ROOT" SKIP_RUNTIME_BUILD=1 bash "$ROOT/install/linux/install.sh"
+    INSTALL_ROOT="$ROOT" \
+    MODEL_ID="${MODEL_ID:-}" \
+    SKIP_RUNTIME_BUILD=1 \
+    LOCAL_QWEN_SKIP_PACKAGE_INSTALL=1 \
+    LOCAL_QWEN_SKIP_SOURCE_CLONE=1 \
+    LOCAL_QWEN_SKIP_OPENCODE_INSTALL=1 \
+    bash "$install_script"
     ;;
   *)
     echo "Koriscenje: $0 [list|compare <model-id>|use <model-id>|recommend|download <model-id>] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"

@@ -3,6 +3,7 @@ set -euo pipefail
 
 INSTALL_ROOT="${INSTALL_ROOT:-$HOME/local-qwen-home}"
 PROFILE="${PROFILE:-balanced}"
+MODEL_ID="${MODEL_ID:-}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
 SKIP_RUNTIME_BUILD="${SKIP_RUNTIME_BUILD:-0}"
 LOCAL_QWEN_SKIP_PACKAGE_INSTALL="${LOCAL_QWEN_SKIP_PACKAGE_INSTALL:-0}"
@@ -36,8 +37,44 @@ ensure_cmd() {
   return 1
 }
 
+is_windows_interop_opencode() {
+  local path="${1:-}"
+  case "$path" in
+    /mnt/*/Users/*/AppData/Roaming/npm/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_linux_opencode() {
+  local candidate prefix
+  candidate="$(command -v opencode 2>/dev/null || true)"
+  if [ -n "$candidate" ] && ! is_windows_interop_opencode "$candidate"; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  prefix="$(npm config get prefix 2>/dev/null || true)"
+  if [ -n "$prefix" ] && [ -x "$prefix/bin/opencode" ] && ! is_windows_interop_opencode "$prefix/bin/opencode"; then
+    printf '%s\n' "$prefix/bin/opencode"
+    return 0
+  fi
+
+  for candidate in \
+    "$HOME/.local/bin/opencode" \
+    "$HOME/.npm-global/bin/opencode" \
+    "/usr/local/bin/opencode" \
+    "/usr/bin/opencode"
+  do
+    if [ -x "$candidate" ] && ! is_windows_interop_opencode "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 ensure_packages_linux() {
-  local pkgs=(git curl python3 python3-pip python3-venv nodejs npm cmake ninja-build build-essential pkg-config)
+  local pkgs=(git curl python3 python3-pip python3-venv nodejs npm cmake ninja-build build-essential pkg-config whiptail)
 
   if ensure_cmd apt-get; then
     sudo apt-get update
@@ -59,6 +96,7 @@ ensure_packages_linux() {
 
 mkdir -p "$STATE_DIR" "$APPS_DIR" "$BIN_DIR" "$MODELS_DIR" "$LAUNCHERS_DIR" "$CONFIG_DIR" "$ASSETS_DIR"
 mkdir -p "$INSTALL_ROOT/docs"
+mkdir -p "$INSTALL_ROOT/install/linux"
 
 if [ "$LOCAL_QWEN_SKIP_PACKAGE_INSTALL" != "1" ]; then
   ensure_packages_linux
@@ -113,11 +151,12 @@ fi
 
 if [ "$LOCAL_QWEN_SKIP_OPENCODE_INSTALL" = "1" ]; then
   :
-elif ! command -v opencode >/dev/null 2>&1; then
+elif ! resolve_linux_opencode >/dev/null 2>&1; then
   npm install -g opencode-ai
 fi
 
 cp -R "$REPO_ROOT/launcher/linux/." "$LAUNCHERS_DIR/"
+cp -R "$REPO_ROOT/install/linux/." "$INSTALL_ROOT/install/linux/"
 cp -R "$REPO_ROOT/config/profiles/." "$CONFIG_DIR/profiles/"
 mkdir -p "$INSTALL_ROOT/scripts"
 cp -R "$REPO_ROOT/scripts/." "$INSTALL_ROOT/scripts/"
@@ -131,6 +170,7 @@ else
 fi
 
 chmod +x "$LAUNCHERS_DIR/"*.sh
+chmod +x "$INSTALL_ROOT/install/linux/"*.sh
 
 LLAMA_SERVER_EXE=""
 if [ -x "$APPS_DIR/llama.cpp/build/bin/llama-server" ]; then
@@ -154,19 +194,34 @@ print(value)
 PY
 )"
 
-MODEL_META_JSON="$(python3 "$REPO_ROOT/scripts/local_qwen_runtime.py" recommend --defaults "$DEFAULTS_PATH" --gpu-mib "${GPU_MIB:-0}" --ram-gib "${RAM_GIB:-0}" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)")"
+if [ -n "$MODEL_ID" ]; then
+  MODEL_META_JSON="$(python3 - <<'PY' "$DEFAULTS_PATH" "$MODEL_ID"
+import json, sys
+defaults_path, requested = sys.argv[1:3]
+with open(defaults_path, "r", encoding="utf-8") as f:
+    defaults = json.load(f)
+for item in defaults.get("modelChoices", {}).values():
+    if item.get("id") == requested or item.get("filename") == requested:
+        print(json.dumps(item))
+        raise SystemExit(0)
+raise SystemExit(f"Model nije pronadjen u defaults katalogu: {requested}")
+PY
+)"
+else
+  MODEL_META_JSON="$(python3 "$REPO_ROOT/scripts/local_qwen_runtime.py" recommend --defaults "$DEFAULTS_PATH" --gpu-mib "${GPU_MIB:-0}" --ram-gib "${RAM_GIB:-0}" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)")"
+fi
 
 MODEL_REPO="$(python3 - <<'PY' "$MODEL_META_JSON"
 import json, sys
 payload = json.loads(sys.argv[1])
-model = payload["recommendedModel"]
+model = payload.get("recommendedModel", payload)
 print(model["source"])
 PY
 )"
 MODEL_FILENAME="$(python3 - <<'PY' "$MODEL_META_JSON"
 import json, sys
 payload = json.loads(sys.argv[1])
-model = payload["recommendedModel"]
+model = payload.get("recommendedModel", payload)
 print(model["filename"])
 PY
 )"
@@ -175,7 +230,7 @@ MODEL_VENV_DIR="$STATE_DIR/model-download-venv"
 MODEL_MIN_EXPECTED_BYTES="$(python3 - <<'PY' "$MODEL_META_JSON"
 import json, sys
 payload = json.loads(sys.argv[1])
-model = payload["recommendedModel"]
+model = payload.get("recommendedModel", payload)
 print(model.get("minExpectedBytes", 0))
 PY
 )"
@@ -251,8 +306,8 @@ cat > "$DESKTOP_DIR/local-qwen-control-center.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Local Qwen Control Center
-Exec=$LAUNCHERS_DIR/control-center.sh
-Terminal=true
+Exec=$LAUNCHERS_DIR/desktop-launch.sh $LAUNCHERS_DIR/control-center.sh
+Terminal=false
 Icon=$ASSETS_DIR/icons/control-center.ico
 Categories=Development;
 EOF
@@ -261,8 +316,8 @@ cat > "$DESKTOP_DIR/opencode-local-qwen.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=OpenCode - Local Qwen
-Exec=$LAUNCHERS_DIR/start-opencode.sh balanced
-Terminal=true
+Exec=$LAUNCHERS_DIR/desktop-launch.sh $LAUNCHERS_DIR/start-opencode.sh balanced
+Terminal=false
 Icon=$ASSETS_DIR/icons/opencode-local-qwen.ico
 Categories=Development;
 EOF
@@ -271,7 +326,7 @@ chmod +x "$DESKTOP_DIR/local-qwen-control-center.desktop" "$DESKTOP_DIR/opencode
 
 LLAMA_UPSTREAM_PATH="$APPS_DIR/llama.cpp/build/bin/llama-server"
 TURBO_RUNTIME_PATH="$APPS_DIR/llama.cpp-turboquant/build-cuda/bin/llama-server"
-OPENCODE_PATH="$(command -v opencode || true)"
+OPENCODE_PATH="$(resolve_linux_opencode || true)"
 
 python3 - <<'PY' "$INSTALL_REPORT_PATH" "$INSTALL_ROOT" "$STATE_DIR/install-state.json" "$LAUNCHERS_DIR" "$DESKTOP_DIR" "$LLAMA_UPSTREAM_PATH" "$TURBO_RUNTIME_PATH" "$MODEL_PATH" "$OPENCODE_PATH" "$PROFILE"
 import json, os, sys
