@@ -120,7 +120,18 @@ model = {
 filtered = [item for item in models if str(item.get("id")) != model["id"]]
 filtered.append(model)
 registry.parent.mkdir(parents=True, exist_ok=True)
-registry.write_text(json.dumps({"updatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z", "models": filtered}, ensure_ascii=False, indent=2), encoding="utf-8")
+datetime_mod = __import__("datetime")
+registry.write_text(
+    json.dumps(
+        {
+            "updatedAt": datetime_mod.datetime.now(datetime_mod.timezone.utc).isoformat(),
+            "models": filtered,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
 print(json.dumps(model, ensure_ascii=False))
 PY
 }
@@ -185,7 +196,18 @@ model = {
 filtered = [item for item in models if str(item.get("id")) != model["id"]]
 filtered.append(model)
 registry.parent.mkdir(parents=True, exist_ok=True)
-registry.write_text(json.dumps({"updatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z", "models": filtered}, ensure_ascii=False, indent=2), encoding="utf-8")
+datetime_mod = __import__("datetime")
+registry.write_text(
+    json.dumps(
+        {
+            "updatedAt": datetime_mod.datetime.now(datetime_mod.timezone.utc).isoformat(),
+            "models": filtered,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
 print(json.dumps(model, ensure_ascii=False))
 PY
 }

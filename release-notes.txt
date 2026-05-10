@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.17
+- Linux `Dodaj lokalni GGUF` i `Dodaj HF model` vise ne prosipaju Python `DeprecationWarning` poruke zbog `datetime.utcnow()`; custom-model registry sada koristi timezone-aware UTC timestamp, pa rezultat dodavanja modela ostaje cist i razumljiv korisniku
+
 v2.10.16
 - Shared runtime `model-browser` sada tolerantno parsira blago polomljen `installed-model-sizes-json` argument sa viskom zatvarajucih zagrada, umesto da ga tiho odbaci i prijavi prazne `installedSizeGiB` vrednosti; time Linux CLI i TUI dobijaju ispravnu velicinu instaliranog modela i smislen `Need disk` izracun
 - Dodat je i regresioni test koji cuva upravo taj Linux shell slucaj, pa `Installed GiB` vise ne treba da se vrati na `0.0` ili `nepoznato` samo zbog sitne quoting/payload greske iz launcher sloja
