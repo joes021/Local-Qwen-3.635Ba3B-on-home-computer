@@ -5,31 +5,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 . "$SCRIPT_DIR/control-center-actions.sh"
 
-render_status_header() {
-  local profile model_id health_state server_title next_action summary_line
-  profile="$(get_saved_profile)"
-  model_id="$(python3 - <<'PY' "$(get_install_state_path)"
+get_current_version() {
+  python3 - <<'PY' "$(get_local_qwen_root)/version.json"
+import json, os, sys
+path = sys.argv[1]
+if os.path.exists(path):
+    with open(path, "r", encoding="utf-8-sig") as f:
+        print(json.load(f).get("version", "unknown"))
+else:
+    print("unknown")
+PY
+}
+
+get_current_model_id() {
+  python3 - <<'PY' "$(get_install_state_path)"
 import json, sys
-with open(sys.argv[1], "r", encoding="utf-8") as f:
+with open(sys.argv[1], "r", encoding="utf-8-sig") as f:
     print(json.load(f).get("modelId", "n/a"))
 PY
-)"
-  health_state="$(python3 - <<'PY' "$(get_health_center_json)"
-import json, sys
-payload = json.loads(sys.argv[1])
-print(payload.get("overallState", "unknown"))
-PY
-)"
-  server_title="$(python3 - <<'PY' "$(get_effective_service_status_json)"
-import json, sys
-payload = json.loads(sys.argv[1])
-print(payload.get("title", payload.get("state", "unknown")))
-PY
-)"
-  next_action="$(python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
+}
+
+get_next_action_title() {
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_runtime_engine_path)" "$(get_health_url)" "$HOME/.config/opencode/opencode.json"
 import json, os, subprocess, sys, urllib.request
 state_path, runtime_script, health_url, opencode_config = sys.argv[1:5]
-with open(state_path, "r", encoding="utf-8") as f:
+with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
 has_server = False
 try:
@@ -53,8 +53,10 @@ payload = subprocess.run(
 data = json.loads(payload.stdout)
 print(data.get("title", "n/a"))
 PY
-)"
-  summary_line="$(python3 - <<'PY' "$(get_token_metrics_summary_json)"
+}
+
+get_last_activity_summary() {
+  python3 - <<'PY' "$(get_token_metrics_summary_json)"
 import json, sys
 payload = json.loads(sys.argv[1])
 recent = payload.get("activity", {}).get("recentActivities", [])
@@ -64,19 +66,30 @@ if recent:
 else:
     print("Jos nema merenja")
 PY
-)"
+}
 
-  echo "Local Qwen Control Center"
-  echo "Verzija: $(python3 - <<'PY' "$(get_local_qwen_root)/version.json"
-import json, os, sys
-path = sys.argv[1]
-if os.path.exists(path):
-    with open(path, "r", encoding="utf-8") as f:
-        print(json.load(f).get("version", "unknown"))
-else:
-    print("unknown")
+render_status_header() {
+  local profile model_id health_state server_title next_action summary_line version
+  profile="$(get_saved_profile)"
+  model_id="$(get_current_model_id)"
+  health_state="$(python3 - <<'PY' "$(get_health_center_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("overallState", "unknown"))
 PY
 )"
+  server_title="$(python3 - <<'PY' "$(get_effective_service_status_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("title", payload.get("state", "unknown")))
+PY
+)"
+  next_action="$(get_next_action_title)"
+  summary_line="$(get_last_activity_summary)"
+  version="$(get_current_version)"
+
+  echo "Local Qwen Control Center"
+  echo "Verzija: $version"
   echo "Server: $server_title | Health: $health_state | Model: $model_id | Profil: $profile"
   echo "Next action: $next_action"
   echo "Last activity: $summary_line"
@@ -155,7 +168,7 @@ render_model_summary() {
   python3 - <<'PY' "$(get_install_state_path)" "$(get_installed_model_ids_csv)"
 import json, sys
 state_path, installed_csv = sys.argv[1:3]
-with open(state_path, "r", encoding="utf-8") as f:
+with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
 installed = [item for item in installed_csv.split(",") if item]
 print(f"Aktivni model: {state.get('modelId', 'n/a')}")
@@ -234,8 +247,8 @@ current = payload.get("current")
 if not current:
     print("Jos nema benchmark merenja. Pokreni Test prompt ili Test throughput.")
 else:
-    print(f\"Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalTokensPerSecond', 0)} tok/s\")
-    print(f\"Prosek total: {payload.get('averages', {}).get('totalTokensPerSecond', 0)} tok/s\")
+    print(f"Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalTokensPerSecond', 0)} tok/s")
+    print(f"Prosek total: {payload.get('averages', {}).get('totalTokensPerSecond', 0)} tok/s")
 PY
 )" ;;
       5) return ;;
