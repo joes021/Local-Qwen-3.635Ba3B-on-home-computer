@@ -48,6 +48,24 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn("[AKTIVAN]", dashboard)
         self.assertIn("[SKINUT]", dashboard)
 
+    def test_diagnostics_screen_contains_logs_export_and_benchmark_entries(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('echo "1. Health details"', dashboard)
+        self.assertIn('echo "2. View logs"', dashboard)
+        self.assertIn('echo "3. Export diagnostics"', dashboard)
+        self.assertIn('echo "4. Benchmark pregled"', dashboard)
+
+    def test_settings_screen_contains_profile_context_output_and_presets(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('echo "1. Promeni profil"', dashboard)
+        self.assertIn('echo "2. Promeni context"', dashboard)
+        self.assertIn('echo "3. Promeni output"', dashboard)
+        self.assertIn('echo "4. Promeni stepove"', dashboard)
+        self.assertIn('echo "5. Promeni working dir"', dashboard)
+        self.assertIn('echo "6. Quick presets"', dashboard)
+
 
 if __name__ == "__main__":
     unittest.main()

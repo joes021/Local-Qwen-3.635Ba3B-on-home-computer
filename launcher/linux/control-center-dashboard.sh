@@ -212,6 +212,64 @@ show_models_menu() {
   done
 }
 
+show_diagnostics_menu() {
+  while true; do
+    clear
+    render_status_header
+    echo "Diagnostics"
+    echo "1. Health details"
+    echo "2. View logs"
+    echo "3. Export diagnostics"
+    echo "4. Benchmark pregled"
+    echo "5. Nazad"
+    read -r -p "Izaberi broj i pritisni Enter: " choice
+    case "$choice" in
+      1) run_action_with_result_screen "Health details" "$SCRIPT_DIR/verify-install.sh" ;;
+      2) run_action_with_result_screen "View logs" "$SCRIPT_DIR/show-logs.sh" ;;
+      3) run_action_with_result_screen "Export diagnostics" "$SCRIPT_DIR/export-diagnostics.sh" ;;
+      4) show_info_screen "Benchmark pregled" "$(python3 - <<'PY' "$(get_token_metrics_summary_json)"
+import json, sys
+payload = json.loads(sys.argv[1])
+current = payload.get("current")
+if not current:
+    print("Jos nema benchmark merenja. Pokreni Test prompt ili Test throughput.")
+else:
+    print(f\"Poslednje merenje: prompt {current.get('promptTokensPerSecond', 0)} tok/s | output {current.get('completionTokensPerSecond', 0)} tok/s | total {current.get('totalTokensPerSecond', 0)} tok/s\")
+    print(f\"Prosek total: {payload.get('averages', {}).get('totalTokensPerSecond', 0)} tok/s\")
+PY
+)" ;;
+      5) return ;;
+      *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 5." ;;
+    esac
+  done
+}
+
+show_settings_menu() {
+  while true; do
+    clear
+    render_status_header
+    echo "Settings"
+    echo "1. Promeni profil"
+    echo "2. Promeni context"
+    echo "3. Promeni output"
+    echo "4. Promeni stepove"
+    echo "5. Promeni working dir"
+    echo "6. Quick presets"
+    echo "7. Nazad"
+    read -r -p "Izaberi broj i pritisni Enter: " choice
+    case "$choice" in
+      1) run_action_with_result_screen "Promeni profil" "$SCRIPT_DIR/settings-tui.sh" ;;
+      2) run_action_with_result_screen "Promeni context" "$SCRIPT_DIR/settings-tui.sh" ;;
+      3) run_action_with_result_screen "Promeni output" "$SCRIPT_DIR/settings-tui.sh" ;;
+      4) run_action_with_result_screen "Promeni stepove" "$SCRIPT_DIR/settings-tui.sh" ;;
+      5) run_action_with_result_screen "Promeni working dir" "$SCRIPT_DIR/settings-tui.sh" ;;
+      6) run_action_with_result_screen "Quick presets" "$SCRIPT_DIR/settings-tui.sh" ;;
+      7) return ;;
+      *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 7." ;;
+    esac
+  done
+}
+
 render_home_screen
 while true; do
   show_main_menu
@@ -220,8 +278,8 @@ while true; do
     1) show_launch_menu ;;
     2) show_models_menu ;;
     3) show_tools_menu ;;
-    4) show_info_screen "Diagnostics" "Diagnostics ekran dolazi u sledecem zadatku." ;;
-    5) show_info_screen "Settings" "Settings ekran dolazi u sledecem zadatku." ;;
+    4) show_diagnostics_menu ;;
+    5) show_settings_menu ;;
     6) exit 0 ;;
     *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 6." ;;
   esac
