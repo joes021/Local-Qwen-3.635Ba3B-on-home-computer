@@ -151,13 +151,74 @@ show_tools_menu() {
   done
 }
 
+render_model_summary() {
+  python3 - <<'PY' "$(get_install_state_path)" "$(get_installed_model_ids_csv)"
+import json, sys
+state_path, installed_csv = sys.argv[1:3]
+with open(state_path, "r", encoding="utf-8") as f:
+    state = json.load(f)
+installed = [item for item in installed_csv.split(",") if item]
+print(f"Aktivni model: {state.get('modelId', 'n/a')}")
+print(f"Skinuti modeli: {len(installed)}")
+print("Download: nema aktivnog preuzimanja")
+print("Status oznake: [AKTIVAN] [SKINUT] [NIJE SKINUT] [HF] [LOKALNI] [PREPORUKA]")
+PY
+}
+
+prompt_model_id() {
+  local prompt_text="$1"
+  local model_id
+  read -r -p "$prompt_text" model_id
+  printf '%s' "$model_id"
+}
+
+show_models_menu() {
+  while true; do
+    clear
+    render_status_header
+    echo "Modeli"
+    render_model_summary
+    echo
+    echo "1. Pregled modela"
+    echo "2. Aktiviraj model"
+    echo "3. Preuzmi model"
+    echo "4. Dodaj lokalni GGUF"
+    echo "5. Dodaj HF model"
+    echo "6. Nazad"
+    read -r -p "Izaberi broj i pritisni Enter: " choice
+    case "$choice" in
+      1) run_action_with_result_screen "Pregled modela" "$SCRIPT_DIR/manage-models.sh" list ;;
+      2)
+        model_id="$(prompt_model_id "Unesi model id za aktivaciju: ")"
+        if [ -n "$model_id" ]; then
+          run_action_with_result_screen "Aktiviraj model" "$SCRIPT_DIR/manage-models.sh" use "$model_id"
+        else
+          show_warning_screen "Aktiviraj model" "Model id je obavezan."
+        fi
+        ;;
+      3)
+        model_id="$(prompt_model_id "Unesi model id za download (Enter za preporuceni): ")"
+        if [ -n "$model_id" ]; then
+          run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"
+        else
+          run_action_with_result_screen "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" recommend
+        fi
+        ;;
+      4) show_info_screen "Dodaj lokalni GGUF" "Linux import lokalnog GGUF modela je sledeci korak ovog TUI plana." ;;
+      5) show_info_screen "Dodaj HF model" "Linux Hugging Face custom model tok je sledeci korak ovog TUI plana." ;;
+      6) return ;;
+      *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 6." ;;
+    esac
+  done
+}
+
 render_home_screen
 while true; do
   show_main_menu
   read -r -p "Izaberi broj i pritisni Enter: " choice
   case "$choice" in
     1) show_launch_menu ;;
-    2) show_info_screen "Modeli" "Modeli ekran dolazi u sledecem zadatku." ;;
+    2) show_models_menu ;;
     3) show_tools_menu ;;
     4) show_info_screen "Diagnostics" "Diagnostics ekran dolazi u sledecem zadatku." ;;
     5) show_info_screen "Settings" "Settings ekran dolazi u sledecem zadatku." ;;

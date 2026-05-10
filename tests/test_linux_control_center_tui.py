@@ -37,6 +37,17 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('echo "6. Test throughput"', launch_block)
         self.assertNotIn('Repair install', launch_block)
 
+    def test_models_screen_mentions_model_actions_and_status_labels(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('echo "1. Pregled modela"', dashboard)
+        self.assertIn('echo "2. Aktiviraj model"', dashboard)
+        self.assertIn('echo "3. Preuzmi model"', dashboard)
+        self.assertIn('echo "4. Dodaj lokalni GGUF"', dashboard)
+        self.assertIn('echo "5. Dodaj HF model"', dashboard)
+        self.assertIn("[AKTIVAN]", dashboard)
+        self.assertIn("[SKINUT]", dashboard)
+
 
 if __name__ == "__main__":
     unittest.main()
