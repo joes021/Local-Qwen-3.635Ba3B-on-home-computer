@@ -31,7 +31,7 @@ function Get-OpenCodeLaunchCommand {
 
     $escapedConfigPath = (Split-Path -Parent (Get-OpenCodeConfigPath)).Replace("'", "''")
     $escapedExecutable = $ExecutablePath.Replace("'", "''")
-    return "`$env:OPENCODE_CONFIG_DIR='$escapedConfigPath'; & '$escapedExecutable'"
+    return "`$env:OPENCODE_CONFIG_DIR='$escapedConfigPath'; `$env:OPENCODE_ENABLE_EXA='1'; & '$escapedExecutable'"
 }
 
 Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(

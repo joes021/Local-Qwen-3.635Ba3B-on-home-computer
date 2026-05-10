@@ -31,4 +31,5 @@ if [ -d "$WORKDIR" ]; then
   cd "$WORKDIR"
 fi
 
+export OPENCODE_ENABLE_EXA=1
 exec opencode

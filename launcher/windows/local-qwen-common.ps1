@@ -1615,6 +1615,7 @@ function Invoke-TestPrompt {
 function Update-OpenCodeConfig {
     $state = Get-InstallState
     $settings = Get-Settings
+    $defaults = Get-Defaults
     $configPath = Get-OpenCodeConfigPath
     Ensure-Directory (Split-Path -Parent $configPath)
 
@@ -1655,6 +1656,32 @@ function Update-OpenCodeConfig {
 
     if (-not $existing.PSObject.Properties["agent"]) {
         $existing | Add-Member -NotePropertyName "agent" -NotePropertyValue ([pscustomobject]@{})
+    }
+
+    if (-not $existing.PSObject.Properties["permission"]) {
+        $existing | Add-Member -NotePropertyName "permission" -NotePropertyValue ([pscustomobject]@{})
+    }
+
+    $webAccess = $null
+    if ($defaults.PSObject.Properties["opencode"] -and $defaults.opencode.PSObject.Properties["webAccess"]) {
+        $webAccess = $defaults.opencode.webAccess
+    }
+    $webAccessEnabled = $true
+    if ($webAccess -and $webAccess.PSObject.Properties["enabled"]) {
+        $webAccessEnabled = [bool]$webAccess.enabled
+    }
+
+    if ($webAccessEnabled) {
+        if (-not $existing.permission.PSObject.Properties["webfetch"]) {
+            $existing.permission | Add-Member -NotePropertyName "webfetch" -NotePropertyValue "allow"
+        } else {
+            $existing.permission.webfetch = "allow"
+        }
+        if (-not $existing.permission.PSObject.Properties["websearch"]) {
+            $existing.permission | Add-Member -NotePropertyName "websearch" -NotePropertyValue "allow"
+        } else {
+            $existing.permission.websearch = "allow"
+        }
     }
 
     foreach ($name in @("build", "plan", "general", "explore")) {

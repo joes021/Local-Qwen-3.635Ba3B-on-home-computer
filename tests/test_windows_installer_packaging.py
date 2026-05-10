@@ -130,8 +130,18 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("Get-OpenCodeExecutable", start_opencode)
         self.assertIn("Get-OpenCodeExecutable", launch_agent)
         self.assertIn("Test-OpenCodeAvailable", verify_install)
+        self.assertIn("OPENCODE_ENABLE_EXA", start_opencode)
+        self.assertIn("OPENCODE_ENABLE_EXA", launch_agent)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", start_opencode)
         self.assertNotIn("Get-Command opencode -ErrorAction SilentlyContinue", launch_agent)
+
+    def test_opencode_config_enables_websearch_and_webfetch(self):
+        common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")
+        linux_configure = (REPO_ROOT / "launcher" / "linux" / "configure-settings.sh").read_text(encoding="utf-8")
+        self.assertIn('webfetch', common)
+        self.assertIn('websearch', common)
+        self.assertIn('permission["webfetch"] = "allow"', linux_configure)
+        self.assertIn('permission["websearch"] = "allow"', linux_configure)
 
     def test_windows_model_download_has_progress_state_hooks(self):
         common = WINDOWS_COMMON_PATH.read_text(encoding="utf-8")

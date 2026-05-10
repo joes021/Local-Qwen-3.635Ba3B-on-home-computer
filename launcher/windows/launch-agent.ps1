@@ -66,6 +66,8 @@ function Build-PermissionConfig {
         "question" = "allow"
         "skill" = "allow"
         "task" = "allow"
+        "webfetch" = "allow"
+        "websearch" = "allow"
     }
 
     switch ($Capability) {
@@ -212,7 +214,7 @@ $windowTitle = "OpenCode Agent | $SecurityMode | $CapabilityMode"
 $escapedConfigDir = $sessionRoot.Replace("'", "''")
 $escapedTitle = $windowTitle.Replace("'", "''")
 $escapedOpenCodeExe = $openCodeExe.Replace("'", "''")
-$command = "`$env:OPENCODE_CONFIG_DIR='$escapedConfigDir'; `$Host.UI.RawUI.WindowTitle='$escapedTitle'; & '$escapedOpenCodeExe'"
+$command = "`$env:OPENCODE_CONFIG_DIR='$escapedConfigDir'; `$env:OPENCODE_ENABLE_EXA='1'; `$Host.UI.RawUI.WindowTitle='$escapedTitle'; & '$escapedOpenCodeExe'"
 
 Start-Process -FilePath (Get-WindowsPowerShellExe) -WorkingDirectory $resolvedFolder -ArgumentList @(
     "-NoExit",

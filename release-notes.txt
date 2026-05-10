@@ -1,5 +1,18 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.1
+- Poravnat je javni release tok tako da se tag, commit i instalacioni asseti za internet-enabled `OpenCode` build sada stvarno poklapaju; koristi ovu verziju umesto prelaznog `v2.10.0`
+- `OpenCode` internet pristup ostaje ukljucen kroz `websearch` i `webfetch`, a launcher i agent sesija eksplicitno pale `OPENCODE_ENABLE_EXA=1` kako bi web search radio i sa lokalnim `llama.cpp` providerom
+
+v2.10.0
+- `OpenCode` sada dobija ukljucen internet pristup kroz svoje ugradjene `websearch` i `webfetch` alate, umesto da zavisi od zasebnog spoljnog browser toka. To omogucava da agent pretrazuje web, otvara rezultate i cita stranice direktno iz istog lokalnog `OpenCode` sesijskog toka
+- Windows `start-opencode` i `launch-agent` sada postavljaju `OPENCODE_ENABLE_EXA=1`, pa se `websearch` alat aktivira i kada je model provider lokalni `llama.cpp`, a ne OpenCode cloud provider
+- Windows i Linux generatori `opencode.json` sada eksplicitno dopisuju `permission.websearch = allow` i `permission.webfetch = allow`, tako da pristup web pretrazi i citanju stranica ostaje konzistentan i posle update, repair ili ponovnog upisa podesavanja
+
+v2.9.9
+- Windows `Benchmark` chart vise ne puca kada telemetry koristi tekstualne vremenske oznake tipa `03:21:28`; serije sada koriste indeksirane X vrednosti i postavljaju vreme kao `AxisLabel`, pa `Control Center` vise ne prijavljuje `Cannot convert argument 'XValue' ... to type 'System.Double'`
+- Dodat je zastitni test da se benchmark graf vise ne vrati na stari `AddXY(time, value)` tok koji je rusio WinForms chart kada throughput istorija sadrzi vreme kao tekst
+
 v2.9.8
 - Windows installer sada prikazuje zivi tok tokom dugacke `Configuring LocalQwenHome workspace, runtime, model and OpenCode...` faze: u samom setup prozoru se osvezavaju trenutni korak, detalj aktivnosti, a tokom model downloada i procenat, brzina, preuzeto i ETA, tako da setup vise ne deluje kao da je zablokirao kada progress bar stigne do kraja
 - Windows `Control Center` je ciscen po tabovima: `Pokretanje` sada sadrzi samo glavne akcije za server i klijente, servisne akcije su prebacene u poseban `Tools` tab, a dodat je i novi `Benchmark` tab sa live throughput grafikom (input/output/ukupno tok/s) koji koristi regularne zahteve iz `OpenCode`, `llama.cpp` web-a i `Test throughput` toka

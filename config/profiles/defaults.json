@@ -46,7 +46,13 @@
       "general": 100,
       "explore": 60
     },
-    "smallModelFallback": "local-ollama/qwen3:8b"
+    "smallModelFallback": "local-ollama/qwen3:8b",
+    "webAccess": {
+      "enabled": true,
+      "search": true,
+      "fetch": true,
+      "provider": "exa"
+    }
   },
   "modelChoices": {
     "iq2_m_compact": {

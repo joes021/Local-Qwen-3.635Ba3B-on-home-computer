@@ -20,6 +20,9 @@ class WindowsControlCenterLayoutTests(unittest.TestCase):
         self.assertIn('Test throughput', content)
         self.assertIn('System.Windows.Forms.DataVisualization', content)
         self.assertIn('Refresh-BenchmarkChart', content)
+        self.assertIn('IsXValueIndexed = $true', content)
+        self.assertIn('Points.AddY', content)
+        self.assertIn('AxisLabel = $label', content)
 
 
 if __name__ == "__main__":

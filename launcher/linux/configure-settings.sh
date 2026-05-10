@@ -94,6 +94,9 @@ provider["local-llamacpp"] = {
 }
 config["model"] = f"local-llamacpp/{state['modelId']}"
 config["small_model"] = config.get("small_model", f"local-llamacpp/{state['modelId']}")
+permission = config.setdefault("permission", {})
+permission["webfetch"] = "allow"
+permission["websearch"] = "allow"
 agent = config.setdefault("agent", {})
 for name, steps in {
     "build": build,

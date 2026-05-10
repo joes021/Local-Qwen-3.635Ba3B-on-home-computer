@@ -736,6 +736,7 @@ $benchmarkPromptSeries.ChartType = [System.Windows.Forms.DataVisualization.Chart
 $benchmarkPromptSeries.BorderWidth = 2
 $benchmarkPromptSeries.Color = [System.Drawing.Color]::FromArgb(44, 123, 229)
 $benchmarkPromptSeries.ChartArea = "Main"
+$benchmarkPromptSeries.IsXValueIndexed = $true
 [void]$benchmarkChart.Series.Add($benchmarkPromptSeries)
 
 $benchmarkOutputSeries = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Output tok/s"
@@ -743,6 +744,7 @@ $benchmarkOutputSeries.ChartType = [System.Windows.Forms.DataVisualization.Chart
 $benchmarkOutputSeries.BorderWidth = 2
 $benchmarkOutputSeries.Color = [System.Drawing.Color]::FromArgb(220, 63, 58)
 $benchmarkOutputSeries.ChartArea = "Main"
+$benchmarkOutputSeries.IsXValueIndexed = $true
 [void]$benchmarkChart.Series.Add($benchmarkOutputSeries)
 
 $benchmarkTotalSeries = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Ukupno tok/s"
@@ -750,6 +752,7 @@ $benchmarkTotalSeries.ChartType = [System.Windows.Forms.DataVisualization.Charti
 $benchmarkTotalSeries.BorderWidth = 2
 $benchmarkTotalSeries.Color = [System.Drawing.Color]::FromArgb(120, 64, 180)
 $benchmarkTotalSeries.ChartArea = "Main"
+$benchmarkTotalSeries.IsXValueIndexed = $true
 [void]$benchmarkChart.Series.Add($benchmarkTotalSeries)
 
 $usagePanel = New-Object System.Windows.Forms.GroupBox
@@ -1437,9 +1440,12 @@ function Refresh-BenchmarkChart {
             }
         }
 
-        [void]$benchmarkPromptSeries.Points.AddXY($label, [double]$item.promptTokensPerSecond)
-        [void]$benchmarkOutputSeries.Points.AddXY($label, [double]$item.completionTokensPerSecond)
-        [void]$benchmarkTotalSeries.Points.AddXY($label, [double]$item.totalTokensPerSecond)
+        $promptPointIndex = $benchmarkPromptSeries.Points.AddY([double]$item.promptTokensPerSecond)
+        $benchmarkPromptSeries.Points[$promptPointIndex].AxisLabel = $label
+        $outputPointIndex = $benchmarkOutputSeries.Points.AddY([double]$item.completionTokensPerSecond)
+        $benchmarkOutputSeries.Points[$outputPointIndex].AxisLabel = $label
+        $totalPointIndex = $benchmarkTotalSeries.Points.AddY([double]$item.totalTokensPerSecond)
+        $benchmarkTotalSeries.Points[$totalPointIndex].AxisLabel = $label
     }
 }
 
