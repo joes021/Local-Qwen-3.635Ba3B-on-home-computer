@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.8
+- Linux `.run` payload sada stvarno nosi i `scripts/local_qwen_runtime.py` i ostatak `scripts/` foldera, pa installer vise ne puca na `python3: can't open file .../scripts/local_qwen_runtime.py` kada se pokrene na pravoj Ubuntu masini iz samog release artefakta
+- Ovaj hotfix je potvrden kroz stvarni Ubuntu install rerun na x86_64 okruzenju, umesto samo kroz repo-level smoke, tako da Linux release sada odgovara onome sto installer zaista trazi iz raspakovanog payload-a
+
 v2.10.7
 - Linux installer je sada zaista samostalniji: `.run` prvo pokusava svoj GUI tok, zatim ako nema `zenity` pokusava da ga sam instalira, a tek onda pada nazad na TUI, umesto da odmah korisnika ostavi na sirovom tekstualnom promptu bez pokusaja da dovrsi desktop iskustvo
 - Linux TUI sada ima validaciju unosa i potvrdu pre starta, pa vise ne prihvata greske tipa `Install root = y` ili `Profile = y`; putanje, profil i numericka polja se proveravaju pre nego sto krene pravi install

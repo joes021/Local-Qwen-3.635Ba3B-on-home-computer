@@ -157,6 +157,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
 
         self.assertIn('installer-gui.sh', build_script)
         self.assertIn('cp "$REPO_ROOT/release-notes.txt" "$PAYLOAD_DIR/"', build_script)
+        self.assertIn('mkdir -p "$PAYLOAD_DIR/install" "$PAYLOAD_DIR/launcher" "$PAYLOAD_DIR/config" "$PAYLOAD_DIR/assets" "$PAYLOAD_DIR/scripts"', build_script)
+        self.assertIn('cp -R "$REPO_ROOT/scripts/." "$PAYLOAD_DIR/scripts/"', build_script)
         self.assertIn('WAYLAND_DISPLAY', build_script)
         self.assertIn('exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"', build_script)
         self.assertIn('command -v zenity', gui_script)

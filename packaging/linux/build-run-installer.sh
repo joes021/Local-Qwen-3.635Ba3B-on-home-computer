@@ -25,11 +25,12 @@ mkdir -p "$PAYLOAD_DIR" "$OUTPUT_DIR"
 cp "$REPO_ROOT/version.json" "$PAYLOAD_DIR/"
 cp "$REPO_ROOT/README.md" "$PAYLOAD_DIR/"
 cp "$REPO_ROOT/release-notes.txt" "$PAYLOAD_DIR/"
-mkdir -p "$PAYLOAD_DIR/install" "$PAYLOAD_DIR/launcher" "$PAYLOAD_DIR/config" "$PAYLOAD_DIR/assets"
+mkdir -p "$PAYLOAD_DIR/install" "$PAYLOAD_DIR/launcher" "$PAYLOAD_DIR/config" "$PAYLOAD_DIR/assets" "$PAYLOAD_DIR/scripts"
 cp -R "$REPO_ROOT/install/linux" "$PAYLOAD_DIR/install/"
 cp -R "$REPO_ROOT/launcher/linux" "$PAYLOAD_DIR/launcher/"
 cp -R "$REPO_ROOT/config/profiles" "$PAYLOAD_DIR/config/"
 cp -R "$REPO_ROOT/assets/icons" "$PAYLOAD_DIR/assets/"
+cp -R "$REPO_ROOT/scripts/." "$PAYLOAD_DIR/scripts/"
 
 cat > "$PAYLOAD_DIR/install.sh" <<'EOF'
 #!/usr/bin/env bash
