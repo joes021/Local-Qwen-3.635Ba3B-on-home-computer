@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.10
+- Linux `Start server` sada prvo proverava da li je `llama.cpp` vec aktivan; ako jeste, ne pokusava novi start nego odmah javlja da je server vec ziv i poravnava lifecycle na `active`
+- Linux `Diagnostics` sada prikazuje i `Current version`, a zaglavljeni lifecycle tipa `starting` vise se ne prikazuje kao da je sistem u medjustanju kada je `health` vec potvrden; umesto toga ide jasniji status `active (health-confirmed)`
+
 v2.10.9
 - Linux instalacija sada stvarno kopira i `scripts/` u `LocalQwenHome`, pa `local-qwen-control-center.desktop` i `opencode-local-qwen.desktop` vise ne umiru odmah zato sto launcheri ne mogu da nadju `scripts/local_qwen_runtime.py`
 - Ovaj hotfix je potvrden kroz stvarni Ubuntu x86_64 reinstall i direktan launcher smoke: `control-center.sh` sada normalno podize pocetni ekran umesto da odmah izleti pri startu

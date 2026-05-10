@@ -14,6 +14,23 @@ if [ -z "$PROFILE" ]; then
   PROFILE="$(get_saved_profile)"
 fi
 
+if test_llama_health; then
+  lifecycle_json="$(get_service_lifecycle_json)"
+  stdout_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stdout", "") or "")
+PY
+)"
+  stderr_path="$(python3 - <<'PY' "$lifecycle_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("stderr", "") or "")
+PY
+)"
+  set_service_lifecycle_state "active" "$PROFILE" "$stdout_path" "$stderr_path" "Health endpoint je vec aktivan."
+  echo "llama.cpp server je vec aktivan na $(get_health_url)"
+  exit 0
+fi
+
 python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$DEFAULTS_PATH" "$PROFILE"
 import json, os, subprocess, sys, time
 

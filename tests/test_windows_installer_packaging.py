@@ -154,6 +154,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")
         gui_script = (REPO_ROOT / "install" / "linux" / "installer-gui.sh").read_text(encoding="utf-8")
         tui_script = (REPO_ROOT / "install" / "linux" / "installer-tui.sh").read_text(encoding="utf-8")
+        start_server_script = (REPO_ROOT / "launcher" / "linux" / "start-server.sh").read_text(encoding="utf-8")
+        control_center_script = (REPO_ROOT / "launcher" / "linux" / "control-center.sh").read_text(encoding="utf-8")
 
         self.assertIn('installer-gui.sh', build_script)
         self.assertIn('cp "$REPO_ROOT/release-notes.txt" "$PAYLOAD_DIR/"', build_script)
@@ -171,6 +173,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('exec bash "$TUI_SCRIPT"', gui_script)
         self.assertIn('LOCAL_QWEN_INSTALLER_TARGET_SCRIPT', tui_script)
         self.assertIn('Potvrdi instalaciju? y/n', tui_script)
+        self.assertIn('if test_llama_health; then', start_server_script)
+        self.assertIn('llama.cpp server je vec aktivan na $(get_health_url)', start_server_script)
+        self.assertIn('display_lifecycle_state = "active (health-confirmed)"', control_center_script)
+        self.assertIn('print(f"- Current version: {current_version}")', control_center_script)
 
     def test_linux_tui_validates_inputs_and_runs_target_script(self):
         script_path = REPO_ROOT / "install" / "linux" / "installer-tui.sh"

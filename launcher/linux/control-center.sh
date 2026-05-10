@@ -231,15 +231,19 @@ if payload.returncode == 0 and payload.stdout.strip():
         latest = json.loads(payload.stdout)
     except Exception:
         latest = None
+display_lifecycle_state = lifecycle.get("state")
+if status.get("state") == "active" and display_lifecycle_state in {"inactive", "starting", "warming", "timeout", "failed"}:
+    display_lifecycle_state = "active (health-confirmed)"
 print("Diagnostics")
 print(f"- Effective state: {status.get('state')}")
 print(f"- Effective reason: {status.get('reason')}")
-print(f"- Lifecycle state: {lifecycle.get('state')}")
+print(f"- Lifecycle state: {display_lifecycle_state}")
 print(f"- Lifecycle updated: {lifecycle.get('updatedAt')}")
 print(f"- Stdout log: {lifecycle.get('stdout')}")
 print(f"- Stderr log: {lifecycle.get('stderr')}")
 print(f"- Profile: {settings.get('profile')}")
 print(f"- Model: {state.get('modelId')}")
+print(f"- Current version: {current_version}")
 if latest:
     print(f"- GitHub latest: {latest.get('latestVersion')}")
     print(f"- Update available: {'da' if latest.get('updateAvailable') else 'ne'}")
