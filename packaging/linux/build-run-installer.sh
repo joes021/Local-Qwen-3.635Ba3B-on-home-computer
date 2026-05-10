@@ -34,6 +34,19 @@ cat > "$PAYLOAD_DIR/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = "--tui" ]; then
+  shift
+  exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"
+fi
+if [ "${1:-}" = "--cli-install" ]; then
+  shift
+  exec bash "$SCRIPT_DIR/install/linux/install.sh" "$@"
+fi
+if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "x11" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+  if [ -f "$SCRIPT_DIR/install/linux/installer-gui.sh" ]; then
+    exec bash "$SCRIPT_DIR/install/linux/installer-gui.sh" "$@"
+  fi
+fi
 exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"
 EOF
 chmod +x "$PAYLOAD_DIR/install.sh"

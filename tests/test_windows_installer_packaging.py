@@ -143,6 +143,20 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('& bash @arguments', content)
         self.assertIn('throw "Linux installer build nije uspeo (exit $LASTEXITCODE)."', content)
 
+    def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
+        build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")
+        gui_script = (REPO_ROOT / "install" / "linux" / "installer-gui.sh").read_text(encoding="utf-8")
+
+        self.assertIn('installer-gui.sh', build_script)
+        self.assertIn('WAYLAND_DISPLAY', build_script)
+        self.assertIn('exec bash "$SCRIPT_DIR/install/linux/installer-tui.sh" "$@"', build_script)
+        self.assertIn('command -v zenity', gui_script)
+        self.assertIn('pick_terminal()', gui_script)
+        self.assertIn('launch_script_in_terminal', gui_script)
+        self.assertIn('zenity --entry', gui_script)
+        self.assertIn('zenity --list', gui_script)
+        self.assertIn('exec bash "$TUI_SCRIPT"', gui_script)
+
     def test_check_updates_hides_raw_json_unless_requested(self):
         content = (WINDOWS_LAUNCHER_DIR / "check-updates.ps1").read_text(encoding="utf-8")
         self.assertIn("param(", content)

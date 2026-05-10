@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.6
+- Linux `.run` paket sada podrzava prirodniji desktop tok na dvoklik: ako postoji graficko okruzenje, setup prvo otvara mali GUI wizard za izbor install root-a, profila i osnovnih opcija, a zatim sam pokrece terminalsku instalaciju sa vidljivim logom i `Press Enter to close` zavrsetkom
+- Isti Linux paket i dalje cuva stari pouzdani fallback: ako nema desktop sesije, `zenity` ili terminal emulatora, `.run` automatski pada nazad na postojeci TUI/CLI installer, pa headless i server masine nisu polomljene
+- Linux build tok je dopunjen posebnim `installer-gui.sh` slojem i novim testovima, tako da se GUI i TUI putanje sada proveravaju zajedno sa postojecim `.run` packaging wrapper-om
+
 v2.10.5
 - Windows launcher tokovi sada doslednije salju poruke kroz `Write-Output`, pa `Control Center` i background akcije (`check updates`, `install update`, `repair-*`, `configure settings`, `dump UI`, `test prompt`) mnogo pouzdanije prikazuju da se stvarno nesto desava umesto da deluju nemrtvo ili poluprazno
 - `Test prompt` vise ne ostavlja prazan rezultat kada model vrati samo `reasoning_content`; sada prikazuje kratak fallback izvod, napomenu da finalni tekst nije vracen i `finish reason`, pa benchmark smoke test ne izgleda kao da je propao iako su metrike stigle
