@@ -328,6 +328,34 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertTrue(coder["installed"])
         self.assertGreater(coder["installedSizeGiB"], 0)
 
+    def test_model_browser_recovers_from_trailing_brace_in_installed_sizes_json(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "12288",
+            "--ram-gib",
+            "31",
+            "--cpu-threads",
+            "32",
+            "--current-model-id",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--installed-model-ids",
+            "qwen36-35b-a3b-IQ2_M.gguf",
+            "--installed-model-sizes-json",
+            '{"qwen36-35b-a3b-IQ2_M.gguf": 11659235616}}',
+            "--free-disk-gib",
+            "700",
+            "--search",
+            "qwen36",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        qwen36 = next(item for item in payload["models"] if item["id"] == "qwen36-35b-a3b-IQ2_M.gguf")
+        self.assertGreater(qwen36["installedSizeGiB"], 0)
+        self.assertLess(qwen36["diskNeededGiB"], qwen36["approxSizeGiB"])
+
     def test_settings_presets_expose_all_quick_presets(self):
         code, stdout, stderr = run_runtime_command(
             "settings-presets",

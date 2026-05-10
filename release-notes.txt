@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.16
+- Shared runtime `model-browser` sada tolerantno parsira blago polomljen `installed-model-sizes-json` argument sa viskom zatvarajucih zagrada, umesto da ga tiho odbaci i prijavi prazne `installedSizeGiB` vrednosti; time Linux CLI i TUI dobijaju ispravnu velicinu instaliranog modela i smislen `Need disk` izracun
+- Dodat je i regresioni test koji cuva upravo taj Linux shell slucaj, pa `Installed GiB` vise ne treba da se vrati na `0.0` ili `nepoznato` samo zbog sitne quoting/payload greske iz launcher sloja
+
 v2.10.15
 - Linux `manage-models.sh add-local` i `add-hf` vise ne lome dodatne argumente poput labela i familije na `Nepoznat argument`; parser sada razdvaja opcione flagove od pozicionih vrednosti, pa `Dodaj lokalni GGUF` i `Dodaj HF model` zaista prolaze kroz isti installer-backed tok iz `Control Center`-a
 - Linux `Model browser` CLI prikaz vise ne laze sa `Installed: 0.0 GiB` za stvarno prisutan model; velicina se cita kroz svez defaults payload, a kada backend ipak nema pouzdan broj prikazuje se `nepoznato` umesto varljivog `0.0`

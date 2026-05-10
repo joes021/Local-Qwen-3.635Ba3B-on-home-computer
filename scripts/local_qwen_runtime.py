@@ -20,6 +20,35 @@ def load_json_file(path: Path) -> dict | list:
         return json.load(handle)
 
 
+def parse_json_argument(value: str, fallback):
+    if not value:
+        return fallback
+    text = str(value).strip()
+    candidates = [text]
+    trimmed = text
+    for _ in range(4):
+        has_extra_object_brace = trimmed.endswith("}") and trimmed.count("{") < trimmed.count("}")
+        has_extra_array_brace = trimmed.endswith("]") and trimmed.count("[") < trimmed.count("]")
+        if not has_extra_object_brace and not has_extra_array_brace:
+            break
+        trimmed = trimmed[:-1].rstrip()
+        if trimmed:
+            candidates.append(trimmed)
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(fallback, dict) and isinstance(parsed, dict):
+            return parsed
+        if isinstance(fallback, list) and isinstance(parsed, list):
+            return parsed
+        if not isinstance(fallback, (dict, list)):
+            return parsed
+    return fallback
+
+
 def normalize_models(defaults: dict) -> list[dict]:
     models = []
     for key, raw in defaults.get("modelChoices", {}).items():
@@ -742,10 +771,7 @@ def command_model_browser(args: argparse.Namespace) -> int:
         installed_model_ids = [item for item in str(args.installed_model_ids).split(",") if item]
     installed_model_sizes: dict[str, int] = {}
     if args.installed_model_sizes_json:
-        try:
-            installed_model_sizes = json.loads(args.installed_model_sizes_json)
-        except json.JSONDecodeError:
-            installed_model_sizes = {}
+        installed_model_sizes = parse_json_argument(args.installed_model_sizes_json, {})
     payload = build_model_browser(
         defaults,
         args.gpu_mib,
