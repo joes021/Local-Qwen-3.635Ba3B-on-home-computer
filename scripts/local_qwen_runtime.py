@@ -49,6 +49,14 @@ def parse_json_argument(value: str, fallback):
     return fallback
 
 
+def to_display_gib(size_bytes: int | float) -> float:
+    numeric = float(size_bytes or 0)
+    if numeric <= 0:
+        return 0.0
+    rounded = round(numeric / (1024 ** 3), 2)
+    return 0.01 if rounded == 0 else rounded
+
+
 def build_release_asset_urls(repo: str, version: str, base_name: str = "Local-Qwen-Setup") -> dict[str, str]:
     clean_version = str(version or "").lstrip("v")
     tag = f"v{clean_version}" if clean_version else ""
@@ -458,9 +466,9 @@ def build_model_browser(
         entry["fitGroup"] = fit_group
         entry["useCaseBadges"] = list(dict.fromkeys(badges))
         entry["installedSizeBytes"] = installed_size_bytes
-        entry["installedSizeGiB"] = round(installed_size_bytes / (1024 ** 3), 2) if installed_size_bytes > 0 else 0.0
+        entry["installedSizeGiB"] = to_display_gib(installed_size_bytes)
         entry["diskNeededBytes"] = disk_needed_bytes
-        entry["diskNeededGiB"] = disk_needed_gib
+        entry["diskNeededGiB"] = 0.01 if disk_needed_bytes and disk_needed_gib == 0 else disk_needed_gib
         entry["freeDiskGiB"] = round(float(free_disk_gib), 2) if free_disk_gib is not None else None
         entry["hasEnoughDisk"] = has_enough_disk
         entry["speedEstimateLabel"] = speed_label

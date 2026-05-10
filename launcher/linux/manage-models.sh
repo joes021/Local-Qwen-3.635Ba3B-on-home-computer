@@ -92,6 +92,9 @@ target_path = target_dir / src.name
 if src.resolve() != target_path.resolve():
     shutil.copy2(src, target_path)
 size_bytes = target_path.stat().st_size
+size_gib = round(size_bytes / (1024 ** 3), 2)
+if size_bytes > 0 and size_gib == 0:
+    size_gib = 0.01
 friendly = label.strip() or target_path.stem
 family_text = family.strip() or "Custom"
 token = __import__("re").sub(r"[^a-zA-Z0-9_-]+", "_", target_path.stem or "custom")
@@ -105,7 +108,7 @@ model = {
     "useCase": "agentic-general",
     "filename": target_path.name,
     "minExpectedBytes": int(size_bytes),
-    "approxSizeGiB": round(size_bytes / (1024 ** 3), 2),
+    "approxSizeGiB": size_gib,
     "minimumGpuMiB": 0,
     "recommendedGpuMiB": 0,
     "minimumRamGiB": 8,

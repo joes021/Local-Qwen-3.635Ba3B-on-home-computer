@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.20
+- Linux custom lokalni modeli sa veoma malim `.gguf` fajlovima vise ne deluju polomljeno kao `0.0 GiB` ili `nepoznato`; browser sada za nenulte sitne velicine zaokruzuje na minimalnih `0.01 GiB`, pa je status pregledniji i iskreniji i za test/import scenarije
+
 v2.10.19
 - Linux `check-updates.sh` i `install-update.sh` sada citaju `version.json` BOM-tolerantno (`utf-8-sig`), pa update tok vise ne puca na `Unexpected UTF-8 BOM` kada instalirana kopija nosi UTF-8 BOM u verzionom fajlu
 - Linux update launcher je sada potvrden i testom i kodom kao verzionisani download tok: preuzima konkretan `Local-Qwen-Setup-X.Y.Z.run` asset za najnoviji tag, umesto da zavisi od `latest.run` aliasa i njegovog keša

@@ -365,6 +365,56 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertGreater(qwen36["installedSizeGiB"], 0)
         self.assertLess(qwen36["diskNeededGiB"], qwen36["approxSizeGiB"])
 
+    def test_tiny_installed_model_size_rounds_up_for_display(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_defaults = pathlib.Path(temp_dir) / "defaults.json"
+            defaults = json.loads(DEFAULTS_PATH.read_text(encoding="utf-8"))
+            defaults.setdefault("modelChoices", {})["tiny_test"] = {
+                "id": "tiny.gguf",
+                "label": "Tiny Demo",
+                "family": "Custom",
+                "agenticScore": 6,
+                "opencodeFit": 6,
+                "useCase": "agentic-general",
+                "filename": "tiny.gguf",
+                "minExpectedBytes": 1,
+                "approxSizeGiB": 0.01,
+                "minimumGpuMiB": 0,
+                "recommendedGpuMiB": 0,
+                "minimumRamGiB": 1,
+                "preferredProfiles": ["speed", "balanced"],
+                "qualityTier": "compact",
+                "curationLevel": "custom",
+                "description": "Tiny demo model.",
+                "sources": [],
+            }
+            temp_defaults.write_text(json.dumps(defaults), encoding="utf-8")
+            code, stdout, stderr = run_runtime_command(
+                "model-browser",
+                "--defaults",
+                str(temp_defaults),
+                "--gpu-mib",
+                "12288",
+                "--ram-gib",
+                "31",
+                "--cpu-threads",
+                "32",
+                "--current-model-id",
+                "qwen36-35b-a3b-IQ2_M.gguf",
+                "--installed-model-ids",
+                "tiny.gguf",
+                "--installed-model-sizes-json",
+                json.dumps({"tiny.gguf": 4}),
+                "--free-disk-gib",
+                "700",
+                "--search",
+                "tiny",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            tiny = next(item for item in payload["models"] if item["id"] == "tiny.gguf")
+            self.assertEqual(tiny["installedSizeGiB"], 0.01)
+
     def test_settings_presets_expose_all_quick_presets(self):
         code, stdout, stderr = run_runtime_command(
             "settings-presets",
