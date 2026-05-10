@@ -10,8 +10,30 @@ LOCAL_QWEN_SKIP_PACKAGE_INSTALL="${LOCAL_QWEN_SKIP_PACKAGE_INSTALL:-0}"
 LOCAL_QWEN_SKIP_SOURCE_CLONE="${LOCAL_QWEN_SKIP_SOURCE_CLONE:-0}"
 LOCAL_QWEN_SKIP_OPENCODE_INSTALL="${LOCAL_QWEN_SKIP_OPENCODE_INSTALL:-0}"
 LOCAL_QWEN_SKIP_PREREQ_CHECKS="${LOCAL_QWEN_SKIP_PREREQ_CHECKS:-0}"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULTS_PATH="$REPO_ROOT/config/profiles/defaults.json"
+PAYLOAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -d "$PAYLOAD_ROOT/launcher/linux" ]; then
+  REPO_ROOT="$PAYLOAD_ROOT"
+  SOURCE_LAUNCHERS_DIR="$REPO_ROOT/launcher/linux"
+  SOURCE_INSTALL_LINUX_DIR="$REPO_ROOT/install/linux"
+  SOURCE_PROFILES_DIR="$REPO_ROOT/config/profiles"
+  SOURCE_SCRIPTS_DIR="$REPO_ROOT/scripts"
+  SOURCE_ASSETS_DIR="$REPO_ROOT/assets/icons"
+  SOURCE_VERSION_PATH="$REPO_ROOT/version.json"
+  SOURCE_RELEASE_NOTES_PATH="$REPO_ROOT/release-notes.txt"
+elif [ -d "$PAYLOAD_ROOT/launchers" ]; then
+  REPO_ROOT="$PAYLOAD_ROOT"
+  SOURCE_LAUNCHERS_DIR="$REPO_ROOT/launchers"
+  SOURCE_INSTALL_LINUX_DIR="$REPO_ROOT/install/linux"
+  SOURCE_PROFILES_DIR="$REPO_ROOT/config/profiles"
+  SOURCE_SCRIPTS_DIR="$REPO_ROOT/scripts"
+  SOURCE_ASSETS_DIR="$REPO_ROOT/assets/icons"
+  SOURCE_VERSION_PATH="$REPO_ROOT/version.json"
+  SOURCE_RELEASE_NOTES_PATH="$REPO_ROOT/docs/release-notes.txt"
+else
+  echo "Linux install payload layout nije prepoznat: $PAYLOAD_ROOT"
+  exit 1
+fi
+DEFAULTS_PATH="$SOURCE_PROFILES_DIR/defaults.json"
 STATE_DIR="$INSTALL_ROOT/state"
 APPS_DIR="$INSTALL_ROOT/apps"
 BIN_DIR="$INSTALL_ROOT/bin"
@@ -155,16 +177,16 @@ elif ! resolve_linux_opencode >/dev/null 2>&1; then
   npm install -g opencode-ai
 fi
 
-cp -R "$REPO_ROOT/launcher/linux/." "$LAUNCHERS_DIR/"
-cp -R "$REPO_ROOT/install/linux/." "$INSTALL_ROOT/install/linux/"
-cp -R "$REPO_ROOT/config/profiles/." "$CONFIG_DIR/profiles/"
+cp -R "$SOURCE_LAUNCHERS_DIR/." "$LAUNCHERS_DIR/"
+cp -R "$SOURCE_INSTALL_LINUX_DIR/." "$INSTALL_ROOT/install/linux/"
+cp -R "$SOURCE_PROFILES_DIR/." "$CONFIG_DIR/profiles/"
 mkdir -p "$INSTALL_ROOT/scripts"
-cp -R "$REPO_ROOT/scripts/." "$INSTALL_ROOT/scripts/"
+cp -R "$SOURCE_SCRIPTS_DIR/." "$INSTALL_ROOT/scripts/"
 mkdir -p "$ASSETS_DIR/icons"
-cp -R "$REPO_ROOT/assets/icons/." "$ASSETS_DIR/icons/"
-cp "$REPO_ROOT/version.json" "$INSTALL_ROOT/version.json"
-if [ -f "$REPO_ROOT/release-notes.txt" ]; then
-  cp "$REPO_ROOT/release-notes.txt" "$INSTALL_ROOT/docs/release-notes.txt"
+cp -R "$SOURCE_ASSETS_DIR/." "$ASSETS_DIR/icons/"
+cp "$SOURCE_VERSION_PATH" "$INSTALL_ROOT/version.json"
+if [ -f "$SOURCE_RELEASE_NOTES_PATH" ]; then
+  cp "$SOURCE_RELEASE_NOTES_PATH" "$INSTALL_ROOT/docs/release-notes.txt"
 else
   printf 'Release notes nisu dostupne u ovom payload-u.\n' > "$INSTALL_ROOT/docs/release-notes.txt"
 fi
@@ -208,7 +230,7 @@ raise SystemExit(f"Model nije pronadjen u defaults katalogu: {requested}")
 PY
 )"
 else
-  MODEL_META_JSON="$(python3 "$REPO_ROOT/scripts/local_qwen_runtime.py" recommend --defaults "$DEFAULTS_PATH" --gpu-mib "${GPU_MIB:-0}" --ram-gib "${RAM_GIB:-0}" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)")"
+  MODEL_META_JSON="$(python3 "$SOURCE_SCRIPTS_DIR/local_qwen_runtime.py" recommend --defaults "$DEFAULTS_PATH" --gpu-mib "${GPU_MIB:-0}" --ram-gib "${RAM_GIB:-0}" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)")"
 fi
 
 MODEL_REPO="$(python3 - <<'PY' "$MODEL_META_JSON"

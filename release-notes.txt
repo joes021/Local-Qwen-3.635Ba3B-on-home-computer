@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.12
+- Linux `manage-models list` i `compare` tokovi vise ne koriste polomljeni `pipe + here-doc` obrazac zbog kog je Python dobijao prazan stdin i rusio `Modeli -> Pregled modela`; JSON payload se sada prosledjuje eksplicitno i browser prikaz radi stabilno
+- Linux installed `install.sh` sada ume da radi i iz vec instalirane kopije `local-qwen-home`, ne samo iz repo/payload layout-a, pa `Preuzmi model` vise ne trazi nepostojeci `launcher/linux/.` kada ga pokrenes kroz vec instalirani Control Center
+- Installer testovi su dopunjeni da cuvaju oba slucaja: repo payload layout i installed layout, kao i Linux model download tok koji koristi zajednicki install-script helper
+
 v2.10.11
 - Linux `Control Center` tokovi su dodatno poravnati kroz installer umesto kroz rucne live zakrpe: instalacija sada kopira i `install/linux` u `local-qwen-home`, pa `Preuzmi model` vise ne pada na `.../install/linux/install.sh: No such file or directory`
 - Linux `manage-models.sh download` sada trazi install skriptu preko zajednickog helpera, cuva eksplicitno izabrani `MODEL_ID` i pokrece samo model download tok bez nepotrebnog package/source/OpenCode polu-reinstall-a

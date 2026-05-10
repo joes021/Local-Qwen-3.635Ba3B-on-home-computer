@@ -90,6 +90,7 @@ PY
 
 get_recommended_model_id() {
   local gpu_mib="0" ram_gib="0" cpu_threads="0"
+  local recommendation_json
   if command -v nvidia-smi >/dev/null 2>&1; then
     gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
   fi
@@ -104,9 +105,10 @@ with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as handle:
 PY
 )"
   cpu_threads="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
-  get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads" | python3 - <<'PY'
+  recommendation_json="$(get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads")"
+  python3 - <<'PY' "$recommendation_json"
 import json, sys
-print(json.load(sys.stdin)["recommendedModel"]["id"])
+print(json.loads(sys.argv[1])["recommendedModel"]["id"])
 PY
 }
 
@@ -196,6 +198,7 @@ PY
 
 case "$ACTION" in
   list)
+    local model_browser_json
     current_id="$(python3 - <<'PY' "$STATE_PATH"
 import json, sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
@@ -208,10 +211,11 @@ PY
     free_disk_gib="$(get_free_disk_gib)"
     echo "Aktivni model: $current_id"
     echo "Preporuceni model: $recommended_id"
-    get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib" | python3 - <<'PY' "$current_id" "$recommended_id"
+    model_browser_json="$(get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib")"
+    python3 - <<'PY' "$current_id" "$recommended_id" "$model_browser_json"
 import json, sys
-current_id, recommended_id = sys.argv[1:3]
-payload = json.load(sys.stdin)
+current_id, recommended_id, payload_json = sys.argv[1:4]
+payload = json.loads(payload_json)
 print(f"Hardverska klasa: {payload.get('detectedClass')}")
 print(f"Preporucen profil: {payload.get('recommendedProfile')}")
 print()
@@ -236,6 +240,7 @@ PY
     ;;
   compare)
     [ -n "$MODEL_ID" ] || { echo "Prosledi model id za compare."; exit 1; }
+    local compare_json
     gpu_mib="0"
     if command -v nvidia-smi >/dev/null 2>&1; then
       gpu_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')"
@@ -258,9 +263,10 @@ PY
 )"
     recommended_id="$(get_recommended_model_id)"
     ids="$MODEL_ID,$current_id,$recommended_id"
-    python3 "$(get_runtime_engine_path)" model-compare --defaults "$DEFAULTS_PATH" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)" --model-ids "$ids" | python3 - <<'PY'
+    compare_json="$(python3 "$(get_runtime_engine_path)" model-compare --defaults "$DEFAULTS_PATH" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)" --model-ids "$ids")"
+    python3 - <<'PY' "$compare_json"
 import json, sys
-payload = json.load(sys.stdin)
+payload = json.loads(sys.argv[1])
 print("Model compare")
 print(f"- Best speed: {payload.get('summary', {}).get('bestForSpeed')}")
 print(f"- Best coding: {payload.get('summary', {}).get('bestForCoding')}")
