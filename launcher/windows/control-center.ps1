@@ -1,5 +1,6 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms.DataVisualization
 
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
@@ -207,25 +208,33 @@ function Invoke-BackgroundShellScript {
         [Parameter(Mandatory = $true)][string]$ScriptPath,
         [string[]]$ArgumentList = @(),
         [scriptblock]$OnSuccess = $null,
-        [scriptblock]$OnFinally = $null
+        [scriptblock]$OnFinally = $null,
+        [scriptblock]$OnTick = $null
     )
 
     Set-WorkerStatus -State "Working" -Detail $Name
     Write-LaunchMessage @("$Name je pokrenut u pozadini.")
+    $powerShellExe = Get-WindowsPowerShellExe
 
     $job = Start-Job -ScriptBlock {
-        param($Path, $Args)
-        $lines = & (Get-WindowsPowerShellExe) -NoProfile -ExecutionPolicy Bypass -File $Path @Args 2>&1
+        param($PowerShellExe, $Path, $Args)
+        $lines = & $PowerShellExe -NoProfile -ExecutionPolicy Bypass -File $Path @Args 2>&1
         $code = $LASTEXITCODE
         [pscustomobject]@{
             ExitCode = $code
             Output = @($lines)
         }
-    } -ArgumentList $ScriptPath, $ArgumentList
+    } -ArgumentList $powerShellExe, $ScriptPath, $ArgumentList
 
     $poller = New-Object System.Windows.Forms.Timer
     $poller.Interval = 800
     $poller.Add_Tick({
+        if ($OnTick) {
+            try {
+                & $OnTick
+            } catch {
+            }
+        }
         if ($job.State -in @('Completed', 'Failed', 'Stopped')) {
             $poller.Stop()
             $result = $null
@@ -268,6 +277,81 @@ function Invoke-BackgroundShellScript {
         }
     })
     $poller.Start()
+}
+
+function Format-BytesText {
+    param([double]$Bytes)
+
+    if ($Bytes -ge 1GB) {
+        return ("{0:N2} GiB" -f ($Bytes / 1GB))
+    }
+    if ($Bytes -ge 1MB) {
+        return ("{0:N1} MiB" -f ($Bytes / 1MB))
+    }
+    return ("{0:N0} B" -f $Bytes)
+}
+
+function Format-EtaText {
+    param([object]$Seconds)
+
+    if ($null -eq $Seconds -or [string]::IsNullOrWhiteSpace([string]$Seconds)) {
+        return "ETA: --"
+    }
+
+    $value = [int]$Seconds
+    if ($value -lt 60) {
+        return "ETA: ${value}s"
+    }
+    $minutes = [math]::Floor($value / 60)
+    $remainder = $value % 60
+    return "ETA: ${minutes}m ${remainder}s"
+}
+
+function Refresh-ModelDownloadProgressView {
+    $progress = Get-ModelDownloadProgressData
+    if (-not $progress) {
+        return
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("MODEL DOWNLOAD STATUS") | Out-Null
+    $lines.Add("Status: $($progress.status)") | Out-Null
+    if ($progress.modelId) {
+        $lines.Add("Model: $($progress.modelId)") | Out-Null
+    }
+    if ($progress.source) {
+        $lines.Add("Izvor: $($progress.source)") | Out-Null
+    }
+    if ($progress.totalBytes -and [int64]$progress.totalBytes -gt 0) {
+        $downloadedText = Format-BytesText -Bytes ([double]$progress.downloadedBytes)
+        $totalText = Format-BytesText -Bytes ([double]$progress.totalBytes)
+        $percentText = if ($null -ne $progress.percent -and "$($progress.percent)" -ne "") { "$($progress.percent)%" } else { "--" }
+        $lines.Add("Napredak: $downloadedText / $totalText ($percentText)") | Out-Null
+    } elseif ($progress.downloadedBytes) {
+        $lines.Add("Preuzeto: $(Format-BytesText -Bytes ([double]$progress.downloadedBytes))") | Out-Null
+    }
+    if ($progress.speedMBps) {
+        $lines.Add("Brzina: $($progress.speedMBps) MB/s") | Out-Null
+    }
+    $lines.Add((Format-EtaText -Seconds $progress.etaSeconds)) | Out-Null
+    if ($progress.message) {
+        $lines.Add("Poruka: $($progress.message)") | Out-Null
+    }
+
+    $launchOutput.Text = $lines -join [Environment]::NewLine
+
+    if ($progress.status -eq "downloading") {
+        $statusDetail = if ($null -ne $progress.percent -and "$($progress.percent)" -ne "") {
+            "Model download $($progress.percent)% | $($progress.speedMBps) MB/s"
+        } else {
+            "Model download u toku"
+        }
+        Set-WorkerStatus -State "Working" -Detail $statusDetail
+    } elseif ($progress.status -eq "completed") {
+        Set-WorkerStatus -State "Idle" -Detail "Model download zavrsen"
+    } elseif ($progress.status -eq "failed") {
+        Set-WorkerStatus -State "Error" -Detail "Model download nije uspeo"
+    }
 }
 
 function Get-AgentAuditSummary {
@@ -332,8 +416,8 @@ $script:SavedSettingsExplore = [int]$settings.opencode.exploreSteps
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local Qwen Home Computer v$(Get-AppVersion)"
 $form.StartPosition = "CenterScreen"
-$form.Size = New-Object System.Drawing.Size(760, 800)
-$form.MinimumSize = New-Object System.Drawing.Size(760, 800)
+$form.Size = New-Object System.Drawing.Size(980, 860)
+$form.MinimumSize = New-Object System.Drawing.Size(980, 860)
 $form.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 251)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $form.MaximizeBox = $true
@@ -346,21 +430,22 @@ if (Test-Path $iconPath) {
 $title = New-Object System.Windows.Forms.Label
 $title.Text = "Local Qwen 3.6 35B A3B Control Center"
 $title.Location = New-Object System.Drawing.Point(16, 14)
-$title.Size = New-Object System.Drawing.Size(520, 28)
+$title.Size = New-Object System.Drawing.Size(700, 28)
 $title.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 14, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($title)
 
 $subtitle = New-Object System.Windows.Forms.Label
 $subtitle.Text = "Jedno mesto za pokretanje, podesavanja i agent rezim. Aktivna verzija: v$(Get-AppVersion)"
 $subtitle.Location = New-Object System.Drawing.Point(20, 44)
-$subtitle.Size = New-Object System.Drawing.Size(520, 22)
+$subtitle.Size = New-Object System.Drawing.Size(720, 22)
 $subtitle.ForeColor = [System.Drawing.Color]::FromArgb(85, 85, 85)
 $form.Controls.Add($subtitle)
 
 $aboutButton = New-Object System.Windows.Forms.Button
 $aboutButton.Text = "About"
-$aboutButton.Location = New-Object System.Drawing.Point(620, 24)
+$aboutButton.Location = New-Object System.Drawing.Point(852, 24)
 $aboutButton.Size = New-Object System.Drawing.Size(104, 34)
+$aboutButton.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $form.Controls.Add($aboutButton)
 
 $statusStrip = New-Object System.Windows.Forms.StatusStrip
@@ -377,7 +462,8 @@ $statusStrip.Items.Add($workerStatusLabel) | Out-Null
 $quickPanel = New-Object System.Windows.Forms.GroupBox
 $quickPanel.Text = "Quick status / Quick actions"
 $quickPanel.Location = New-Object System.Drawing.Point(18, 74)
-$quickPanel.Size = New-Object System.Drawing.Size(706, 76)
+$quickPanel.Size = New-Object System.Drawing.Size(938, 76)
+$quickPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 $form.Controls.Add($quickPanel)
 
 $quickServerLabel = New-Object System.Windows.Forms.Label
@@ -419,31 +505,32 @@ $quickPanel.Controls.Add($quickSignalLabel)
 
 $quickStartButton = New-Object System.Windows.Forms.Button
 $quickStartButton.Text = "Start"
-$quickStartButton.Location = New-Object System.Drawing.Point(556, 18)
-$quickStartButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickStartButton.Location = New-Object System.Drawing.Point(760, 18)
+$quickStartButton.Size = New-Object System.Drawing.Size(72, 24)
 $quickPanel.Controls.Add($quickStartButton)
 
 $quickStopButton = New-Object System.Windows.Forms.Button
 $quickStopButton.Text = "Stop"
-$quickStopButton.Location = New-Object System.Drawing.Point(622, 18)
-$quickStopButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickStopButton.Location = New-Object System.Drawing.Point(840, 18)
+$quickStopButton.Size = New-Object System.Drawing.Size(72, 24)
 $quickPanel.Controls.Add($quickStopButton)
 
 $quickOpenCodeButton = New-Object System.Windows.Forms.Button
 $quickOpenCodeButton.Text = "OpenCode"
-$quickOpenCodeButton.Location = New-Object System.Drawing.Point(556, 44)
-$quickOpenCodeButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickOpenCodeButton.Location = New-Object System.Drawing.Point(760, 44)
+$quickOpenCodeButton.Size = New-Object System.Drawing.Size(72, 24)
 $quickPanel.Controls.Add($quickOpenCodeButton)
 
 $quickRefreshButton = New-Object System.Windows.Forms.Button
 $quickRefreshButton.Text = "Osvezi"
-$quickRefreshButton.Location = New-Object System.Drawing.Point(622, 44)
-$quickRefreshButton.Size = New-Object System.Drawing.Size(60, 22)
+$quickRefreshButton.Location = New-Object System.Drawing.Point(840, 44)
+$quickRefreshButton.Size = New-Object System.Drawing.Size(72, 24)
 $quickPanel.Controls.Add($quickRefreshButton)
 
 $tabs = New-Object System.Windows.Forms.TabControl
 $tabs.Location = New-Object System.Drawing.Point(18, 158)
-$tabs.Size = New-Object System.Drawing.Size(706, 562)
+$tabs.Size = New-Object System.Drawing.Size(938, 650)
+$tabs.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 $form.Controls.Add($tabs)
 
 $onboardingTab = New-Object System.Windows.Forms.TabPage
@@ -460,8 +547,22 @@ $launchTab = New-Object System.Windows.Forms.TabPage
 $launchTab.Text = "Pokretanje"
 $launchTab.BackColor = [System.Drawing.Color]::WhiteSmoke
 $launchTab.AutoScroll = $true
-$launchTab.AutoScrollMinSize = New-Object System.Drawing.Size(0, 1080)
+$launchTab.AutoScrollMinSize = New-Object System.Drawing.Size(900, 540)
 $tabs.TabPages.Add($launchTab)
+
+$toolsTab = New-Object System.Windows.Forms.TabPage
+$toolsTab.Text = "Tools"
+$toolsTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$toolsTab.AutoScroll = $true
+$toolsTab.AutoScrollMinSize = New-Object System.Drawing.Size(900, 760)
+$tabs.TabPages.Add($toolsTab)
+
+$benchmarkTab = New-Object System.Windows.Forms.TabPage
+$benchmarkTab.Text = "Benchmark"
+$benchmarkTab.BackColor = [System.Drawing.Color]::WhiteSmoke
+$benchmarkTab.AutoScroll = $true
+$benchmarkTab.AutoScrollMinSize = New-Object System.Drawing.Size(900, 980)
+$tabs.TabPages.Add($benchmarkTab)
 
 $settingsTab = New-Object System.Windows.Forms.TabPage
 $settingsTab.Text = "Podesavanja"
@@ -497,33 +598,61 @@ $agentTab.Controls.Add($agentPanel)
 
 $serverStatus = New-Object System.Windows.Forms.Label
 $serverStatus.Location = New-Object System.Drawing.Point(18, 18)
-$serverStatus.Size = New-Object System.Drawing.Size(620, 22)
+$serverStatus.Size = New-Object System.Drawing.Size(872, 22)
 $serverStatus.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $launchTab.Controls.Add($serverStatus)
 
 $profileNote = New-Object System.Windows.Forms.Label
 $profileNote.Location = New-Object System.Drawing.Point(18, 44)
-$profileNote.Size = New-Object System.Drawing.Size(640, 22)
+$profileNote.Size = New-Object System.Drawing.Size(872, 22)
 $profileNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $launchTab.Controls.Add($profileNote)
 
+$launchPrimaryGroup = New-Object System.Windows.Forms.GroupBox
+$launchPrimaryGroup.Text = "Pokretanje"
+$launchPrimaryGroup.Location = New-Object System.Drawing.Point(18, 82)
+$launchPrimaryGroup.Size = New-Object System.Drawing.Size(872, 132)
+$launchPrimaryGroup.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$launchTab.Controls.Add($launchPrimaryGroup)
+
+$launchPrimaryHintLabel = New-Object System.Windows.Forms.Label
+$launchPrimaryHintLabel.Location = New-Object System.Drawing.Point(16, 24)
+$launchPrimaryHintLabel.Size = New-Object System.Drawing.Size(832, 18)
+$launchPrimaryHintLabel.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+$launchPrimaryHintLabel.Text = "Ovde su samo glavne akcije za server i klijente. Benchmark, repair i ostali alati su prebaceni u zasebne tabove."
+$launchPrimaryGroup.Controls.Add($launchPrimaryHintLabel)
+
+$launchToolsGroup = New-Object System.Windows.Forms.GroupBox
+$launchToolsGroup.Text = "Tools"
+$launchToolsGroup.Location = New-Object System.Drawing.Point(18, 18)
+$launchToolsGroup.Size = New-Object System.Drawing.Size(872, 236)
+$launchToolsGroup.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$toolsTab.Controls.Add($launchToolsGroup)
+
+$toolsHintLabel = New-Object System.Windows.Forms.Label
+$toolsHintLabel.Location = New-Object System.Drawing.Point(16, 24)
+$toolsHintLabel.Size = New-Object System.Drawing.Size(832, 32)
+$toolsHintLabel.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+$toolsHintLabel.Text = "Servisne i redje akcije su izdvojene ovde da glavni tab ostane cist. Ovde su repair, testovi, model browser i update tokovi."
+$launchToolsGroup.Controls.Add($toolsHintLabel)
+
 $hardwareBox = New-Object System.Windows.Forms.TextBox
-$hardwareBox.Location = New-Object System.Drawing.Point(18, 716)
-$hardwareBox.Size = New-Object System.Drawing.Size(648, 110)
+$hardwareBox.Location = New-Object System.Drawing.Point(18, 18)
+$hardwareBox.Size = New-Object System.Drawing.Size(872, 118)
 $hardwareBox.Multiline = $true
 $hardwareBox.ScrollBars = "Vertical"
 $hardwareBox.ReadOnly = $true
 $hardwareBox.BackColor = [System.Drawing.Color]::White
 $hardwareBox.Text = "Ovde ce biti prikazan hardver i efektivne runtime opcije."
-$launchTab.Controls.Add($hardwareBox)
+$benchmarkTab.Controls.Add($hardwareBox)
 
 $liveThroughputPanel = New-Object System.Windows.Forms.GroupBox
 $liveThroughputPanel.Text = "LIVE THROUGHPUT"
-$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 268)
-$liveThroughputPanel.Size = New-Object System.Drawing.Size(648, 96)
+$liveThroughputPanel.Location = New-Object System.Drawing.Point(18, 152)
+$liveThroughputPanel.Size = New-Object System.Drawing.Size(872, 110)
 $liveThroughputPanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $liveThroughputPanel.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 228)
-$launchTab.Controls.Add($liveThroughputPanel)
+$benchmarkTab.Controls.Add($liveThroughputPanel)
 
 $livePromptLabel = New-Object System.Windows.Forms.Label
 $livePromptLabel.Location = New-Object System.Drawing.Point(18, 24)
@@ -556,18 +685,80 @@ $liveThroughputPanel.Controls.Add($liveStateLabel)
 
 $liveSignalLabel = New-Object System.Windows.Forms.Label
 $liveSignalLabel.Location = New-Object System.Drawing.Point(18, 70)
-$liveSignalLabel.Size = New-Object System.Drawing.Size(612, 18)
+$liveSignalLabel.Size = New-Object System.Drawing.Size(500, 30)
 $liveSignalLabel.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
 $liveSignalLabel.Text = "Signal: jos nema merenja. Pokreni Test prompt, Test throughput ili posalji zahtev kroz OpenCode."
 $liveThroughputPanel.Controls.Add($liveSignalLabel)
 
+$benchmarkChartPanel = New-Object System.Windows.Forms.GroupBox
+$benchmarkChartPanel.Text = "Benchmark grafikon"
+$benchmarkChartPanel.Location = New-Object System.Drawing.Point(18, 276)
+$benchmarkChartPanel.Size = New-Object System.Drawing.Size(872, 238)
+$benchmarkChartPanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
+$benchmarkChartPanel.BackColor = [System.Drawing.Color]::White
+$benchmarkTab.Controls.Add($benchmarkChartPanel)
+
+$benchmarkChartHintLabel = New-Object System.Windows.Forms.Label
+$benchmarkChartHintLabel.Location = New-Object System.Drawing.Point(18, 24)
+$benchmarkChartHintLabel.Size = New-Object System.Drawing.Size(830, 18)
+$benchmarkChartHintLabel.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+$benchmarkChartHintLabel.Text = "Plavo = input tok/s, crveno = output tok/s, ljubicastо = ukupno tok/s kroz regularne zahteve i testove."
+$benchmarkChartPanel.Controls.Add($benchmarkChartHintLabel)
+
+$benchmarkChart = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
+$benchmarkChart.Location = New-Object System.Drawing.Point(18, 50)
+$benchmarkChart.Size = New-Object System.Drawing.Size(836, 170)
+$benchmarkChart.BackColor = [System.Drawing.Color]::White
+$benchmarkChart.BorderlineColor = [System.Drawing.Color]::FromArgb(220, 224, 230)
+$benchmarkChart.BorderlineDashStyle = [System.Windows.Forms.DataVisualization.Charting.ChartDashStyle]::Solid
+$benchmarkChart.BorderlineWidth = 1
+$benchmarkChartPanel.Controls.Add($benchmarkChart)
+
+$benchmarkChartArea = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea "Main"
+$benchmarkChartArea.BackColor = [System.Drawing.Color]::White
+$benchmarkChartArea.AxisX.Interval = 1
+$benchmarkChartArea.AxisX.MajorGrid.LineColor = [System.Drawing.Color]::FromArgb(238, 241, 246)
+$benchmarkChartArea.AxisY.MajorGrid.LineColor = [System.Drawing.Color]::FromArgb(238, 241, 246)
+$benchmarkChartArea.AxisX.LabelStyle.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$benchmarkChartArea.AxisY.LabelStyle.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$benchmarkChartArea.AxisX.Title = "Skorasnji zahtevi"
+$benchmarkChartArea.AxisY.Title = "tok/s"
+[void]$benchmarkChart.ChartAreas.Add($benchmarkChartArea)
+
+$benchmarkLegend = New-Object System.Windows.Forms.DataVisualization.Charting.Legend "Legend"
+$benchmarkLegend.Docking = [System.Windows.Forms.DataVisualization.Charting.Docking]::Top
+$benchmarkLegend.Alignment = [System.Drawing.StringAlignment]::Center
+$benchmarkLegend.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+[void]$benchmarkChart.Legends.Add($benchmarkLegend)
+
+$benchmarkPromptSeries = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Input tok/s"
+$benchmarkPromptSeries.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
+$benchmarkPromptSeries.BorderWidth = 2
+$benchmarkPromptSeries.Color = [System.Drawing.Color]::FromArgb(44, 123, 229)
+$benchmarkPromptSeries.ChartArea = "Main"
+[void]$benchmarkChart.Series.Add($benchmarkPromptSeries)
+
+$benchmarkOutputSeries = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Output tok/s"
+$benchmarkOutputSeries.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
+$benchmarkOutputSeries.BorderWidth = 2
+$benchmarkOutputSeries.Color = [System.Drawing.Color]::FromArgb(220, 63, 58)
+$benchmarkOutputSeries.ChartArea = "Main"
+[void]$benchmarkChart.Series.Add($benchmarkOutputSeries)
+
+$benchmarkTotalSeries = New-Object System.Windows.Forms.DataVisualization.Charting.Series "Ukupno tok/s"
+$benchmarkTotalSeries.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
+$benchmarkTotalSeries.BorderWidth = 2
+$benchmarkTotalSeries.Color = [System.Drawing.Color]::FromArgb(120, 64, 180)
+$benchmarkTotalSeries.ChartArea = "Main"
+[void]$benchmarkChart.Series.Add($benchmarkTotalSeries)
+
 $usagePanel = New-Object System.Windows.Forms.GroupBox
 $usagePanel.Text = "Request activity"
-$usagePanel.Location = New-Object System.Drawing.Point(18, 370)
-$usagePanel.Size = New-Object System.Drawing.Size(648, 230)
+$usagePanel.Location = New-Object System.Drawing.Point(18, 530)
+$usagePanel.Size = New-Object System.Drawing.Size(872, 250)
 $usagePanel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
 $usagePanel.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
-$launchTab.Controls.Add($usagePanel)
+$benchmarkTab.Controls.Add($usagePanel)
 
 $usageCountLabel = New-Object System.Windows.Forms.Label
 $usageCountLabel.Location = New-Object System.Drawing.Point(18, 24)
@@ -585,7 +776,7 @@ $usagePanel.Controls.Add($usageLastMsLabel)
 
 $usageSourceLabel = New-Object System.Windows.Forms.Label
 $usageSourceLabel.Location = New-Object System.Drawing.Point(430, 24)
-$usageSourceLabel.Size = New-Object System.Drawing.Size(196, 22)
+$usageSourceLabel.Size = New-Object System.Drawing.Size(420, 36)
 $usageSourceLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
 $usageSourceLabel.Text = "Izvor: --"
 $usagePanel.Controls.Add($usageSourceLabel)
@@ -610,44 +801,44 @@ $usagePanel.Controls.Add($usageServerLabel)
 
 $usageStabilityLabel = New-Object System.Windows.Forms.Label
 $usageStabilityLabel.Location = New-Object System.Drawing.Point(18, 72)
-$usageStabilityLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageStabilityLabel.Size = New-Object System.Drawing.Size(830, 20)
 $usageStabilityLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
 $usageStabilityLabel.Text = "Stabilnost: nema podataka"
 $usagePanel.Controls.Add($usageStabilityLabel)
 
 $usageTrendLabel = New-Object System.Windows.Forms.Label
 $usageTrendLabel.Location = New-Object System.Drawing.Point(18, 92)
-$usageTrendLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageTrendLabel.Size = New-Object System.Drawing.Size(830, 20)
 $usageTrendLabel.Text = "Trend: throughput = | latency ="
 $usagePanel.Controls.Add($usageTrendLabel)
 
 $usageSourceBreakdownLabel = New-Object System.Windows.Forms.Label
 $usageSourceBreakdownLabel.Location = New-Object System.Drawing.Point(18, 112)
-$usageSourceBreakdownLabel.Size = New-Object System.Drawing.Size(610, 20)
+$usageSourceBreakdownLabel.Size = New-Object System.Drawing.Size(830, 20)
 $usageSourceBreakdownLabel.Text = "Izvori: test 0 | opencode 0 | other 0"
 $usagePanel.Controls.Add($usageSourceBreakdownLabel)
 
 $usageSourceDetailTestLabel = New-Object System.Windows.Forms.Label
 $usageSourceDetailTestLabel.Location = New-Object System.Drawing.Point(18, 132)
-$usageSourceDetailTestLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailTestLabel.Size = New-Object System.Drawing.Size(830, 18)
 $usageSourceDetailTestLabel.Text = "TEST: zahtevi 0 | avg -- ms | avg -- tok/s"
 $usagePanel.Controls.Add($usageSourceDetailTestLabel)
 
 $usageSourceDetailOpencodeLabel = New-Object System.Windows.Forms.Label
 $usageSourceDetailOpencodeLabel.Location = New-Object System.Drawing.Point(18, 150)
-$usageSourceDetailOpencodeLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailOpencodeLabel.Size = New-Object System.Drawing.Size(830, 18)
 $usageSourceDetailOpencodeLabel.Text = "OPENCODE: zahtevi 0 | avg -- ms | avg -- tok/s"
 $usagePanel.Controls.Add($usageSourceDetailOpencodeLabel)
 
 $usageSourceDetailOtherLabel = New-Object System.Windows.Forms.Label
 $usageSourceDetailOtherLabel.Location = New-Object System.Drawing.Point(18, 168)
-$usageSourceDetailOtherLabel.Size = New-Object System.Drawing.Size(610, 18)
+$usageSourceDetailOtherLabel.Size = New-Object System.Drawing.Size(830, 18)
 $usageSourceDetailOtherLabel.Text = "OTHER: zahtevi 0 | avg -- ms | avg -- tok/s"
 $usagePanel.Controls.Add($usageSourceDetailOtherLabel)
 
 $usageRecentBox = New-Object System.Windows.Forms.TextBox
 $usageRecentBox.Location = New-Object System.Drawing.Point(18, 186)
-$usageRecentBox.Size = New-Object System.Drawing.Size(610, 36)
+$usageRecentBox.Size = New-Object System.Drawing.Size(830, 48)
 $usageRecentBox.Multiline = $true
 $usageRecentBox.ReadOnly = $true
 $usageRecentBox.ScrollBars = "Vertical"
@@ -656,24 +847,24 @@ $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server prim
 $usagePanel.Controls.Add($usageRecentBox)
 
 $throughputBox = New-Object System.Windows.Forms.TextBox
-$throughputBox.Location = New-Object System.Drawing.Point(18, 520)
-$throughputBox.Size = New-Object System.Drawing.Size(648, 82)
+$throughputBox.Location = New-Object System.Drawing.Point(18, 796)
+$throughputBox.Size = New-Object System.Drawing.Size(872, 108)
 $throughputBox.Multiline = $true
 $throughputBox.ScrollBars = "Vertical"
 $throughputBox.ReadOnly = $true
 $throughputBox.BackColor = [System.Drawing.Color]::FromArgb(255, 253, 242)
 $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
-$launchTab.Controls.Add($throughputBox)
+$benchmarkTab.Controls.Add($throughputBox)
 
 $launchOutput = New-Object System.Windows.Forms.TextBox
-$launchOutput.Location = New-Object System.Drawing.Point(18, 842)
-$launchOutput.Size = New-Object System.Drawing.Size(648, 112)
+$launchOutput.Location = New-Object System.Drawing.Point(18, 272)
+$launchOutput.Size = New-Object System.Drawing.Size(872, 210)
 $launchOutput.Multiline = $true
 $launchOutput.ScrollBars = "Vertical"
 $launchOutput.ReadOnly = $true
 $launchOutput.BackColor = [System.Drawing.Color]::White
 $launchOutput.Text = "Ovde ce se pojavljivati status i rezultati akcija."
-$launchTab.Controls.Add($launchOutput)
+$toolsTab.Controls.Add($launchOutput)
 
 $logsLabel = New-Object System.Windows.Forms.Label
 $logsLabel.Text = "Centralni pregled poslednjih logova"
@@ -753,15 +944,20 @@ $refreshHealthButton.Location = New-Object System.Drawing.Point(538, 12)
 $refreshHealthButton.Size = New-Object System.Drawing.Size(128, 30)
 $healthTab.Controls.Add($refreshHealthButton)
 
-$healthSummaryLabel = New-Object System.Windows.Forms.Label
+$healthSummaryLabel = New-Object System.Windows.Forms.TextBox
 $healthSummaryLabel.Text = "Stanje: --"
 $healthSummaryLabel.Location = New-Object System.Drawing.Point(18, 48)
-$healthSummaryLabel.Size = New-Object System.Drawing.Size(648, 24)
+$healthSummaryLabel.Size = New-Object System.Drawing.Size(648, 56)
 $healthSummaryLabel.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10, [System.Drawing.FontStyle]::Bold)
+$healthSummaryLabel.Multiline = $true
+$healthSummaryLabel.ScrollBars = "Vertical"
+$healthSummaryLabel.ReadOnly = $true
+$healthSummaryLabel.BackColor = [System.Drawing.Color]::White
+$healthSummaryLabel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $healthTab.Controls.Add($healthSummaryLabel)
 
 $healthActionPanel = New-Object System.Windows.Forms.Panel
-$healthActionPanel.Location = New-Object System.Drawing.Point(18, 78)
+$healthActionPanel.Location = New-Object System.Drawing.Point(18, 112)
 $healthActionPanel.Size = New-Object System.Drawing.Size(648, 42)
 $healthTab.Controls.Add($healthActionPanel)
 
@@ -796,7 +992,7 @@ $guidedRepairButton.Size = New-Object System.Drawing.Size(120, 30)
 $healthActionPanel.Controls.Add($guidedRepairButton)
 
 $healthMeta = New-Object System.Windows.Forms.TextBox
-$healthMeta.Location = New-Object System.Drawing.Point(18, 130)
+$healthMeta.Location = New-Object System.Drawing.Point(18, 164)
 $healthMeta.Size = New-Object System.Drawing.Size(648, 104)
 $healthMeta.Multiline = $true
 $healthMeta.ScrollBars = "Vertical"
@@ -805,7 +1001,7 @@ $healthMeta.BackColor = [System.Drawing.Color]::White
 $healthTab.Controls.Add($healthMeta)
 
 $healthContent = New-Object System.Windows.Forms.TextBox
-$healthContent.Location = New-Object System.Drawing.Point(18, 246)
+$healthContent.Location = New-Object System.Drawing.Point(18, 280)
 $healthContent.Size = New-Object System.Drawing.Size(648, 274)
 $healthContent.Multiline = $true
 $healthContent.ScrollBars = "Vertical"
@@ -1212,6 +1408,41 @@ function Get-LatestReleaseInfoCached {
     }
 }
 
+function Refresh-BenchmarkChart {
+    param($TokenMetrics)
+
+    foreach ($series in @($benchmarkPromptSeries, $benchmarkOutputSeries, $benchmarkTotalSeries)) {
+        $series.Points.Clear()
+    }
+
+    if (-not $TokenMetrics -or -not $TokenMetrics.history -or @($TokenMetrics.history).Count -eq 0) {
+        $benchmarkChart.Titles.Clear()
+        [void]$benchmarkChart.Titles.Add("Jos nema dovoljno throughput podataka za grafikon.")
+        return
+    }
+
+    $benchmarkChart.Titles.Clear()
+    [void]$benchmarkChart.Titles.Add("Live throughput trend kroz poslednje zahteve")
+
+    $history = @($TokenMetrics.history)
+    $startIndex = [Math]::Max(0, $history.Count - 20)
+    $window = $history[$startIndex..($history.Count - 1)]
+    for ($i = 0; $i -lt $window.Count; $i++) {
+        $item = $window[$i]
+        $label = "#$($startIndex + $i + 1)"
+        if ($item.measuredAt) {
+            try {
+                $label = ([datetime]::Parse([string]$item.measuredAt)).ToString("HH:mm:ss")
+            } catch {
+            }
+        }
+
+        [void]$benchmarkPromptSeries.Points.AddXY($label, [double]$item.promptTokensPerSecond)
+        [void]$benchmarkOutputSeries.Points.AddXY($label, [double]$item.completionTokensPerSecond)
+        [void]$benchmarkTotalSeries.Points.AddXY($label, [double]$item.totalTokensPerSecond)
+    }
+}
+
 function Refresh-ThroughputView {
     $tokenMetrics = Get-TokenMetricsSummary
     $statusBundle = Get-EffectiveServiceStatus
@@ -1239,6 +1470,7 @@ function Refresh-ThroughputView {
         $usageTrendLabel.Text = "Trend: throughput = | latency ="
         $usageRecentBox.Text = "Skorasnje aktivnosti ce se pojaviti ovde cim server primi zahteve."
         $throughputBox.Text = "JOS NEMA MERENJA.`r`nPokreni 'Test prompt', 'Test throughput' ili posalji normalan zahtev kroz server/OpenCode da bi se pojavili input/output tokeni po sekundi i istorija."
+        Refresh-BenchmarkChart -TokenMetrics $tokenMetrics
         return
     }
 
@@ -1301,6 +1533,7 @@ function Refresh-ThroughputView {
         "Aktivnost: avg odgovor $($tokenMetrics.activity.averageTotalMs) ms | test prompt $($tokenMetrics.activity.sources.testPrompt) | OpenCode $($tokenMetrics.activity.sources.opencode) | ostalo $($tokenMetrics.activity.sources.other)",
         "Istorija: $($historyLines -join '   ;   ')"
     ) -join [Environment]::NewLine
+    Refresh-BenchmarkChart -TokenMetrics $tokenMetrics
 }
 
 function Ensure-ModelUiState {
@@ -1514,7 +1747,7 @@ function Apply-ModelFilters {
         $selectedModelId = [string]$currentModelMeta.id
     }
 
-    $filteredPayload = Get-FilteredModelCatalog `
+    $filteredPayload = Get-ModelBrowserPayload `
         -VerifiedOnly:([bool]($verifiedOnlyCheck -and $verifiedOnlyCheck.Checked)) `
         -CoderOnly:([bool]($coderOnlyCheck -and $coderOnlyCheck.Checked)) `
         -FitOnly:([bool]($fitOnlyCheck -and $fitOnlyCheck.Checked))
@@ -1554,6 +1787,50 @@ function Apply-ModelFilters {
     $modelCombo.SelectedIndex = $initialModelIndex
 }
 
+function Format-ModelInfoValue {
+    param(
+        [AllowNull()][object]$Value,
+        [string]$Suffix = ""
+    )
+
+    if ($null -eq $Value) {
+        return "--"
+    }
+
+    $text = ([string]$Value).Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return "--"
+    }
+
+    if ($Suffix) {
+        return "$text $Suffix"
+    }
+
+    return $text
+}
+
+function Get-SelectedModelSpeedText {
+    param($SelectedModel)
+
+    $estimate = [string]$SelectedModel.speedEstimateLabel
+    if (-not [string]::IsNullOrWhiteSpace($estimate)) {
+        return $estimate
+    }
+
+    try {
+        $state = Get-InstallState
+        if ([string]$state.modelId -eq [string]$SelectedModel.id) {
+            $tokenMetrics = Get-TokenMetricsSummary
+            if ($tokenMetrics -and $tokenMetrics.current -and $tokenMetrics.current.totalTokensPerSecond) {
+                return ("izmereno {0} tok/s" -f $tokenMetrics.current.totalTokensPerSecond)
+            }
+        }
+    } catch {
+    }
+
+    return "--"
+}
+
 function Refresh-ModelSelectionInfo {
     try {
         Ensure-ModelUiState
@@ -1566,6 +1843,7 @@ function Refresh-ModelSelectionInfo {
         }
 
         $selectedModel = $script:VisibleModelList[$modelCombo.SelectedIndex]
+        $speedText = Get-SelectedModelSpeedText -SelectedModel $selectedModel
         $downloadCandidates = Get-DownloadCandidates
         $selectedFit = $null
         $selectedGroup = "nepoznato"
@@ -1598,9 +1876,9 @@ function Refresh-ModelSelectionInfo {
 
         $modelInfoBox.Text = @(
             "Status: $statusText"
-            "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10 | Speed: $($selectedModel.speedEstimateLabel)"
-            "Installed: $($selectedModel.installedSizeGiB) GiB | Need disk: $($selectedModel.diskNeededGiB) GiB | Free disk: $($selectedModel.freeDiskGiB) GiB | Enough disk: $(if ($selectedModel.hasEnoughDisk) { 'da' } else { 'ne' })"
-            "GPU prag: $($selectedModel.minimumGpuMiB) MiB | Preporuceni GPU: $($selectedModel.recommendedGpuMiB) MiB | RAM: $($selectedModel.minimumRamGiB) GiB"
+            "Family: $($selectedModel.family) | Agentic: $($selectedModel.agenticScore)/10 | OpenCode: $($selectedModel.opencodeFit)/10 | Speed: $speedText"
+            "Installed: $(Format-ModelInfoValue -Value $selectedModel.installedSizeGiB -Suffix 'GiB') | Need disk: $(Format-ModelInfoValue -Value $selectedModel.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selectedModel.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selectedModel.hasEnoughDisk) { '--' } elseif ($selectedModel.hasEnoughDisk) { 'da' } else { 'ne' })"
+            "GPU prag: $(Format-ModelInfoValue -Value $selectedModel.minimumGpuMiB -Suffix 'MiB') | Preporuceni GPU: $(Format-ModelInfoValue -Value $selectedModel.recommendedGpuMiB -Suffix 'MiB') | RAM: $(Format-ModelInfoValue -Value $selectedModel.minimumRamGiB -Suffix 'GiB')"
             "Opis: $($selectedModel.description)"
             "Badge: $($(if ($selectedModel.useCaseBadges -and @($selectedModel.useCaseBadges).Count -gt 0) { @($selectedModel.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))"
             "$(if ($fitReasons) { 'Fit: ' + $fitReasons } else { '' })"
@@ -1616,6 +1894,21 @@ function Refresh-ModelUiFromInstallState {
         Apply-ModelFilters
         Refresh-ModelSelectionInfo
     } catch {
+    }
+}
+
+function Invoke-OpenCodeLaunch {
+    try {
+        Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $startOpenCodeScript,
+            "-Profile", ([string](Get-Settings).profile)
+        )
+        Write-LaunchMessage @("OpenCode launcher je pokrenut.")
+    } catch {
+        Write-LaunchMessage @($_.Exception.Message)
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "Greska", 0, 16) | Out-Null
     }
 }
 
@@ -1789,6 +2082,7 @@ function Show-ModelBrowserDialog {
             $detailBox.Text = "Detalji nisu dostupni."
             return
         }
+        $speedText = Get-SelectedModelSpeedText -SelectedModel $selected
 
         $statusText = @()
         if ($selected.active) { $statusText += "AKTIVAN" }
@@ -1803,9 +2097,9 @@ function Show-ModelBrowserDialog {
             "Model: $($selected.id)",
             "Family: $($selected.family) | Use case: $($selected.useCase)",
             "Badge: $($(if ($selected.useCaseBadges -and @($selected.useCaseBadges).Count -gt 0) { @($selected.useCaseBadges) -join ', ' } else { 'nema posebne oznake' }))",
-            "Velicina: $($selected.approxSizeGiB) GiB | GPU: $($selected.minimumGpuMiB)/$($selected.recommendedGpuMiB) MiB | RAM: $($selected.minimumRamGiB) GiB",
-            "Installed: $($selected.installedSizeGiB) GiB | Need disk: $($selected.diskNeededGiB) GiB | Free disk: $($selected.freeDiskGiB) GiB | Enough disk: $(if ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
-            "Procena brzine: $($selected.speedEstimateLabel) | $($selected.speedEstimateReason)",
+            "Velicina: $(Format-ModelInfoValue -Value $selected.approxSizeGiB -Suffix 'GiB') | GPU: $(Format-ModelInfoValue -Value $selected.minimumGpuMiB)/$(Format-ModelInfoValue -Value $selected.recommendedGpuMiB) MiB | RAM: $(Format-ModelInfoValue -Value $selected.minimumRamGiB -Suffix 'GiB')",
+            "Installed: $(Format-ModelInfoValue -Value $selected.installedSizeGiB -Suffix 'GiB') | Need disk: $(Format-ModelInfoValue -Value $selected.diskNeededGiB -Suffix 'GiB') | Free disk: $(Format-ModelInfoValue -Value $selected.freeDiskGiB -Suffix 'GiB') | Enough disk: $(if ($null -eq $selected.hasEnoughDisk) { '--' } elseif ($selected.hasEnoughDisk) { 'da' } else { 'ne' })",
+            "Procena brzine: $speedText | $($selected.speedEstimateReason)",
             "Agentic: $($selected.agenticScore)/10 | OpenCode: $($selected.opencodeFit)/10 | Curation: $($selected.curationLevel)",
             "Opis: $($selected.description)"
         ) -join [Environment]::NewLine
@@ -1903,6 +2197,8 @@ function Show-ModelBrowserDialog {
             Refresh-LaunchStatus
             Refresh-LogsView
             & $refreshBrowserGrid
+        }.GetNewClosure()) -OnTick ({
+            Refresh-ModelDownloadProgressView
         }.GetNewClosure())
     }.GetNewClosure())
 
@@ -2027,61 +2323,61 @@ function Start-LlamaBackground {
 
 $startBalanced = New-Object System.Windows.Forms.Button
 $startBalanced.Text = "Start balanced"
-$startBalanced.Location = New-Object System.Drawing.Point(18, 82)
-$startBalanced.Size = New-Object System.Drawing.Size(120, 36)
-$launchTab.Controls.Add($startBalanced)
+$startBalanced.Location = New-Object System.Drawing.Point(16, 52)
+$startBalanced.Size = New-Object System.Drawing.Size(196, 34)
+$launchPrimaryGroup.Controls.Add($startBalanced)
 
 $startVideo = New-Object System.Windows.Forms.Button
 $startVideo.Text = "Start video"
-$startVideo.Location = New-Object System.Drawing.Point(148, 82)
-$startVideo.Size = New-Object System.Drawing.Size(120, 36)
-$launchTab.Controls.Add($startVideo)
+$startVideo.Location = New-Object System.Drawing.Point(228, 52)
+$startVideo.Size = New-Object System.Drawing.Size(196, 34)
+$launchPrimaryGroup.Controls.Add($startVideo)
 
 $startSpeed = New-Object System.Windows.Forms.Button
 $startSpeed.Text = "Start speed"
-$startSpeed.Location = New-Object System.Drawing.Point(278, 82)
-$startSpeed.Size = New-Object System.Drawing.Size(120, 36)
-$launchTab.Controls.Add($startSpeed)
+$startSpeed.Location = New-Object System.Drawing.Point(440, 52)
+$startSpeed.Size = New-Object System.Drawing.Size(196, 34)
+$launchPrimaryGroup.Controls.Add($startSpeed)
 
 $startLlama = New-Object System.Windows.Forms.Button
-$startLlama.Text = "Start llama.cpp"
-$startLlama.Location = New-Object System.Drawing.Point(408, 82)
-$startLlama.Size = New-Object System.Drawing.Size(130, 36)
-$launchTab.Controls.Add($startLlama)
+$startLlama.Text = "Start llama.cpp server"
+$startLlama.Location = New-Object System.Drawing.Point(652, 52)
+$startLlama.Size = New-Object System.Drawing.Size(196, 34)
+$launchPrimaryGroup.Controls.Add($startLlama)
 
 $stopServer = New-Object System.Windows.Forms.Button
-$stopServer.Text = "Stop server"
-$stopServer.Location = New-Object System.Drawing.Point(548, 82)
-$stopServer.Size = New-Object System.Drawing.Size(118, 36)
-$launchTab.Controls.Add($stopServer)
+$stopServer.Text = "Stop llama.cpp server"
+$stopServer.Location = New-Object System.Drawing.Point(16, 92)
+$stopServer.Size = New-Object System.Drawing.Size(196, 26)
+$launchPrimaryGroup.Controls.Add($stopServer)
 
 $openOpenCode = New-Object System.Windows.Forms.Button
-$openOpenCode.Text = "Otvori OpenCode"
-$openOpenCode.Location = New-Object System.Drawing.Point(18, 132)
-$openOpenCode.Size = New-Object System.Drawing.Size(180, 36)
-$launchTab.Controls.Add($openOpenCode)
+$openOpenCode.Text = "Run OpenCode"
+$openOpenCode.Location = New-Object System.Drawing.Point(228, 92)
+$openOpenCode.Size = New-Object System.Drawing.Size(196, 26)
+$launchPrimaryGroup.Controls.Add($openOpenCode)
 
 $openWebUi = New-Object System.Windows.Forms.Button
-$openWebUi.Text = "Otvori llama.cpp web"
-$openWebUi.Location = New-Object System.Drawing.Point(208, 132)
-$openWebUi.Size = New-Object System.Drawing.Size(180, 36)
-$launchTab.Controls.Add($openWebUi)
+$openWebUi.Text = "Run llama.cpp web"
+$openWebUi.Location = New-Object System.Drawing.Point(440, 92)
+$openWebUi.Size = New-Object System.Drawing.Size(196, 26)
+$launchPrimaryGroup.Controls.Add($openWebUi)
 
 $refreshStatus = New-Object System.Windows.Forms.Button
 $refreshStatus.Text = "Osvezi status"
-$refreshStatus.Location = New-Object System.Drawing.Point(398, 132)
-$refreshStatus.Size = New-Object System.Drawing.Size(130, 36)
-$launchTab.Controls.Add($refreshStatus)
+$refreshStatus.Location = New-Object System.Drawing.Point(652, 92)
+$refreshStatus.Size = New-Object System.Drawing.Size(196, 26)
+$launchPrimaryGroup.Controls.Add($refreshStatus)
 
 $openFolderButton = New-Object System.Windows.Forms.Button
 $openFolderButton.Text = "Otvori folder"
-$openFolderButton.Location = New-Object System.Drawing.Point(538, 132)
-$openFolderButton.Size = New-Object System.Drawing.Size(128, 36)
-$launchTab.Controls.Add($openFolderButton)
+$openFolderButton.Location = New-Object System.Drawing.Point(668, 58)
+$openFolderButton.Size = New-Object System.Drawing.Size(180, 30)
+$launchToolsGroup.Controls.Add($openFolderButton)
 
 $quickStartButton.Add_Click({ $startLlama.PerformClick() })
 $quickStopButton.Add_Click({ $stopServer.PerformClick() })
-$quickOpenCodeButton.Add_Click({ $openOpenCode.PerformClick() })
+$quickOpenCodeButton.Add_Click({ Invoke-OpenCodeLaunch })
 $quickRefreshButton.Add_Click({
     Refresh-LaunchStatus
     Refresh-ThroughputView
@@ -2090,45 +2386,45 @@ $quickRefreshButton.Add_Click({
 
 $repairInstallButton = New-Object System.Windows.Forms.Button
 $repairInstallButton.Text = "Repair install"
-$repairInstallButton.Location = New-Object System.Drawing.Point(18, 176)
-$repairInstallButton.Size = New-Object System.Drawing.Size(124, 32)
-$launchTab.Controls.Add($repairInstallButton)
+$repairInstallButton.Location = New-Object System.Drawing.Point(16, 58)
+$repairInstallButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($repairInstallButton)
 
 $testPromptButton = New-Object System.Windows.Forms.Button
 $testPromptButton.Text = "Test prompt"
-$testPromptButton.Location = New-Object System.Drawing.Point(152, 176)
-$testPromptButton.Size = New-Object System.Drawing.Size(110, 32)
-$launchTab.Controls.Add($testPromptButton)
+$testPromptButton.Location = New-Object System.Drawing.Point(182, 58)
+$testPromptButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($testPromptButton)
 
 $testThroughputButton = New-Object System.Windows.Forms.Button
 $testThroughputButton.Text = "Test throughput"
-$testThroughputButton.Location = New-Object System.Drawing.Point(272, 176)
-$testThroughputButton.Size = New-Object System.Drawing.Size(124, 32)
-$launchTab.Controls.Add($testThroughputButton)
+$testThroughputButton.Location = New-Object System.Drawing.Point(348, 58)
+$testThroughputButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($testThroughputButton)
 
 $modelManagerButton = New-Object System.Windows.Forms.Button
-$modelManagerButton.Text = "Model manager"
-$modelManagerButton.Location = New-Object System.Drawing.Point(406, 176)
-$modelManagerButton.Size = New-Object System.Drawing.Size(124, 32)
-$launchTab.Controls.Add($modelManagerButton)
+$modelManagerButton.Text = "Model browser"
+$modelManagerButton.Location = New-Object System.Drawing.Point(514, 58)
+$modelManagerButton.Size = New-Object System.Drawing.Size(138, 30)
+$launchToolsGroup.Controls.Add($modelManagerButton)
 
 $diagnosticsButton = New-Object System.Windows.Forms.Button
 $diagnosticsButton.Text = "Diagnostics"
-$diagnosticsButton.Location = New-Object System.Drawing.Point(540, 176)
-$diagnosticsButton.Size = New-Object System.Drawing.Size(126, 32)
-$launchTab.Controls.Add($diagnosticsButton)
+$diagnosticsButton.Location = New-Object System.Drawing.Point(16, 100)
+$diagnosticsButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($diagnosticsButton)
 
 $updatesButton = New-Object System.Windows.Forms.Button
 $updatesButton.Text = "Check updates"
-$updatesButton.Location = New-Object System.Drawing.Point(18, 218)
-$updatesButton.Size = New-Object System.Drawing.Size(150, 32)
-$launchTab.Controls.Add($updatesButton)
+$updatesButton.Location = New-Object System.Drawing.Point(182, 100)
+$updatesButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($updatesButton)
 
 $installUpdateButton = New-Object System.Windows.Forms.Button
 $installUpdateButton.Text = "Install update"
-$installUpdateButton.Location = New-Object System.Drawing.Point(178, 218)
-$installUpdateButton.Size = New-Object System.Drawing.Size(150, 32)
-$launchTab.Controls.Add($installUpdateButton)
+$installUpdateButton.Location = New-Object System.Drawing.Point(348, 100)
+$installUpdateButton.Size = New-Object System.Drawing.Size(150, 30)
+$launchToolsGroup.Controls.Add($installUpdateButton)
 
 $modelLabel = New-Object System.Windows.Forms.Label
 $modelLabel.Text = "Model varijanta"
@@ -2276,8 +2572,8 @@ $settingsPanel.Controls.Add($saveSettingsButton)
 
 $resetSettingsButton = New-Object System.Windows.Forms.Button
 $resetSettingsButton.Text = "Vrati preporuku"
-$resetSettingsButton.Location = New-Object System.Drawing.Point(285, 1046)
-$resetSettingsButton.Size = New-Object System.Drawing.Size(132, 34)
+$resetSettingsButton.Location = New-Object System.Drawing.Point(265, 1046)
+$resetSettingsButton.Size = New-Object System.Drawing.Size(152, 34)
 $settingsPanel.Controls.Add($resetSettingsButton)
 
 Set-SettingsProfileVisuals
@@ -2374,29 +2670,34 @@ $browseFolderButton.Location = New-Object System.Drawing.Point(530, 352)
 $browseFolderButton.Size = New-Object System.Drawing.Size(118, 30)
 $agentPanel.Controls.Add($browseFolderButton)
 
-$agentWarning = New-Object System.Windows.Forms.Label
+$agentWarning = New-Object System.Windows.Forms.TextBox
 $agentWarning.Text = "AUTO + C:\ je skoro puna sloboda nad sistemom."
 $agentWarning.Location = New-Object System.Drawing.Point(18, 392)
-$agentWarning.Size = New-Object System.Drawing.Size(620, 54)
+$agentWarning.Size = New-Object System.Drawing.Size(620, 68)
+$agentWarning.Multiline = $true
+$agentWarning.ScrollBars = "Vertical"
+$agentWarning.ReadOnly = $true
+$agentWarning.BackColor = [System.Drawing.Color]::White
+$agentWarning.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $agentWarning.ForeColor = [System.Drawing.Color]::FromArgb(176, 72, 18)
 $agentPanel.Controls.Add($agentWarning)
 
 $agentStatus = New-Object System.Windows.Forms.Label
 $agentStatus.Text = "Konfiguracija se cuva pre starta."
-$agentStatus.Location = New-Object System.Drawing.Point(18, 470)
+$agentStatus.Location = New-Object System.Drawing.Point(18, 486)
 $agentStatus.Size = New-Object System.Drawing.Size(360, 24)
 $agentStatus.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
 $agentPanel.Controls.Add($agentStatus)
 
 $saveAgentButton = New-Object System.Windows.Forms.Button
 $saveAgentButton.Text = "Sacuvaj agent rezim"
-$saveAgentButton.Location = New-Object System.Drawing.Point(365, 466)
+$saveAgentButton.Location = New-Object System.Drawing.Point(365, 482)
 $saveAgentButton.Size = New-Object System.Drawing.Size(140, 34)
 $agentPanel.Controls.Add($saveAgentButton)
 
 $launchAgentButton = New-Object System.Windows.Forms.Button
 $launchAgentButton.Text = "Pokreni agent"
-$launchAgentButton.Location = New-Object System.Drawing.Point(520, 466)
+$launchAgentButton.Location = New-Object System.Drawing.Point(520, 482)
 $launchAgentButton.Size = New-Object System.Drawing.Size(128, 34)
 $launchAgentButton.BackColor = [System.Drawing.Color]::FromArgb(23, 111, 235)
 $launchAgentButton.ForeColor = [System.Drawing.Color]::White
@@ -2405,7 +2706,7 @@ $agentPanel.Controls.Add($launchAgentButton)
 
 $refreshAuditButton = New-Object System.Windows.Forms.Button
 $refreshAuditButton.Text = "Osvezi audit"
-$refreshAuditButton.Location = New-Object System.Drawing.Point(18, 506)
+$refreshAuditButton.Location = New-Object System.Drawing.Point(18, 522)
 $refreshAuditButton.Size = New-Object System.Drawing.Size(120, 30)
 $agentPanel.Controls.Add($refreshAuditButton)
 
@@ -2536,6 +2837,8 @@ $downloadModelButton.Add_Click({
             $settingsStatus.ForeColor = [System.Drawing.Color]::FromArgb(20, 120, 50)
             Refresh-LaunchStatus
             Refresh-LogsView
+        } -OnTick {
+            Refresh-ModelDownloadProgressView
         }
     } catch {
         $settingsStatus.Text = "Model download nije uspeo."
@@ -2657,12 +2960,7 @@ $stopServer.Add_Click({
 })
 
 $openOpenCode.Add_Click({
-    Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
-        "-ExecutionPolicy", "Bypass",
-        "-File", $startOpenCodeScript,
-        "-Profile", ([string](Get-Settings).profile)
-    )
-    Write-LaunchMessage @("OpenCode launcher je pokrenut.")
+    Invoke-OpenCodeLaunch
 })
 
 $openWebUi.Add_Click({

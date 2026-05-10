@@ -2,6 +2,10 @@ param(
     [string]$InstallRoot = "$env:USERPROFILE\LocalQwenHome",
     [string]$DesktopFolder = "$env:USERPROFILE\Desktop",
     [string]$Profile = "balanced",
+    [string]$ModelId = "",
+    [string]$LogPath = "",
+    [string]$SummaryPath = "",
+    [string]$StatusPath = "",
     [switch]$SkipDependencies,
     [switch]$SkipRepoClone,
     [switch]$SkipOpenCodeInstall,
@@ -12,10 +16,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 $script:CurrentStageName = "Startup"
+$script:CurrentStageNumber = 0
 $script:TotalInstallStages = 10
 $script:InstallWarnings = New-Object System.Collections.Generic.List[string]
+$script:InstallNotes = New-Object System.Collections.Generic.List[string]
 $script:TurboQuantDependenciesReady = $true
 $script:WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+$script:CurrentStatusDetail = "Pokretanje Windows install toka."
+$script:CurrentStatusActivity = "startup"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $defaultsPath = Join-Path $repoRoot "config\profiles\defaults.json"
@@ -30,6 +38,7 @@ $scriptsDir = Join-Path $InstallRoot "scripts"
 $configDir = Join-Path $InstallRoot "config"
 $assetsDir = Join-Path $InstallRoot "assets"
 $docsDir = Join-Path $InstallRoot "docs"
+$toolsDir = Join-Path $InstallRoot "tools"
 $desktopTargetDir = Join-Path $DesktopFolder "Local Qwen Home Computer"
 $statePath = Join-Path $stateDir "install-state.json"
 $installReportPath = Join-Path $stateDir "install-report.json"
@@ -39,6 +48,19 @@ $llamaBinDir = Join-Path $binDir "llama.cpp"
 $script:modelChoice = $null
 $script:modelFile = $null
 $script:TurboServerExe = $null
+$script:TranscriptStarted = $false
+
+if (-not [string]::IsNullOrWhiteSpace($LogPath)) {
+    $logDir = Split-Path -Parent $LogPath
+    if (-not [string]::IsNullOrWhiteSpace($logDir)) {
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    }
+    try {
+        Start-Transcript -Path $LogPath -Force | Out-Null
+        $script:TranscriptStarted = $true
+    } catch {
+    }
+}
 
 function Write-InstallOverview {
     param(
@@ -76,8 +98,14 @@ function Invoke-InstallStage {
     )
 
     $script:CurrentStageName = $Name
+    $script:CurrentStageNumber = $Number
+    $script:CurrentStatusActivity = "stage"
+    $script:CurrentStatusDetail = "Pokrenut korak [$Number/$($script:TotalInstallStages)] $Name."
+    Write-InstallStatus -State "running" -Detail $script:CurrentStatusDetail -ActivityType "stage" -ProgressPercent ((($Number - 1) / [double]$script:TotalInstallStages) * 100.0)
     Write-Host ("[{0}/{1}] {2}" -f $Number, $script:TotalInstallStages, $Name) -ForegroundColor Cyan
     & $Action
+    $script:CurrentStatusDetail = "Zavrsen korak [$Number/$($script:TotalInstallStages)] $Name."
+    Write-InstallStatus -State "running" -Detail $script:CurrentStatusDetail -ActivityType "stage" -ProgressPercent (($Number / [double]$script:TotalInstallStages) * 100.0)
     Write-Host ("[{0}/{1}] DONE - {2}" -f $Number, $script:TotalInstallStages, $Name) -ForegroundColor Green
     Write-Host ""
 }
@@ -87,11 +115,223 @@ function Ensure-Dir {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
 }
 
+function Write-Utf8NoBomText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($directory)) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
+
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
+function Convert-StatusValue {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return ([string]$Value).Replace("`r", " ").Replace("`n", " ").Trim()
+}
+
+function Write-InstallStatus {
+    param(
+        [string]$State = "running",
+        [string]$Detail = $script:CurrentStatusDetail,
+        [string]$ActivityType = $script:CurrentStatusActivity,
+        [Nullable[double]]$ProgressPercent = $null,
+        [string]$Source = "",
+        [string]$DownloadedGiB = "",
+        [string]$TotalGiB = "",
+        [string]$SpeedMBps = "",
+        [string]$EtaSeconds = "",
+        [string]$ModelStatus = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($StatusPath)) {
+        return
+    }
+
+    $statusDirectory = Split-Path -Parent $StatusPath
+    if (-not [string]::IsNullOrWhiteSpace($statusDirectory)) {
+        New-Item -ItemType Directory -Force -Path $statusDirectory | Out-Null
+    }
+
+    $percentText = ""
+    if ($null -ne $ProgressPercent) {
+        $percentText = [math]::Round([double]$ProgressPercent, 2)
+    }
+
+    $lines = @(
+        "[status]",
+        ("state={0}" -f (Convert-StatusValue $State)),
+        ("stageNumber={0}" -f $script:CurrentStageNumber),
+        ("totalStages={0}" -f $script:TotalInstallStages),
+        ("stageName={0}" -f (Convert-StatusValue $script:CurrentStageName)),
+        ("detail={0}" -f (Convert-StatusValue $Detail)),
+        ("activityType={0}" -f (Convert-StatusValue $ActivityType)),
+        ("progressPercent={0}" -f (Convert-StatusValue $percentText)),
+        ("source={0}" -f (Convert-StatusValue $Source)),
+        ("downloadedGiB={0}" -f (Convert-StatusValue $DownloadedGiB)),
+        ("totalGiB={0}" -f (Convert-StatusValue $TotalGiB)),
+        ("speedMBps={0}" -f (Convert-StatusValue $SpeedMBps)),
+        ("etaSeconds={0}" -f (Convert-StatusValue $EtaSeconds)),
+        ("modelStatus={0}" -f (Convert-StatusValue $ModelStatus)),
+        ("updatedAt={0}" -f (Get-Date).ToString("o"))
+    )
+
+    Write-Utf8NoBomText -Path $StatusPath -Content ($lines -join "`r`n")
+}
+
+function Set-InstallStatusDetail {
+    param(
+        [Parameter(Mandatory = $true)][string]$Detail,
+        [string]$ActivityType = $script:CurrentStatusActivity,
+        [Nullable[double]]$ProgressPercent = $null
+    )
+
+    $script:CurrentStatusDetail = $Detail
+    $script:CurrentStatusActivity = $ActivityType
+    Write-InstallStatus -Detail $Detail -ActivityType $ActivityType -ProgressPercent $ProgressPercent
+}
+
+function Invoke-WithRetry {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Action,
+        [string]$FailureMessage = "Operacija nije uspela.",
+        [int]$Attempts = 5,
+        [int]$DelayMilliseconds = 350
+    )
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            & $Action
+            return
+        } catch {
+            if ($attempt -ge $Attempts) {
+                throw "$FailureMessage $($_.Exception.Message)"
+            }
+            Start-Sleep -Milliseconds $DelayMilliseconds
+        }
+    }
+}
+
 function Get-WindowsPowerShellExe {
     if (-not (Test-Path $script:WindowsPowerShellExe)) {
         throw "Windows PowerShell nije pronadjen na ocekivanoj putanji: $($script:WindowsPowerShellExe)"
     }
     return $script:WindowsPowerShellExe
+}
+
+function Stop-RunningLocalQwenProcesses {
+    $candidates = @()
+    try {
+        $processes = Get-CimInstance Win32_Process -ErrorAction Stop
+        $protectedIds = New-Object System.Collections.Generic.HashSet[int]
+        $currentId = $PID
+        while ($currentId -and $protectedIds.Add([int]$currentId)) {
+            $currentProcess = $processes | Where-Object { $_.ProcessId -eq $currentId } | Select-Object -First 1
+            if (-not $currentProcess) {
+                break
+            }
+            $currentId = [int]$currentProcess.ParentProcessId
+            if ($currentId -le 0) {
+                break
+            }
+        }
+
+        $launcherMarkers = @(
+            "control-center.ps1",
+            "open-control-center.vbs",
+            "manage-models.ps1",
+            "repair-install.ps1",
+            "repair-model.ps1",
+            "repair-runtime.ps1",
+            "repair-config.ps1",
+            "verify-install.ps1",
+            "start-opencode.ps1",
+            "launch-agent.ps1",
+            "open-opencode.cmd"
+        )
+        $candidates = @(
+            $processes | Where-Object {
+                $commandLine = [string]$_.CommandLine
+                $commandLineLower = $commandLine.ToLowerInvariant()
+                -not $protectedIds.Contains([int]$_.ProcessId) -and
+                -not [string]::IsNullOrWhiteSpace($commandLine) -and
+                $commandLineLower.Contains($InstallRoot.ToLowerInvariant()) -and
+                ($launcherMarkers | Where-Object { $commandLineLower.Contains($_) }).Count -gt 0
+            }
+        )
+    } catch {
+        return
+    }
+
+    if (-not $candidates -or $candidates.Count -eq 0) {
+        return
+    }
+
+    $stopped = New-Object System.Collections.Generic.List[string]
+    foreach ($process in $candidates) {
+        try {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+            $stopped.Add(("{0} ({1})" -f $process.Name, $process.ProcessId)) | Out-Null
+        } catch {
+        }
+    }
+
+    if ($stopped.Count -gt 0) {
+        $message = "Zatvoreni su aktivni Local Qwen launcher procesi pre osvezavanja fajlova: {0}" -f ($stopped -join ", ")
+        $script:InstallNotes.Add($message) | Out-Null
+        Write-Host $message -ForegroundColor Yellow
+    }
+}
+
+function Add-PathEntryIfMissing {
+    param([Parameter(Mandatory = $true)][string]$PathEntry)
+
+    if (-not $PathEntry -or -not (Test-Path $PathEntry)) {
+        return
+    }
+
+    $currentPath = [Environment]::GetEnvironmentVariable("PATH", "Process")
+    $parts = @($currentPath -split ';' | Where-Object { $_ })
+    if ($parts -notcontains $PathEntry) {
+        [Environment]::SetEnvironmentVariable("PATH", "$PathEntry;$currentPath", "Process")
+    }
+}
+
+function Install-PortableNinja {
+    $ninjaDir = Join-Path $toolsDir "ninja"
+    $ninjaExe = Join-Path $ninjaDir "ninja.exe"
+    if (Test-Path $ninjaExe) {
+        Add-PathEntryIfMissing -PathEntry $ninjaDir
+        return $true
+    }
+
+    Write-Host "Preuzimam portable Ninja fallback..." -ForegroundColor Cyan
+    Ensure-Dir $ninjaDir
+    $zipPath = Join-Path $env:TEMP ("local-qwen-ninja-" + [guid]::NewGuid().ToString() + ".zip")
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/ninja-build/ninja/releases/latest/download/ninja-win.zip" -OutFile $zipPath
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $ninjaDir -Force
+        if (-not (Test-Path $ninjaExe)) {
+            throw "Portable Ninja archive nije sadrzao ninja.exe"
+        }
+        Add-PathEntryIfMissing -PathEntry $ninjaDir
+        return $true
+    } catch {
+        Write-Host "Portable Ninja fallback nije uspeo: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-WingetPackageInstalled {
@@ -166,6 +406,49 @@ function Get-PythonLauncher {
     return $null
 }
 
+function Get-OpenCodeExecutable {
+    $commandCandidates = @("opencode.cmd", "opencode.ps1", "opencode", "opencode.exe")
+    foreach ($candidate in $commandCandidates) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($command -and $command.Source -and (Test-Path $command.Source)) {
+            return $command.Source
+        }
+    }
+
+    $pathCandidates = New-Object System.Collections.Generic.List[string]
+    foreach ($base in @(
+        (Join-Path $env:APPDATA "npm"),
+        (Join-Path $env:USERPROFILE "AppData\Roaming\npm")
+    )) {
+        if ($base) {
+            $pathCandidates.Add((Join-Path $base "opencode.cmd")) | Out-Null
+            $pathCandidates.Add((Join-Path $base "opencode.ps1")) | Out-Null
+            $pathCandidates.Add((Join-Path $base "opencode")) | Out-Null
+        }
+    }
+
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        try {
+            $prefix = (& npm prefix -g 2>$null | Select-Object -Last 1)
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$prefix)) {
+                $base = ([string]$prefix).Trim()
+                foreach ($leaf in @("opencode.cmd", "opencode.ps1", "opencode")) {
+                    $pathCandidates.Add((Join-Path $base $leaf)) | Out-Null
+                }
+            }
+        } catch {
+        }
+    }
+
+    foreach ($path in ($pathCandidates | Select-Object -Unique)) {
+        if ($path -and (Test-Path $path)) {
+            return $path
+        }
+    }
+
+    return $null
+}
+
 function Invoke-Native {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -212,6 +495,12 @@ function Ensure-OptionalCommand {
 
     if (Get-Command $Name -ErrorAction SilentlyContinue) {
         return $true
+    }
+
+    if ($Name -eq "ninja") {
+        if (Install-PortableNinja) {
+            return $true
+        }
     }
 
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
@@ -375,6 +664,25 @@ function Ensure-VsBuildTools {
     Invoke-Native winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 }
 
+function Test-WindowsSdkBuildToolsPresent {
+    $rc = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\rc.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    $mt = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    return [bool]($rc -and $mt)
+}
+
+function Repair-VsBuildToolsWindowsSdk {
+    $setupExe = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe"
+    $installPath = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+    if (-not (Test-Path $setupExe) -or -not (Test-Path $installPath)) {
+        return $false
+    }
+
+    Write-Host "Dopunjavam Visual Studio Build Tools Windows SDK komponentama..." -ForegroundColor Cyan
+    & $setupExe modify --installPath $installPath --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.Windows11SDK.26100 --includeRecommended --passive --norestart
+    Start-Sleep -Seconds 5
+    return (Test-WindowsSdkBuildToolsPresent)
+}
+
 function Ensure-CudaToolkit {
     if (Get-Command nvcc -ErrorAction SilentlyContinue) {
         return
@@ -391,8 +699,16 @@ function Ensure-CudaToolkit {
 
 function Ensure-OptionalVsBuildTools {
     $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-    if (Test-Path $vcvars) {
+    if ((Test-Path $vcvars) -and (Test-WindowsSdkBuildToolsPresent)) {
         return $true
+    }
+
+    if (Test-Path $vcvars) {
+        if (Repair-VsBuildToolsWindowsSdk) {
+            return $true
+        }
+        $script:InstallWarnings.Add("TurboQuant build bice preskocen. Visual Studio Build Tools postoje, ali Windows SDK build alati (rc.exe/mt.exe) nisu dostupni.") | Out-Null
+        return $false
     }
 
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
@@ -407,7 +723,14 @@ function Ensure-OptionalVsBuildTools {
         return $false
     }
 
-    return (Test-Path $vcvars)
+    if (-not (Test-WindowsSdkBuildToolsPresent)) {
+        if (-not (Repair-VsBuildToolsWindowsSdk)) {
+            $script:InstallWarnings.Add("TurboQuant build bice preskocen. Visual Studio Build Tools su instalirani, ali Windows SDK build alati (rc.exe/mt.exe) nisu dostupni.") | Out-Null
+            return $false
+        }
+    }
+
+    return ((Test-Path $vcvars) -and (Test-WindowsSdkBuildToolsPresent))
 }
 
 function Ensure-OptionalCudaToolkit {
@@ -441,11 +764,34 @@ function Ensure-OptionalCudaToolkit {
 function Copy-FolderContent {
     param(
         [string]$Source,
-        [string]$Destination
+        [string]$Destination,
+        [switch]$ReplaceExisting
     )
 
     Ensure-Dir $Destination
-    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+    if ($ReplaceExisting) {
+        Get-ChildItem -LiteralPath $Destination -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            $targetPath = $_.FullName
+            Invoke-WithRetry -FailureMessage "Ne mogu da obrisem prethodni sadrzaj iz $targetPath." -Action {
+                Remove-Item -LiteralPath $targetPath -Recurse -Force -ErrorAction Stop
+            }
+        }
+    }
+    Invoke-WithRetry -FailureMessage "Ne mogu da kopiram sadrzaj iz $Source u $Destination." -Action {
+        Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force -ErrorAction Stop
+    }
+}
+
+function Copy-FileWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    Ensure-Dir (Split-Path -Parent $Destination)
+    Invoke-WithRetry -FailureMessage "Ne mogu da kopiram fajl iz $Source u $Destination." -Action {
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+    }
 }
 
 function Download-LlamaCppWindowsCuda {
@@ -484,6 +830,47 @@ function Test-LlamaBinaryRunnable {
     } catch {
         return $false
     }
+}
+
+function Test-IsAppControlWarningText {
+    param([Parameter(Mandatory = $true)][string]$WarningText)
+
+    $normalized = $WarningText.ToLowerInvariant()
+    return ($normalized -like "*wdac*") -or ($normalized -like "*app control*") -or ($normalized -like "*unsigned exe*")
+}
+
+function Test-HealthEndpointAlive {
+    param([int]$Port = 8091)
+
+    try {
+        $response = Invoke-RestMethod -Uri ("http://127.0.0.1:{0}/health" -f $Port) -TimeoutSec 3
+        return [string]$response.status -eq "ok"
+    } catch {
+        return $false
+    }
+}
+
+function Get-FilteredInstallWarnings {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]]$Warnings,
+        [string]$PreferredServerExe,
+        [int]$Port = 8091,
+        [bool]$HasTurboRuntime = $false
+    )
+
+    $runtimeHealthy = $HasTurboRuntime
+    if (-not $runtimeHealthy -and $PreferredServerExe -and (Test-Path $PreferredServerExe)) {
+        $runtimeHealthy = Test-LlamaBinaryRunnable -ServerExe $PreferredServerExe
+    }
+    if (-not $runtimeHealthy) {
+        $runtimeHealthy = Test-HealthEndpointAlive -Port $Port
+    }
+
+    if (-not $runtimeHealthy) {
+        return @($Warnings)
+    }
+
+    return @($Warnings | Where-Object { -not (Test-IsAppControlWarningText -WarningText ([string]$_)) })
 }
 
 function Download-RecommendedModel {
@@ -815,6 +1202,7 @@ function Write-DesktopShortcuts {
 
 try {
     Write-InstallOverview -InstallRoot $InstallRoot -DesktopTargetDir $desktopTargetDir
+    Write-InstallStatus -State "running" -Detail "Pripremam staged installer tok." -ActivityType "startup" -ProgressPercent 0
 
     Invoke-InstallStage -Number 1 -Name "Prepare folders and workspace" -Action {
         Ensure-Dir $InstallRoot
@@ -827,6 +1215,7 @@ try {
         Ensure-Dir $configDir
         Ensure-Dir $assetsDir
         Ensure-Dir $docsDir
+        Ensure-Dir $toolsDir
         Ensure-Dir $desktopTargetDir
     }
 
@@ -856,13 +1245,14 @@ try {
     }
 
     Invoke-InstallStage -Number 3 -Name "Copy launchers, scripts, config and icons" -Action {
-        Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir
-        Copy-FolderContent -Source (Join-Path $repoRoot "scripts") -Destination $scriptsDir
-        Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons")
-        Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles")
-        Copy-Item -LiteralPath (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json") -Force
-        Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt") -Force
-        Copy-Item -LiteralPath (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt") -Force
+        Stop-RunningLocalQwenProcesses
+        Copy-FolderContent -Source (Join-Path $repoRoot "launcher\windows") -Destination $launchersDir -ReplaceExisting
+        Copy-FolderContent -Source (Join-Path $repoRoot "scripts") -Destination $scriptsDir -ReplaceExisting
+        Copy-FolderContent -Source (Join-Path $repoRoot "assets\icons") -Destination (Join-Path $assetsDir "icons") -ReplaceExisting
+        Copy-FolderContent -Source (Join-Path $repoRoot "config\profiles") -Destination (Join-Path $configDir "profiles") -ReplaceExisting
+        Copy-FileWithRetry -Source (Join-Path $repoRoot "version.json") -Destination (Join-Path $InstallRoot "version.json")
+        Copy-FileWithRetry -Source (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $InstallRoot "release-notes.txt")
+        Copy-FileWithRetry -Source (Join-Path $repoRoot "release-notes.txt") -Destination (Join-Path $docsDir "release-notes.txt")
 
         foreach ($stalePath in @(
             (Join-Path $launchersDir "version.json"),
@@ -876,6 +1266,13 @@ try {
 
     Invoke-InstallStage -Number 4 -Name "Write install state and desktop shortcuts" -Action {
         $recommendedModelChoice = Get-RecommendedModelChoice
+        $requestedModelChoice = $null
+        if (-not [string]::IsNullOrWhiteSpace($ModelId)) {
+            $requestedModelChoice = Get-ModelChoiceById -ModelId $ModelId
+            if (-not $requestedModelChoice) {
+                $script:InstallWarnings.Add("Trazeni model '$ModelId' nije prepoznat; koristi se podrazumevani preporuceni izbor.") | Out-Null
+            }
+        }
         $existingInstallState = Get-ExistingInstallState
         $existingModelChoice = $null
         $existingModelComplete = $false
@@ -898,6 +1295,9 @@ try {
         $selectedModelChoice = $null
         if ($resolvedInstallModel -and $resolvedInstallModel.selectedModel -and $resolvedInstallModel.selectedModel.id) {
             $selectedModelChoice = Get-ModelChoiceById -ModelId ([string]$resolvedInstallModel.selectedModel.id)
+        }
+        if ($requestedModelChoice) {
+            $selectedModelChoice = $requestedModelChoice
         }
         if (-not $selectedModelChoice) {
             $selectedModelChoice = $recommendedModelChoice
@@ -922,6 +1322,7 @@ try {
     }
 
     Invoke-InstallStage -Number 5 -Name "Clone or verify source repositories" -Action {
+        Set-InstallStatusDetail -Detail "Proveravam potrebne source repozitorijume za llama.cpp i TurboQuant." -ActivityType "repositories" -ProgressPercent 40
         if ($SkipRepoClone) {
             Write-Host "Skipping repository clone because -SkipRepoClone was requested." -ForegroundColor Yellow
             return
@@ -938,6 +1339,7 @@ try {
     }
 
     Invoke-InstallStage -Number 6 -Name "Download or verify llama.cpp runtime" -Action {
+        Set-InstallStatusDetail -Detail "Proveravam ili preuzimam llama.cpp runtime." -ActivityType "runtime" -ProgressPercent 50
         if ($SkipLlamaDownload) {
             Write-Host "Skipping llama.cpp runtime download because -SkipLlamaDownload was requested." -ForegroundColor Yellow
         } elseif (!(Test-Path (Join-Path $llamaBinDir "llama-server.exe"))) {
@@ -955,6 +1357,7 @@ try {
     }
 
     Invoke-InstallStage -Number 7 -Name "Install or verify OpenCode" -Action {
+        Set-InstallStatusDetail -Detail "Proveravam ili instaliram OpenCode CLI." -ActivityType "opencode" -ProgressPercent 60
         if ($SkipOpenCodeInstall) {
             Write-Host "Skipping OpenCode installation because -SkipOpenCodeInstall was requested." -ForegroundColor Yellow
             return
@@ -964,27 +1367,41 @@ try {
             throw "npm nije dostupan, pa OpenCode ne moze da se instalira."
         }
 
-        if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+        if (-not (Get-OpenCodeExecutable)) {
             Invoke-Native npm install -g opencode-ai
+            if (-not (Get-OpenCodeExecutable)) {
+                throw "OpenCode instalacija je zavrsena, ali komanda i dalje nije pronadjena."
+            }
         }
     }
 
     Invoke-InstallStage -Number 8 -Name "Download or verify selected model" -Action {
+        Set-InstallStatusDetail -Detail "Proveravam da li izabrani model vec postoji ili krecem download." -ActivityType "model-download" -ProgressPercent 70
         if ($SkipModelDownload) {
             Write-Host "Skipping model download because -SkipModelDownload was requested." -ForegroundColor Yellow
             return
         }
 
         if ((!(Test-Path $script:modelFile)) -or ((Get-Item $script:modelFile -ErrorAction SilentlyContinue).Length -lt [int64]$script:modelChoice.minExpectedBytes)) {
-            Download-RecommendedModel `
-                -RepoId $script:modelChoice.source `
-                -Filename $script:modelChoice.filename `
-                -TargetPath $script:modelFile `
-                -MinExpectedBytes ([int64]$script:modelChoice.minExpectedBytes)
+            [Environment]::SetEnvironmentVariable("LOCAL_QWEN_INSTALL_STATUS_PATH", $StatusPath, "Process")
+            [Environment]::SetEnvironmentVariable("LOCAL_QWEN_INSTALL_STAGE", "8", "Process")
+            try {
+                Download-RecommendedModel `
+                    -RepoId $script:modelChoice.source `
+                    -Filename $script:modelChoice.filename `
+                    -TargetPath $script:modelFile `
+                    -MinExpectedBytes ([int64]$script:modelChoice.minExpectedBytes)
+            } finally {
+                [Environment]::SetEnvironmentVariable("LOCAL_QWEN_INSTALL_STATUS_PATH", $null, "Process")
+                [Environment]::SetEnvironmentVariable("LOCAL_QWEN_INSTALL_STAGE", $null, "Process")
+            }
+        } else {
+            Set-InstallStatusDetail -Detail "Model je vec prisutan i deluje kompletno; download nije potreban." -ActivityType "model-download" -ProgressPercent 80
         }
     }
 
     Invoke-InstallStage -Number 9 -Name "Apply settings and OpenCode wiring" -Action {
+        Set-InstallStatusDetail -Detail "Upisujem LocalQwenHome settings i povezujem OpenCode sa lokalnim endpointom." -ActivityType "config" -ProgressPercent 82
         $settings = [ordered]@{
             profile = $Profile
             llama = [ordered]@{
@@ -1021,6 +1438,7 @@ try {
     }
 
     Invoke-InstallStage -Number 10 -Name "Optional TurboQuant build and final verification" -Action {
+        Set-InstallStatusDetail -Detail "Pokrecem opcioni TurboQuant build i zavrsnu proveru zdravlja instalacije." -ActivityType "turboquant" -ProgressPercent 90
         if (-not $SkipTurboQuantBuild -and $script:TurboQuantDependenciesReady) {
             & (Get-WindowsPowerShellExe) -ExecutionPolicy Bypass -File (Join-Path $launchersDir "build-turboquant.ps1")
             if ($LASTEXITCODE -ne 0) {
@@ -1046,6 +1464,17 @@ try {
             -Defaults $defaults `
             -TurboServerExe $(if (Test-Path $script:TurboServerExe) { $script:TurboServerExe } else { $null })
 
+        $preferredServerExe = if (Test-Path $script:TurboServerExe) {
+            $script:TurboServerExe
+        } else {
+            Join-Path $llamaBinDir "llama-server.exe"
+        }
+        $filteredWarnings = @(Get-FilteredInstallWarnings -Warnings $script:InstallWarnings -PreferredServerExe $preferredServerExe -Port ([int]$defaults.server.port) -HasTurboRuntime:(Test-Path $script:TurboServerExe))
+        $script:InstallWarnings = New-Object System.Collections.Generic.List[string]
+        foreach ($warning in $filteredWarnings) {
+            $script:InstallWarnings.Add([string]$warning) | Out-Null
+        }
+
         Write-InstallReport `
             -InstallRoot $InstallRoot `
             -InstallRootStatePath $statePath `
@@ -1060,6 +1489,16 @@ try {
     }
 
     $desktopShortcutState = if ((Test-Path (Join-Path $desktopTargetDir "Local Qwen Control Center.lnk")) -and (Test-Path (Join-Path $desktopTargetDir "OpenCode - Local Qwen.lnk"))) { "OK" } else { "MISSING ITEMS" }
+    $summaryWarnings = @($script:InstallWarnings)
+    if (Test-Path $installReportPath) {
+        try {
+            $reportData = Get-Content -Raw $installReportPath | ConvertFrom-Json
+            if ($reportData.PSObject.Properties["warnings"]) {
+                $summaryWarnings = @($reportData.warnings)
+            }
+        } catch {
+        }
+    }
     $summary = @"
 Installation summary
 
@@ -1068,19 +1507,39 @@ Installation summary
 - Launchers root: $launchersDir
 - Desktop folder: $desktopTargetDir
 - Desktop shortcuts: $desktopShortcutState
-- OpenCode global install: $(if (Get-Command opencode -ErrorAction SilentlyContinue) { 'OK' } else { 'NOT FOUND' })
+- OpenCode global install: $(if (Get-OpenCodeExecutable) { 'OK' } else { 'NOT FOUND' })
 - Model path: $script:modelFile
 - Install report: $installReportPath
 "@
 
-    if ($script:InstallWarnings.Count -gt 0) {
-        $summary += "`r`nWarnings:`r`n- " + ($script:InstallWarnings -join "`r`n- ")
+    if ($summaryWarnings.Count -gt 0) {
+        $summary += "`r`nWarnings:`r`n- " + ($summaryWarnings -join "`r`n- ")
     }
 
-    Set-Content -Path (Join-Path $stateDir "install-summary.txt") -Value $summary -Encoding UTF8
+    $defaultSummaryPath = Join-Path $stateDir "install-summary.txt"
+    Write-Utf8NoBomText -Path $defaultSummaryPath -Content $summary
+    if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
+        Write-Utf8NoBomText -Path $SummaryPath -Content $summary
+    }
+    Write-InstallStatus -State "completed" -Detail "Instalacija je zavrsena. Mozes da pregledas summary i log pre klika na Finish." -ActivityType "complete" -ProgressPercent 100
     Write-Host "INSTALLATION COMPLETE" -ForegroundColor Green
     Write-Host $summary
 } catch {
+    Write-InstallStatus -State "failed" -Detail ("Instalacija je stala u koraku '{0}': {1}" -f $script:CurrentStageName, $_.Exception.Message) -ActivityType "failed"
     Write-Error ("Install failed during stage '{0}': {1}" -f $script:CurrentStageName, $_.Exception.Message)
     throw
+} finally {
+    if ($script:TranscriptStarted) {
+        try {
+            Stop-Transcript | Out-Null
+        } catch {
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($LogPath) -and (Test-Path $LogPath)) {
+        try {
+            $logContent = Get-Content -LiteralPath $LogPath -Raw
+            Write-Utf8NoBomText -Path $LogPath -Content $logContent
+        } catch {
+        }
+    }
 }

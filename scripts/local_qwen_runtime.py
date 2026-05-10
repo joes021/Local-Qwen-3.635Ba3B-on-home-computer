@@ -12,6 +12,11 @@ def load_defaults(path: str) -> dict:
         return json.load(handle)
 
 
+def load_json_file(path: Path) -> dict | list:
+    with path.open("r", encoding="utf-8-sig") as handle:
+        return json.load(handle)
+
+
 def normalize_models(defaults: dict) -> list[dict]:
     models = []
     for key, raw in defaults.get("modelChoices", {}).items():
@@ -843,6 +848,19 @@ def command_settings_preset_preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def _coerce_semver_tuple(version: str) -> tuple[int, int, int] | None:
+    if not version:
+        return None
+    raw = str(version).strip().lstrip("v")
+    parts = raw.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        return None
+
+
 def command_latest_release(args: argparse.Namespace) -> int:
     import urllib.request
 
@@ -851,12 +869,18 @@ def command_latest_release(args: argparse.Namespace) -> int:
     with urllib.request.urlopen(request, timeout=30) as response:
         payload = json.loads(response.read().decode("utf-8"))
     tag_name = payload.get("tag_name", "").lstrip("v")
+    current_tuple = _coerce_semver_tuple(args.current_version)
+    latest_tuple = _coerce_semver_tuple(tag_name)
+    if current_tuple is not None and latest_tuple is not None:
+        update_available = latest_tuple > current_tuple
+    else:
+        update_available = bool(tag_name and tag_name != args.current_version)
     print(
         json.dumps(
             {
                 "currentVersion": args.current_version,
                 "latestVersion": tag_name,
-                "updateAvailable": bool(tag_name and tag_name != args.current_version),
+                "updateAvailable": update_available,
                 "releaseUrl": payload.get("html_url"),
             },
             indent=2,
@@ -1696,8 +1720,7 @@ def summarize_history_payload(history: list[dict]) -> dict:
 def command_token_metrics(args: argparse.Namespace) -> int:
     response_path = Path(args.response_file)
     history_path = Path(args.history_file)
-    with response_path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+    payload = load_json_file(response_path)
 
     payload["_label"] = args.label
     current = summarize_token_metrics(payload)
@@ -1705,8 +1728,7 @@ def command_token_metrics(args: argparse.Namespace) -> int:
     history = []
     if history_path.exists():
         try:
-            with history_path.open("r", encoding="utf-8") as handle:
-                history = json.load(handle)
+            history = load_json_file(history_path)
         except Exception:
             history = []
 
@@ -1739,8 +1761,7 @@ def command_log_token_metrics(args: argparse.Namespace) -> int:
     history: list[dict] = []
     if history_path.exists():
         try:
-            with history_path.open("r", encoding="utf-8") as handle:
-                history = json.load(handle)
+            history = load_json_file(history_path)
         except Exception:
             history = []
 

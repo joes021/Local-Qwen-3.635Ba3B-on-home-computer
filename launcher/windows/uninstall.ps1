@@ -1,11 +1,11 @@
-. (Join-Path $PSScriptRoot "local-qwen-common.ps1")
-
 param(
     [ValidateSet("everything", "keep-models", "shortcuts-only")]
     [string]$Mode
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
 function Remove-PathIfExists {
     param([string]$Path)
@@ -22,14 +22,7 @@ function Remove-PathIfExists {
 
 function Remove-DesktopLaunchers {
     $desktopDir = Get-DesktopTargetDir
-    $shortcutNames = @(
-        "Local Qwen Control Center.lnk",
-        "OpenCode - Local Qwen.lnk",
-        "Verify Local Qwen Install.lnk",
-        "Repair Windows App Control.lnk",
-        "Uninstall Local Qwen.lnk"
-    )
-    foreach ($name in $shortcutNames) {
+    foreach ($name in (Get-DesktopShortcutNames)) {
         $path = Join-Path $desktopDir $name
         if (Test-Path $path) {
             Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
@@ -74,7 +67,7 @@ function Get-UninstallMode {
     Write-Host "  [2] Obrisi aplikaciju, zadrzi modele"
     Write-Host "  [3] Obrisi sve ukljucujuci modele (default)"
     $choice = Read-Host "Izbor [1/2/3]"
-    switch ([string]$choice).Trim() {
+    switch (([string]$choice).Trim()) {
         "1" { return "shortcuts-only" }
         "2" { return "keep-models" }
         "3" { return "everything" }

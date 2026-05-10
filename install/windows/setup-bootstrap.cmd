@@ -44,6 +44,6 @@ if not "%EXITCODE%"=="0" (
 
 echo.
 echo Installation complete.
-echo This window will close automatically in 3 seconds.
-timeout /t 3 /nobreak >nul
+echo Press any key to close this window.
+pause >nul
 exit /b 0

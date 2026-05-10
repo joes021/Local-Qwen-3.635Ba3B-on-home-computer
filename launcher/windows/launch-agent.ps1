@@ -204,16 +204,15 @@ if ($audit.requiresWarning) {
     $audit.reasons | ForEach-Object { Write-Host "- $_" -ForegroundColor Yellow }
 }
 
-if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
-    throw "OpenCode nije pronadjen u PATH-u."
-}
+$openCodeExe = Get-OpenCodeExecutable
 
 Ensure-LlamaServer -SelectedProfile $selectedProfile
 
 $windowTitle = "OpenCode Agent | $SecurityMode | $CapabilityMode"
 $escapedConfigDir = $sessionRoot.Replace("'", "''")
 $escapedTitle = $windowTitle.Replace("'", "''")
-$command = "`$env:OPENCODE_CONFIG_DIR='$escapedConfigDir'; `$Host.UI.RawUI.WindowTitle='$escapedTitle'; opencode"
+$escapedOpenCodeExe = $openCodeExe.Replace("'", "''")
+$command = "`$env:OPENCODE_CONFIG_DIR='$escapedConfigDir'; `$Host.UI.RawUI.WindowTitle='$escapedTitle'; & '$escapedOpenCodeExe'"
 
 Start-Process -FilePath (Get-WindowsPowerShellExe) -WorkingDirectory $resolvedFolder -ArgumentList @(
     "-NoExit",

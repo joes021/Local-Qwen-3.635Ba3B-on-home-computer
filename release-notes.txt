@@ -1,5 +1,24 @@
 Local Qwen Home Computer - recent fixes
 
+v2.9.8
+- Windows installer sada prikazuje zivi tok tokom dugacke `Configuring LocalQwenHome workspace, runtime, model and OpenCode...` faze: u samom setup prozoru se osvezavaju trenutni korak, detalj aktivnosti, a tokom model downloada i procenat, brzina, preuzeto i ETA, tako da setup vise ne deluje kao da je zablokirao kada progress bar stigne do kraja
+- Windows `Control Center` je ciscen po tabovima: `Pokretanje` sada sadrzi samo glavne akcije za server i klijente, servisne akcije su prebacene u poseban `Tools` tab, a dodat je i novi `Benchmark` tab sa live throughput grafikom (input/output/ukupno tok/s) koji koristi regularne zahteve iz `OpenCode`, `llama.cpp` web-a i `Test throughput` toka
+- `Health` i `Agent` prikazi vise ne seku duzi tekst: `Stanje` u `Health` tabu i `Risk` u `Agent` tabu sada koriste skrolabilne viselinijske boxeve sa vise prostora, pa warning i audit objasnjenja mogu da se procitaju do kraja
+- Windows model info panel sada koristi puni `model-browser` payload umesto siromasnijeg filter rezultata, pa `Installed`, `Need disk`, `Free disk`, `Enough disk` i procena brzine vise ne ostaju prazni, a za aktivni model ume i da prikaze poslednju izmerenu throughput brzinu kada benchmark podaci vec postoje
+- Gornje `OpenCode` quick dugme sada koristi isti direktni launcher tok kao i `Run OpenCode` iz `Pokretanje` taba, pa oba otvaraju isti lokalni OpenCode launcher bez oslanjanja na nepouzdani `PerformClick()` preko drugog taba
+
+v2.9.7
+- Kompletan Windows QA prolaz zatvorio je niz kvarova u installer/update/repair/uninstall toku: launcher fajlovi i release beleške se sada pouzdanije osvežavaju, `uninstall` briše tačne desktop prečice koje installer i pravi, a `repair-install` više ne puca kada su warning liste prazne ili kada je runtime payload delimično prazan
+- Windows `Model browser` više ne pada na praznim `search/family` argumentima i tačno prikazuje lokalnu veličinu instaliranog modela i potreban dodatni disk prostor, pa status instaliranih modela više ne deluje kao da je sve `0.0 GiB`
+- Windows `OpenCode` launcher je potvrđen kroz živu proveru i više ne zavisi od golog `PATH` lookup-a, nego pouzdano pronalazi globalni npm `opencode.cmd` i pokreće ga sa lokalnim `OPENCODE_CONFIG_DIR`
+- Windows `TurboQuant` build tok je doveden do stvarnog rada: build skripta sada oporavlja `PATH`, Windows SDK `LIB/INCLUDE`, čisti stari CMake generator cache kada je potrebno i uspešno završava do `llama-server.exe`, a `verify-install` sada potvrđuje `UsesTurboQuant: True`
+- Dodat je `dump-ui-text.ps1` dijagnostički alat za skupljanje UI tekstova, hash-eva i release-notes signala iz instalirane kopije, da sledeći ručni QA lakše pokaže da li se na mašini zaista vrti novi Control Center
+
+v2.9.6
+- Windows installer sada ima direktan portable `ninja` fallback bez oslanjanja na `winget`, pa TurboQuant build vise ne mora da bude preskocen samo zato sto sistem nema `winget`, a `ninja` nije unapred instaliran
+- Windows `build-turboquant.ps1` sada ume da koristi lokalno instalirani `ninja.exe` iz `LocalQwenHome\\tools\\ninja` i automatski ga ubacuje u process `PATH`, tako da TurboQuant build koristi isti fallback alat i pri prvom install-u i pri kasnijem repair/build toku
+- Windows `Control Center` background worker sada prosledjuje eksplicitnu PowerShell putanju u `Start-Job`, pa klikovi na pozadinske akcije vise ne deluju kao da se nista nije desilo kada job runspace nema lokalne helper funkcije
+
 v2.9.5
 - Windows installer vise ne koristi nepodrzanu Inno konstantu `{userprofile}` za default install putanju; umesto toga cita `USERPROFILE` iz okruzenja sa sigurnim fallback-om, pa setup vise ne puca na startu sa `runtime error ... unknown constant userprofile`
 - Dodat je packaging test koji eksplicitno proverava da se `{userprofile}` vise ne pojavi u Windows installer skripti

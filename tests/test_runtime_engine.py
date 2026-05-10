@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import pathlib
 import subprocess
@@ -10,6 +11,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "local_qwen_runtime.py"
 DEFAULTS_PATH = REPO_ROOT / "config" / "profiles" / "defaults.json"
 
+SPEC = importlib.util.spec_from_file_location("local_qwen_runtime", SCRIPT_PATH)
+RUNTIME_MODULE = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(RUNTIME_MODULE)
+
 
 def run_runtime_command(*args):
     command = [sys.executable, str(SCRIPT_PATH), *args]
@@ -18,6 +24,15 @@ def run_runtime_command(*args):
 
 
 class RuntimeEngineTests(unittest.TestCase):
+    def test_semver_tuple_parses_normal_versions(self):
+        self.assertEqual(RUNTIME_MODULE._coerce_semver_tuple("2.9.7"), (2, 9, 7))
+        self.assertEqual(RUNTIME_MODULE._coerce_semver_tuple("v2.9.6"), (2, 9, 6))
+
+    def test_semver_tuple_rejects_invalid_versions(self):
+        self.assertIsNone(RUNTIME_MODULE._coerce_semver_tuple(""))
+        self.assertIsNone(RUNTIME_MODULE._coerce_semver_tuple("2.9"))
+        self.assertIsNone(RUNTIME_MODULE._coerce_semver_tuple("latest"))
+
     def test_recommendation_prefers_iq2_for_6gb_gpu(self):
         code, stdout, stderr = run_runtime_command(
             "recommend",
@@ -229,6 +244,36 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertIn("best-quality-model", quality["useCaseBadges"])
         self.assertGreater(quality["diskNeededGiB"], 0)
         self.assertFalse(quality["hasEnoughDisk"])
+
+    def test_model_browser_keeps_non_active_installed_model_visible_with_own_size(self):
+        code, stdout, stderr = run_runtime_command(
+            "model-browser",
+            "--defaults",
+            str(DEFAULTS_PATH),
+            "--gpu-mib",
+            "6144",
+            "--ram-gib",
+            "16",
+            "--cpu-threads",
+            "12",
+            "--current-model-id",
+            "gemma-3-4b-it-Q4_K_M.gguf",
+            "--installed-model-ids",
+            "qwen2.5-coder-7b-instruct-q5_k_m.gguf",
+            "--installed-model-sizes-json",
+            json.dumps({
+                "qwen2.5-coder-7b-instruct-q5_k_m.gguf": 5600000000,
+            }),
+            "--free-disk-gib",
+            "40",
+            "--search",
+            "coder",
+        )
+        self.assertEqual(code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        coder = next(item for item in payload["models"] if item["id"] == "qwen2.5-coder-7b-instruct-q5_k_m.gguf")
+        self.assertTrue(coder["installed"])
+        self.assertGreater(coder["installedSizeGiB"], 0)
 
     def test_settings_presets_expose_all_quick_presets(self):
         code, stdout, stderr = run_runtime_command(
@@ -706,6 +751,38 @@ class RuntimeEngineTests(unittest.TestCase):
             self.assertEqual(len(payload["activity"]["recentActivities"]), 1)
             self.assertEqual(payload["activity"]["recentActivities"][0]["source"], "testPrompt")
             self.assertEqual(payload["activity"]["recentActivities"][0]["status"], "ok")
+
+    def test_token_metrics_accepts_utf8_bom_response_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            response_path = temp_path / "response-bom.json"
+            history_path = temp_path / "history.json"
+            response_payload = {
+                "_elapsed_ms": 1500,
+                "usage": {
+                    "prompt_tokens": 60,
+                    "completion_tokens": 30,
+                },
+                "timings": {
+                    "prompt_ms": 750,
+                    "predicted_ms": 500,
+                },
+            }
+            response_path.write_text(json.dumps(response_payload), encoding="utf-8-sig")
+
+            code, stdout, stderr = run_runtime_command(
+                "token-metrics",
+                "--response-file",
+                str(response_path),
+                "--history-file",
+                str(history_path),
+                "--label",
+                "test-prompt",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["current"]["promptTokens"], 60)
+            self.assertEqual(payload["current"]["completionTokens"], 30)
 
     def test_log_token_metrics_parses_llama_timing_block_and_dedupes(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -83,6 +83,13 @@ Ensure-Directory (Join-Path $root "assets")
 Ensure-Directory (Join-Path $root "docs")
 
 try {
+    $restoredSupport = @(Restore-BundledSupportFiles)
+    if ($restoredSupport.Count -gt 0) {
+        Add-UniqueListItem -List $found -Value "Bundled support fajlovi su provereni i osvezeni."
+        Add-UniqueListItem -List $messages -Value ("Bundled support osvezen: {0}" -f ($restoredSupport -join ", "))
+        Add-UniqueListItem -List $fixed -Value "Launchers, scripts i release-notes su osvezeni iz bootstrap paketa."
+    }
+
     Add-UniqueListItem -List $found -Value "Desktop shortcuts provereni i po potrebi obnovljeni."
     Repair-DesktopShortcuts
     Add-UniqueListItem -List $messages -Value "Desktop shortcuts su ponovo napravljeni."
@@ -137,10 +144,10 @@ $repairSummaryPath = Get-RepairSummaryPath
 $repairSummary = Invoke-RuntimeEngineJson -Arguments @(
     "repair-summary",
     "--outcome", $(if ($manual.Count -gt 0) { "partial" } else { "completed" }),
-    "--found-json", ((@($found) | ConvertTo-Json -Compress)),
-    "--fixed-json", ((@($fixed) | ConvertTo-Json -Compress)),
-    "--manual-json", ((@($manual) | ConvertTo-Json -Compress)),
-    "--notes-json", ((@($notes) | ConvertTo-Json -Compress))
+    "--found-json", (Convert-CollectionToJsonArrayString -Collection $found),
+    "--fixed-json", (Convert-CollectionToJsonArrayString -Collection $fixed),
+    "--manual-json", (Convert-CollectionToJsonArrayString -Collection $manual),
+    "--notes-json", (Convert-CollectionToJsonArrayString -Collection $notes)
 )
 $repairSummary | ConvertTo-Json -Depth 20 | Set-Content -Path $repairSummaryPath -Encoding UTF8
 

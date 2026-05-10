@@ -5,9 +5,7 @@ param(
 
 . (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
-if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
-    throw "OpenCode nije pronadjen u PATH-u."
-}
+$openCodeExe = Get-OpenCodeExecutable
 
 Update-OpenCodeConfig | Out-Null
 
@@ -28,8 +26,16 @@ if (-not (Test-LlamaHealth)) {
     throw "llama.cpp server nije dostupan."
 }
 
+function Get-OpenCodeLaunchCommand {
+    param([Parameter(Mandatory = $true)][string]$ExecutablePath)
+
+    $escapedConfigPath = (Split-Path -Parent (Get-OpenCodeConfigPath)).Replace("'", "''")
+    $escapedExecutable = $ExecutablePath.Replace("'", "''")
+    return "`$env:OPENCODE_CONFIG_DIR='$escapedConfigPath'; & '$escapedExecutable'"
+}
+
 Start-Process -FilePath (Get-WindowsPowerShellExe) -ArgumentList @(
     "-NoExit",
     "-Command",
-    "opencode"
+    (Get-OpenCodeLaunchCommand -ExecutablePath $openCodeExe)
 )

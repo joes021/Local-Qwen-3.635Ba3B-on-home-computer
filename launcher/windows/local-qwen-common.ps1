@@ -194,12 +194,76 @@ function Get-OpenCodeConfigPath {
     return Join-Path $env:USERPROFILE ".config\opencode\opencode.json"
 }
 
+function Get-OpenCodeExecutable {
+    $commandCandidates = @("opencode.cmd", "opencode.ps1", "opencode", "opencode.exe")
+    foreach ($candidate in $commandCandidates) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($command -and $command.Source -and (Test-Path $command.Source)) {
+            return $command.Source
+        }
+    }
+
+    $pathCandidates = New-Object System.Collections.Generic.List[string]
+    foreach ($base in @(
+        (Join-Path $env:APPDATA "npm"),
+        (Join-Path $env:USERPROFILE "AppData\Roaming\npm")
+    )) {
+        if ($base) {
+            $pathCandidates.Add((Join-Path $base "opencode.cmd")) | Out-Null
+            $pathCandidates.Add((Join-Path $base "opencode.ps1")) | Out-Null
+            $pathCandidates.Add((Join-Path $base "opencode")) | Out-Null
+        }
+    }
+
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        try {
+            $prefix = (& npm prefix -g 2>$null | Select-Object -Last 1)
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$prefix)) {
+                $base = ([string]$prefix).Trim()
+                foreach ($leaf in @("opencode.cmd", "opencode.ps1", "opencode")) {
+                    $pathCandidates.Add((Join-Path $base $leaf)) | Out-Null
+                }
+            }
+        } catch {
+        }
+    }
+
+    foreach ($path in ($pathCandidates | Select-Object -Unique)) {
+        if ($path -and (Test-Path $path)) {
+            return $path
+        }
+    }
+
+    throw "OpenCode nije pronadjen. Proveri globalnu npm instalaciju ili PATH."
+}
+
+function Test-OpenCodeAvailable {
+    try {
+        [void](Get-OpenCodeExecutable)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Get-DesktopTargetDir {
     $state = Get-InstallState
     if ($state.PSObject.Properties["desktopTargetDir"] -and $state.desktopTargetDir) {
         return [string]$state.desktopTargetDir
     }
     return (Join-Path $env:USERPROFILE "Desktop\Local Qwen Home Computer")
+}
+
+function Get-DesktopShortcutNames {
+    return @(
+        "Local Qwen Control Center.lnk",
+        "OpenCode - Local Qwen.lnk",
+        "Verify Local Qwen Install.lnk",
+        "Repair Local Qwen Install.lnk",
+        "Test Local Qwen Prompt.lnk",
+        "Update Local Qwen.lnk",
+        "Uninstall Local Qwen.lnk"
+    )
 }
 
 function Get-LogDirectory {
@@ -298,6 +362,30 @@ function Get-RepairSummaryData {
 function Get-TokenMetricsHistoryPath {
     $root = Get-LocalQwenRoot
     return Join-Path $root "state\token-metrics-history.json"
+}
+
+function Get-ModelDownloadProgressPath {
+    $root = Get-LocalQwenRoot
+    return Join-Path $root "state\model-download-progress.json"
+}
+
+function Clear-ModelDownloadProgress {
+    $path = Get-ModelDownloadProgressPath
+    if (Test-Path $path) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-ModelDownloadProgressData {
+    $path = Get-ModelDownloadProgressPath
+    if (Test-Path $path) {
+        try {
+            return Get-Content -Raw $path | ConvertFrom-Json
+        } catch {
+            return $null
+        }
+    }
+    return $null
 }
 
 function Update-TokenMetricsFromLatestLogs {
@@ -421,6 +509,35 @@ function Invoke-RuntimeEngineJson {
     }
 
     return ($output | Out-String | ConvertFrom-Json)
+}
+
+function Add-OptionalRuntimeArgument {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Flag,
+        [string]$Value
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        $ArgumentList.Add($Flag) | Out-Null
+        $ArgumentList.Add($Value) | Out-Null
+    }
+}
+
+function Convert-CollectionToJsonArrayString {
+    param($Collection)
+
+    $items = New-Object System.Collections.Generic.List[object]
+    if ($null -ne $Collection) {
+        foreach ($item in $Collection) {
+            $items.Add($item) | Out-Null
+        }
+    }
+    if ($items.Count -eq 0) {
+        return "[]"
+    }
+
+    return ($items | ConvertTo-Json -Depth 10 -Compress)
 }
 
 function Get-LlamaHealthUrl {
@@ -787,7 +904,7 @@ function Get-InstalledModelIds {
     $state = Get-InstallState
     foreach ($item in $catalog) {
         $candidatePath = Join-Path (Split-Path -Parent $state.modelFile) ([string]$item.filename)
-        if (Test-ModelFileLooksComplete -Path $candidatePath) {
+        if (Test-ModelFileLooksComplete -Path $candidatePath -ModelId ([string]$item.id)) {
             $installed.Add([string]$item.id) | Out-Null
         }
     }
@@ -870,6 +987,7 @@ function Get-ModelBrowserPayload {
     $cpuThreads = [Environment]::ProcessorCount
     $state = Get-InstallState
     $freeDiskGiB = Get-ModelsDriveFreeGiB
+    $sizeMap = Get-InstalledModelSizeMap
     $arguments = @(
         "model-browser",
         "--defaults", $defaultsPath,
@@ -878,18 +996,38 @@ function Get-ModelBrowserPayload {
         "--cpu-threads", ([string]$cpuThreads),
         "--current-model-id", ([string]$state.modelId),
         "--installed-model-ids", ([string]((Get-InstalledModelIds) -join ",")),
-        "--installed-model-sizes-json", ((Get-InstalledModelSizeMap | ConvertTo-Json -Compress)),
-        "--free-disk-gib", ([string]$(if ($null -ne $freeDiskGiB) { $freeDiskGiB } else { -1 })),
-        "--search", $Search,
-        "--family", $Family
+        "--installed-model-sizes-json", ($sizeMap | ConvertTo-Json -Compress),
+        "--free-disk-gib", ([string]$(if ($null -ne $freeDiskGiB) { $freeDiskGiB } else { -1 }))
     )
+    if (-not [string]::IsNullOrWhiteSpace($Search)) {
+        $arguments += @("--search", $Search)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Family)) {
+        $arguments += @("--family", $Family)
+    }
     if ($InstalledOnly) { $arguments += "--installed-only" }
     if ($RecommendedOnly) { $arguments += "--recommended-only" }
     if ($FitOnly) { $arguments += "--fit-only" }
     if ($CoderOnly) { $arguments += "--coder-only" }
     if ($VerifiedOnly) { $arguments += "--verified-only" }
 
-    return Invoke-RuntimeEngineJson -Arguments $arguments
+    $payload = Invoke-RuntimeEngineJson -Arguments $arguments
+    if ($payload -and $payload.models) {
+        foreach ($model in @($payload.models)) {
+            $modelId = [string]$model.id
+            if ($sizeMap.Contains($modelId)) {
+                $installedBytes = [int64]$sizeMap[$modelId]
+                $model.installedSizeBytes = $installedBytes
+                $model.installedSizeGiB = [math]::Round(($installedBytes / 1GB), 2)
+                $diskNeededBytes = [math]::Max(0, [int64]$model.diskNeededBytes - $installedBytes)
+                $model.diskNeededBytes = $diskNeededBytes
+                $model.diskNeededGiB = [math]::Round(($diskNeededBytes / 1GB), 2)
+                $model.hasEnoughDisk = if ($null -eq $freeDiskGiB) { $true } else { ([double]$freeDiskGiB -ge [double]$model.diskNeededGiB) }
+            }
+        }
+    }
+
+    return $payload
 }
 
 function Get-LatestReleaseInfo {
@@ -929,14 +1067,16 @@ function Get-OnboardingChecklist {
     $configPath = Get-OpenCodeConfigPath
     $profile = [string](Get-Settings).profile
 
-    return Invoke-RuntimeEngineJson -Arguments @(
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    @(
         "onboarding-checklist",
         "--has-server", ([string]$hasServer).ToLower(),
         "--has-model", ([string]$hasModel).ToLower(),
-        "--has-opencode-config", ([string](Test-Path $configPath)).ToLower(),
-        "--profile", $profile,
-        "--model-id", ([string]$state.modelId)
-    )
+        "--has-opencode-config", ([string](Test-Path $configPath)).ToLower()
+    ) | ForEach-Object { $arguments.Add($_) | Out-Null }
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value $profile
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
+    return Invoke-RuntimeEngineJson -Arguments $arguments
 }
 
 function Get-HealthCenterData {
@@ -958,19 +1098,22 @@ function Get-HealthCenterData {
 
     $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
     $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
+    $warningsJson = Convert-CollectionToJsonArrayString -Collection $warnings
 
-    return Invoke-RuntimeEngineJson -Arguments @(
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    @(
         "health-center",
         "--has-server", ([string]$health).ToLower(),
         "--has-model", ([string]$hasModel).ToLower(),
         "--has-runtime", ([string]$runtimeOk).ToLower(),
         "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
         "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
-        "--lifecycle-state", ([string](Get-ServiceLifecycleState).state),
-        "--model-id", ([string]$state.modelId),
-        "--profile", ([string](Get-Settings).profile),
-        "--warnings-json", (($warnings | ConvertTo-Json -Depth 10 -Compress))
-    )
+        "--warnings-json", $warningsJson
+    ) | ForEach-Object { $arguments.Add($_) | Out-Null }
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--lifecycle-state" -Value ([string](Get-ServiceLifecycleState).state)
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value ([string](Get-Settings).profile)
+    return Invoke-RuntimeEngineJson -Arguments $arguments
 }
 
 function Get-RepairPlanData {
@@ -992,19 +1135,22 @@ function Get-RepairPlanData {
 
     $reportPath = Join-Path (Get-LocalQwenRoot) "state\install-report.json"
     $warnings = Get-EffectiveInstallWarnings -HealthOk:$health
+    $warningsJson = Convert-CollectionToJsonArrayString -Collection $warnings
 
-    return Invoke-RuntimeEngineJson -Arguments @(
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    @(
         "repair-plan",
         "--has-server", ([string]$health).ToLower(),
         "--has-model", ([string]$hasModel).ToLower(),
         "--has-runtime", ([string]$runtimeOk).ToLower(),
         "--has-opencode-config", ([string](Test-Path (Get-OpenCodeConfigPath))).ToLower(),
         "--has-install-report", ([string](Test-Path $reportPath)).ToLower(),
-        "--lifecycle-state", ([string](Get-ServiceLifecycleState).state),
-        "--model-id", ([string]$state.modelId),
-        "--profile", ([string](Get-Settings).profile),
-        "--warnings-json", (($warnings | ConvertTo-Json -Depth 10 -Compress))
-    )
+        "--warnings-json", $warningsJson
+    ) | ForEach-Object { $arguments.Add($_) | Out-Null }
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--lifecycle-state" -Value ([string](Get-ServiceLifecycleState).state)
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--model-id" -Value ([string]$state.modelId)
+    Add-OptionalRuntimeArgument -ArgumentList $arguments -Flag "--profile" -Value ([string](Get-Settings).profile)
+    return Invoke-RuntimeEngineJson -Arguments $arguments
 }
 
 function Get-InstallReportObject {
@@ -1128,13 +1274,16 @@ function Set-SelectedModel {
 }
 
 function Test-ModelFileLooksComplete {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$ModelId = $null
+    )
 
     if (!(Test-Path $Path)) {
         return $false
     }
 
-    $meta = Get-ModelMetadata
+    $meta = Get-ModelMetadata -ModelId $ModelId
     if (-not $meta) {
         return $true
     }
@@ -1189,6 +1338,7 @@ function Download-RecommendedModel {
         throw "Python nije pronadjen u PATH-u."
     }
 
+    Clear-ModelDownloadProgress
     & $python.Command @($python.Arguments + @("-m", "pip", "install", "--user", "-U", "huggingface_hub"))
     if ($LASTEXITCODE -ne 0) {
         throw "huggingface_hub instalacija nije uspela."
@@ -1197,6 +1347,7 @@ function Download-RecommendedModel {
     $targetDir = Split-Path -Parent $state.modelFile
     Ensure-Directory $targetDir
     $tmpPy = Join-Path $env:TEMP "local_qwen_repair_model.py"
+    $progressPath = Get-ModelDownloadProgressPath
     $sources = @($meta.sources)
     if ($sources.Count -eq 0 -and $meta.source) {
         $sources = @([pscustomobject]@{ repo = $meta.source; filename = $meta.filename })
@@ -1205,26 +1356,173 @@ function Download-RecommendedModel {
     $sourceJson = ($sources | ConvertTo-Json -Depth 10 -Compress)
     $code = @"
 import json
+import os
+import time
 import sys
-from huggingface_hub import hf_hub_download
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 sources = json.loads(r'''$sourceJson''')
-local_dir = r"$targetDir"
+local_dir = Path(r"$targetDir")
+target_file = local_dir / r"$($meta.filename)"
+progress_path = Path(r"$progressPath")
+model_id = r"$ModelId"
+min_expected_bytes = int($([int64]$meta.minExpectedBytes))
+install_status_path = os.environ.get("LOCAL_QWEN_INSTALL_STATUS_PATH", "").strip()
+install_stage = os.environ.get("LOCAL_QWEN_INSTALL_STAGE", "8").strip() or "8"
 last_error = None
+
+def write_progress(payload):
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps(payload), encoding="utf-8")
+
+def write_install_status(payload):
+    if not install_status_path:
+        return
+    lines = [
+        "[status]",
+        "state=running",
+        f"stageNumber={install_stage}",
+        "totalStages=10",
+        "stageName=Download or verify selected model",
+        f"detail={payload.get('message', '')}",
+        "activityType=model-download",
+        f"progressPercent={payload.get('percent', '') if payload.get('percent') is not None else ''}",
+        f"source={payload.get('source', '') or ''}",
+        f"downloadedGiB={payload.get('downloadedGiB', '') if payload.get('downloadedGiB') is not None else ''}",
+        f"totalGiB={payload.get('totalGiB', '') if payload.get('totalGiB') is not None else ''}",
+        f"speedMBps={payload.get('speedMBps', '') if payload.get('speedMBps') is not None else ''}",
+        f"etaSeconds={payload.get('etaSeconds', '') if payload.get('etaSeconds') is not None else ''}",
+        f"modelStatus={payload.get('status', '') or ''}",
+        f"updatedAt={time.time()}",
+    ]
+    Path(install_status_path).write_text("\n".join(lines), encoding="utf-8")
+
+initial_payload = {
+    "status": "starting",
+    "modelId": model_id,
+    "fileName": target_file.name,
+    "message": "Pripremam download...",
+    "updatedAt": time.time(),
+}
+write_progress(initial_payload)
+write_install_status(initial_payload)
+
 for item in sources:
     try:
-        hf_hub_download(
-            repo_id=item["repo"],
-            filename=item["filename"],
-            local_dir=local_dir,
-            local_dir_use_symlinks=False,
-        )
-        print(item["repo"])
+        repo = item["repo"]
+        filename = item["filename"]
+        url = f"https://huggingface.co/{repo}/resolve/main/{filename}"
+        request = Request(url, headers={"User-Agent": "LocalQwenSetup/1.0"})
+        with urlopen(request) as response:
+            total_bytes = int(response.headers.get("Content-Length") or "0")
+            local_dir.mkdir(parents=True, exist_ok=True)
+            part_path = target_file.with_suffix(target_file.suffix + ".part")
+            downloaded = 0
+            started = time.time()
+            next_emit = 0.0
+            starting_payload = {
+                "status": "downloading",
+                "modelId": model_id,
+                "fileName": target_file.name,
+                "source": repo,
+                "url": url,
+                "totalBytes": total_bytes,
+                "downloadedBytes": 0,
+                "downloadedGiB": 0.0,
+                "totalGiB": round(total_bytes / (1024 ** 3), 2) if total_bytes else None,
+                "speedMBps": 0.0,
+                "etaSeconds": None,
+                "percent": 0.0,
+                "message": f"Preuzimam {filename} sa {repo}",
+                "updatedAt": started,
+            }
+            write_progress(starting_payload)
+            write_install_status(starting_payload)
+            with open(part_path, "wb") as handle:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    downloaded += len(chunk)
+                    now = time.time()
+                    if now >= next_emit:
+                        elapsed = max(0.001, now - started)
+                        speed_mbps = (downloaded / (1024 * 1024)) / elapsed
+                        eta = None
+                        percent = None
+                        if total_bytes > 0:
+                            remaining = max(0, total_bytes - downloaded)
+                            eta = int(remaining / max(1, downloaded / elapsed))
+                            percent = round((downloaded / total_bytes) * 100, 2)
+                        payload = {
+                            "status": "downloading",
+                            "modelId": model_id,
+                            "fileName": target_file.name,
+                            "source": repo,
+                            "url": url,
+                            "totalBytes": total_bytes,
+                            "downloadedBytes": downloaded,
+                            "downloadedGiB": round(downloaded / (1024 ** 3), 2),
+                            "totalGiB": round(total_bytes / (1024 ** 3), 2) if total_bytes else None,
+                            "speedMBps": round(speed_mbps, 2),
+                            "etaSeconds": eta,
+                            "percent": percent,
+                            "message": f"Preuzimam {filename} sa {repo}",
+                            "updatedAt": now,
+                        }
+                        write_progress(payload)
+                        write_install_status(payload)
+                        next_emit = now + 1.0
+            if total_bytes and downloaded < total_bytes:
+                raise RuntimeError("Download je prekinut pre nego sto je sav sadrzaj stigao.")
+            if downloaded < min_expected_bytes:
+                raise RuntimeError(f"Model deluje nepotpuno: {downloaded} < {min_expected_bytes}")
+            os.replace(part_path, target_file)
+            completed_payload = {
+                "status": "completed",
+                "modelId": model_id,
+                "fileName": target_file.name,
+                "source": repo,
+                "totalBytes": downloaded,
+                "downloadedBytes": downloaded,
+                "downloadedGiB": round(downloaded / (1024 ** 3), 2),
+                "totalGiB": round(downloaded / (1024 ** 3), 2),
+                "speedMBps": None,
+                "etaSeconds": 0,
+                "percent": 100.0,
+                "message": f"Download zavrsen sa {repo}",
+                "updatedAt": time.time(),
+            }
+            write_progress(completed_payload)
+            write_install_status(completed_payload)
+        print(repo)
         raise SystemExit(0)
-    except Exception as exc:
+    except (HTTPError, URLError, RuntimeError, OSError) as exc:
         last_error = exc
+        retry_payload = {
+            "status": "retrying",
+            "modelId": model_id,
+            "fileName": target_file.name,
+            "source": item.get("repo"),
+            "message": f"Neuspeo pokusaj sa {item.get('repo')}: {exc}",
+            "updatedAt": time.time(),
+        }
+        write_progress(retry_payload)
+        write_install_status(retry_payload)
 
 if last_error is not None:
+    failed_payload = {
+        "status": "failed",
+        "modelId": model_id,
+        "fileName": target_file.name,
+        "message": str(last_error),
+        "updatedAt": time.time(),
+    }
+    write_progress(failed_payload)
+    write_install_status(failed_payload)
     raise last_error
 "@
     Set-Content -Path $tmpPy -Value $code -Encoding UTF8
@@ -1241,9 +1539,11 @@ function Restore-BundledSupportFiles {
     $copied = New-Object System.Collections.Generic.List[string]
     $baseDir = Join-Path ${env:ProgramFiles} "LocalQwenSetupBootstrap"
     $map = @(
+        @{ Source = (Join-Path $baseDir "launcher\windows"); Destination = (Join-Path $root "launchers"); Label = "launchers" },
         @{ Source = (Join-Path $baseDir "scripts"); Destination = (Join-Path $root "scripts"); Label = "scripts" },
         @{ Source = (Join-Path $baseDir "config"); Destination = (Join-Path $root "config"); Label = "config" },
         @{ Source = (Join-Path $baseDir "assets"); Destination = (Join-Path $root "assets"); Label = "assets" },
+        @{ Source = (Join-Path $baseDir "release-notes.txt"); Destination = (Join-Path $root "release-notes.txt"); Label = "release-notes-root" },
         @{ Source = (Join-Path $baseDir "release-notes.txt"); Destination = (Join-Path $root "docs\release-notes.txt"); Label = "release-notes" },
         @{ Source = (Join-Path $baseDir "version.json"); Destination = (Join-Path $root "version.json"); Label = "version" }
     )
@@ -1379,10 +1679,28 @@ function Write-InstallReport {
     $logMeta = Get-LatestLlamaLogs
     $configPath = Get-OpenCodeConfigPath
     $serverExe = $null
+    $openCodeExe = $null
     try {
         $serverExe = Get-LlamaServerExe
     } catch {
         $serverExe = $null
+    }
+    try {
+        $openCodeExe = Get-OpenCodeExecutable
+    } catch {
+        $openCodeExe = $null
+    }
+
+    $turboServerPath = $null
+    if ($state.PSObject.Properties["turboServerExe"] -and $state.turboServerExe) {
+        $turboServerPath = [string]$state.turboServerExe
+    } elseif ($state.PSObject.Properties["turboDir"] -and $state.turboDir) {
+        $turboServerPath = Join-Path ([string]$state.turboDir) "build-cuda\bin\llama-server.exe"
+    }
+
+    $warnings = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-OpenCodeAvailable)) {
+        $warnings.Add("OpenCode nije dostupan kroz PATH ili poznate npm global putanje.") | Out-Null
     }
 
     $report = [ordered]@{
@@ -1408,12 +1726,20 @@ function Write-InstallReport {
                 path = $serverExe
                 ok = [bool]($serverExe -and (Test-Path $serverExe))
             }
+            turboQuantRuntime = [ordered]@{
+                path = $turboServerPath
+                ok = [bool]($turboServerPath -and (Test-Path $turboServerPath))
+            }
             model = [ordered]@{
                 path = $state.modelFile
                 ok = (Test-Path $state.modelFile)
                 sizeBytes = if (Test-Path $state.modelFile) { (Get-Item $state.modelFile).Length } else { 0 }
                 selectedId = $state.modelId
                 metadata = Get-ModelMetadata
+            }
+            opencodeCommand = [ordered]@{
+                path = $openCodeExe
+                ok = [bool](Test-OpenCodeAvailable)
             }
             opencodeConfig = [ordered]@{
                 path = $configPath
@@ -1424,6 +1750,7 @@ function Write-InstallReport {
                 stderr = $logMeta.StdErr
             }
         }
+        warnings = @($warnings)
     }
 
     $report | ConvertTo-Json -Depth 10 | Set-Content -Path $reportPath -Encoding UTF8

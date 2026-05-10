@@ -1,10 +1,10 @@
-. (Join-Path $PSScriptRoot "local-qwen-common.ps1")
-
 param(
     [string]$ModelId,
     [switch]$Download,
     [switch]$UseRecommended
 )
+
+. (Join-Path $PSScriptRoot "local-qwen-common.ps1")
 
 $state = Get-InstallState
 $recommendation = Get-RecommendationBundle
