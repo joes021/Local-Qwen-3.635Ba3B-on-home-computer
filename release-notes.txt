@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.39
+- Linux custom Hugging Face download zadrzava korisne `Preuzimam...` i `HF model je preuzet...` poruke dok i dalje uklanja nezeljenu HF warning liniju. Shell filter vise ne koristi polomljeni `pipe + here-doc` obrazac koji je umeo da proguta sav izlaz
+
 v2.10.38
 - Linux custom Hugging Face download sada cisti i preostalu warning liniju o neautentifikovanom HF pristupu na shell sloju, pa `Preuzmi model` za stvarno novi HF model ostavlja mnogo mirniji i korisniji izlaz
 

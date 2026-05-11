@@ -316,9 +316,9 @@ PY
 )"
   status=$?
   set -e
-  filtered_output="$(printf '%s\n' "$raw_output" | python3 - <<'PY'
-import sys
-for line in sys.stdin.read().splitlines():
+  filtered_output="$(RAW_OUTPUT="$raw_output" python3 - <<'PY'
+import os
+for line in os.environ.get("RAW_OUTPUT", "").splitlines():
     if "Warning: You are sending unauthenticated requests to the HF Hub." in line:
         continue
     print(line)

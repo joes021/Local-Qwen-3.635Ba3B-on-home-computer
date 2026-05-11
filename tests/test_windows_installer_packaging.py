@@ -268,6 +268,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('warnings.filterwarnings(', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('with contextlib.redirect_stderr(io.StringIO()):', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('if "Warning: You are sending unauthenticated requests to the HF Hub." in line:', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('for line in os.environ.get("RAW_OUTPUT", "").splitlines():', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local_dir_use_symlinks=False', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('if last_error is not None:\n    raise SystemExit(str(last_error))', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('Lokalni model je vec prisutan: $path', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
