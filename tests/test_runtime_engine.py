@@ -517,6 +517,55 @@ class RuntimeEngineTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["bestForCoding"], "qwen2.5-coder-7b-instruct-q5_k_m.gguf")
         self.assertIn(payload["summary"]["bestForSpeed"], {item["id"] for item in payload["models"]})
 
+    def test_model_compare_keeps_curated_model_when_local_custom_mirror_shares_filename(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_defaults = pathlib.Path(temp_dir) / "defaults.json"
+            defaults = json.loads(DEFAULTS_PATH.read_text(encoding="utf-8"))
+            defaults.setdefault("modelChoices", {})["local_mirror_qwen36"] = {
+                "key": "local-qwen36-35b-a3b-IQ2_M",
+                "id": "local-qwen36-35b-a3b-IQ2_M.gguf",
+                "label": "Mirror Local",
+                "family": "Qwen",
+                "agenticScore": 6,
+                "opencodeFit": 6,
+                "useCase": "agentic-general",
+                "filename": "qwen36-35b-a3b-IQ2_M.gguf",
+                "minExpectedBytes": 1,
+                "approxSizeGiB": 10.86,
+                "minimumGpuMiB": 0,
+                "recommendedGpuMiB": 0,
+                "minimumRamGiB": 8,
+                "preferredProfiles": ["speed", "balanced"],
+                "qualityTier": "compact",
+                "curationLevel": "custom",
+                "description": "Lokalni mirror glavnog modela.",
+                "customSource": "local-file",
+                "sources": [],
+            }
+            temp_defaults.write_text(json.dumps(defaults), encoding="utf-8")
+
+            code, stdout, stderr = run_runtime_command(
+                "model-compare",
+                "--defaults",
+                str(temp_defaults),
+                "--gpu-mib",
+                "12288",
+                "--ram-gib",
+                "31",
+                "--cpu-threads",
+                "32",
+                "--model-ids",
+                "qwen36-35b-a3b-IQ2_M.gguf,local-qwen36-35b-a3b-IQ2_M.gguf",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            self.assertEqual([item["id"] for item in payload["models"]], [
+                "qwen36-35b-a3b-IQ2_M.gguf",
+                "local-qwen36-35b-a3b-IQ2_M.gguf",
+            ])
+            self.assertEqual(payload["models"][0]["label"], "Qwen 3.6 35B A3B IQ2_M")
+            self.assertEqual(payload["models"][1]["label"], "Mirror Local")
+
     def test_repair_summary_reports_found_fixed_and_manual_counts(self):
         code, stdout, stderr = run_runtime_command(
             "repair-summary",

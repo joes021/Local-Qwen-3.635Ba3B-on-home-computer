@@ -115,8 +115,8 @@ friendly = label.strip() or target_path.stem
 family_text = family.strip() or "Custom"
 token = __import__("re").sub(r"[^a-zA-Z0-9_-]+", "_", target_path.stem or "custom")
 model = {
-    "key": token,
-    "id": target_path.name,
+    "key": f"local-{token}",
+    "id": f"local-{target_path.name}",
     "label": friendly,
     "family": family_text,
     "agenticScore": 6,
@@ -136,7 +136,16 @@ model = {
     "originalPath": str(src),
     "sources": [],
 }
-filtered = [item for item in models if str(item.get("id")) != model["id"]]
+filtered = [
+    item for item in models
+    if not (
+        str(item.get("id")) == model["id"]
+        or (
+            str(item.get("customSource", "")).lower() == "local-file"
+            and str(item.get("filename", "")) == model["filename"]
+        )
+    )
+]
 filtered.append(model)
 registry.parent.mkdir(parents=True, exist_ok=True)
 datetime_mod = __import__("datetime")

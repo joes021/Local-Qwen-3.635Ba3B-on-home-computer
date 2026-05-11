@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.49
+- Linux `Dodaj lokalni GGUF` sada daje namespacovani custom `id` (`local-...`) umesto golog filename-a, pa lokalni mirror model vise ne moze da pregazi kurirani model sa istim `.gguf` imenom u `manage-models compare/use` tokovima
+
 v2.10.48
 - Linux `manage-models compare` sada i vizuelno zatvara custom model rezultat: kada model nema nikakav badge, izlaz vise ne ostavlja prazno `Badge:` polje nego jasno ispisuje `Badge: nema`
 

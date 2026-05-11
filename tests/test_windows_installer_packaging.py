@@ -237,6 +237,13 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("nema jasnog favorita u ovom poredjenju", content)
         self.assertIn('badge_text = ", ".join(visible_badges(item)) or "nema"', content)
 
+    def test_linux_local_custom_models_use_namespaced_ids_to_avoid_curated_collisions(self):
+        content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
+        self.assertIn('"key": f"local-{token}"', content)
+        self.assertIn('"id": f"local-{target_path.name}"', content)
+        self.assertIn('str(item.get("customSource", "")).lower() == "local-file"', content)
+        self.assertIn('str(item.get("filename", "")) == model["filename"]', content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
