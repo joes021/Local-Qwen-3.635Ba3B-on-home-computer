@@ -258,6 +258,8 @@ if target_path.is_file():
         print(f"Model je vec prisutan: {target_path}")
         raise SystemExit(0)
 
+import contextlib
+import io
 import warnings
 
 warnings.filterwarnings(
@@ -285,11 +287,12 @@ for item in sources:
         continue
     try:
         print(f"Preuzimam {source_filename} sa {repo} ...")
-        hf_hub_download(
-            repo_id=repo,
-            filename=source_filename,
-            local_dir=str(models_dir),
-        )
+        with contextlib.redirect_stderr(io.StringIO()):
+            hf_hub_download(
+                repo_id=repo,
+                filename=source_filename,
+                local_dir=str(models_dir),
+            )
         if not target_path.is_file():
             candidate = models_dir / source_filename
             if candidate.is_file():
