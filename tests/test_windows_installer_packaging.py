@@ -246,6 +246,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('recommendation_json="$(get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('model_browser_json="$(get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('compare_json="$(python3 "$(get_runtime_engine_path)" model-compare', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('get_model_metadata_json()', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('download_huggingface_custom_model()', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('python3 -m pip install --user -U huggingface_hub >/dev/null', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('Lokalni model je vec prisutan: $path', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local model_browser_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local compare_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
 

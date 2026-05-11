@@ -1,5 +1,10 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.24
+- Linux `manage-models.sh download` sada ume da obradi i rucno dodate Hugging Face modele umesto da ih slepo salje na `install.sh` koji poznaje samo defaults katalog. Custom HF model se sada aktivira, proverava lokalni fajl i po potrebi skida direktno kroz `huggingface_hub`
+- Linux `manage-models.sh download` za rucno dodati lokalni GGUF sada daje cistu poruku ako je model vec prisutan na disku, umesto da deluje kao polovicno podrzan tok
+- Linux `compare` vise ne duplira isti model tri puta kada su trazeni, aktivni i preporuceni model zapravo isti
+
 v2.10.23
 - Linux `Control Center` vise ne ume da prijavi laznu gresku `141` samo zato sto je shared rezultat ekran sekao duzi izlaz kroz `head` pod `pipefail`. Preview summary i error detalji sada seku linije bez SIGPIPE side efekta, pa rutinske akcije sa duzim izlazom ostaju stabilne
 - Linux desktop TUI sada za duze tokove kao `Preuzmi model` i `Install update` pokrece poseban terminal kada je dostupan desktop terminal emulator, umesto da korisnik gleda tih i mrtav ekran bez live izlaza. To daje vidljiv napredak i prirodniji UX za model download i update tok

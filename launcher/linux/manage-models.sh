@@ -65,6 +65,21 @@ ROOT="$(get_local_qwen_root)"
 MODELS_DIR="$ROOT/models"
 CUSTOM_MODELS_PATH="$(get_custom_models_registry_path)"
 
+get_model_metadata_json() {
+  local selected_id="$1"
+  python3 - <<'PY' "$DEFAULTS_PATH" "$selected_id"
+import json, sys
+defaults_path, selected_id = sys.argv[1:3]
+with open(defaults_path, "r", encoding="utf-8-sig") as f:
+    defaults = json.load(f)
+for item in defaults.get("modelChoices", {}).values():
+    if item.get("id") == selected_id or item.get("filename") == selected_id:
+        print(json.dumps(item))
+        raise SystemExit(0)
+raise SystemExit(f"Model nije pronadjen: {selected_id}")
+PY
+}
+
 import_local_gguf_model() {
   local source_path="$1"
   local label="${2:-}"
@@ -212,6 +227,72 @@ registry.write_text(
     encoding="utf-8",
 )
 print(json.dumps(model, ensure_ascii=False))
+PY
+}
+
+download_huggingface_custom_model() {
+  local meta_json="$1"
+  python3 - <<'PY' "$meta_json" "$MODELS_DIR"
+import json, sys
+from pathlib import Path
+
+meta = json.loads(sys.argv[1])
+models_dir = Path(sys.argv[2])
+filename = str(meta.get("filename", "") or "")
+if not filename:
+    raise SystemExit("HF custom model nema filename.")
+
+sources = list(meta.get("sources") or [])
+if not sources and meta.get("source"):
+    sources = [{"repo": meta.get("source"), "filename": filename}]
+if not sources:
+    raise SystemExit("HF custom model nema izvor za download.")
+
+target_path = models_dir / filename
+min_expected = int(meta.get("minExpectedBytes", 0) or 0)
+if target_path.is_file():
+    current_size = target_path.stat().st_size
+    if min_expected <= 0 or current_size >= min_expected:
+        print(f"Model je vec prisutan: {target_path}")
+        raise SystemExit(0)
+
+try:
+    from huggingface_hub import hf_hub_download
+except Exception:
+    raise SystemExit("huggingface_hub nije dostupan. Pokreni update/install tok ili instaliraj paket pa probaj ponovo.")
+
+models_dir.mkdir(parents=True, exist_ok=True)
+last_error = None
+for item in sources:
+    repo = str(item.get("repo", "") or "").strip()
+    source_filename = str(item.get("filename", "") or filename).strip()
+    if not repo or not source_filename:
+        continue
+    try:
+        print(f"Preuzimam {source_filename} sa {repo} ...")
+        hf_hub_download(
+            repo_id=repo,
+            filename=source_filename,
+            local_dir=str(models_dir),
+            local_dir_use_symlinks=False,
+        )
+        if not target_path.is_file():
+            candidate = models_dir / source_filename
+            if candidate.is_file():
+                target_path = candidate
+        if not target_path.is_file():
+            raise RuntimeError(f"Download nije proizveo fajl: {target_path}")
+        final_size = target_path.stat().st_size
+        if min_expected > 0 and final_size < min_expected:
+            raise RuntimeError(f"Model je skinut nepotpuno: {target_path}")
+        print(f"HF model je preuzet: {target_path}")
+        raise SystemExit(0)
+    except Exception as exc:
+        last_error = exc
+
+if last_error is not None:
+    raise SystemExit(str(last_error))
+raise SystemExit("HF custom model nema validan izvor za download.")
 PY
 }
 
@@ -428,7 +509,16 @@ with open(sys.argv[1], "r", encoding="utf-8") as f:
 PY
 )"
     recommended_id="$(get_recommended_model_id)"
-    ids="$MODEL_ID,$current_id,$recommended_id"
+    ids="$(python3 - <<'PY' "$MODEL_ID" "$current_id" "$recommended_id"
+import sys
+seen = []
+for value in sys.argv[1:]:
+    value = str(value or "").strip()
+    if value and value not in seen:
+        seen.append(value)
+print(",".join(seen))
+PY
+)"
     compare_json="$(python3 "$(get_runtime_engine_path)" model-compare --defaults "$DEFAULTS_PATH" --gpu-mib "$gpu_mib" --ram-gib "$ram_gib" --cpu-threads "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)" --model-ids "$ids")"
     python3 - <<'PY' "$compare_json"
 import json, sys
@@ -459,16 +549,39 @@ PY
     "$SCRIPT_DIR/configure-settings.sh" >/dev/null
     ;;
   download)
+    if [ -n "$MODEL_ID" ]; then
+      meta_json="$(get_model_metadata_json "$MODEL_ID")"
+      custom_source="$(python3 - <<'PY' "$meta_json"
+import json, sys
+print(json.loads(sys.argv[1]).get("customSource", ""))
+PY
+)"
+      path="$(select_model "$MODEL_ID")"
+      echo "Model postavljen na: $MODEL_ID"
+      echo "Model path: $path"
+      case "$custom_source" in
+        huggingface)
+          python3 -m pip install --user -U huggingface_hub >/dev/null
+          download_huggingface_custom_model "$meta_json"
+          "$SCRIPT_DIR/configure-settings.sh" >/dev/null
+          exit 0
+          ;;
+        local-file)
+          if [ -f "$path" ]; then
+            echo "Lokalni model je vec prisutan: $path"
+            "$SCRIPT_DIR/configure-settings.sh" >/dev/null
+            exit 0
+          fi
+          echo "Lokalni model nije pronadjen na ocekivanoj putanji: $path"
+          exit 1
+          ;;
+      esac
+    fi
     install_script="$(get_local_qwen_install_script_path || true)"
     if [ -z "${install_script:-}" ] || [ ! -f "$install_script" ]; then
       echo "Linux install skripta nije pronadjena za model download tok."
       echo "Ocekivana putanja: ~/local-qwen-home/install/linux/install.sh"
       exit 1
-    fi
-    if [ -n "$MODEL_ID" ]; then
-      path="$(select_model "$MODEL_ID")"
-      echo "Model postavljen na: $MODEL_ID"
-      echo "Model path: $path"
     fi
     INSTALL_ROOT="$ROOT" \
     MODEL_ID="${MODEL_ID:-}" \
