@@ -64,6 +64,7 @@ DEFAULTS_PATH="$(get_defaults_path)"
 ROOT="$(get_local_qwen_root)"
 MODELS_DIR="$ROOT/models"
 CUSTOM_MODELS_PATH="$(get_custom_models_registry_path)"
+MODEL_DOWNLOAD_VENV_DIR="$ROOT/state/model-download-venv"
 
 get_model_metadata_json() {
   local selected_id="$1"
@@ -232,7 +233,8 @@ PY
 
 download_huggingface_custom_model() {
   local meta_json="$1"
-  python3 - <<'PY' "$meta_json" "$MODELS_DIR"
+  local download_python="$2"
+  "$download_python" - <<'PY' "$meta_json" "$MODELS_DIR"
 import json, sys
 from pathlib import Path
 
@@ -291,9 +293,19 @@ for item in sources:
         last_error = exc
 
 if last_error is not None:
-    raise SystemExit(str(last_error))
+raise SystemExit(str(last_error))
 raise SystemExit("HF custom model nema validan izvor za download.")
 PY
+}
+
+ensure_model_download_python() {
+  local python_bin="$MODEL_DOWNLOAD_VENV_DIR/bin/python"
+  if [ ! -x "$python_bin" ]; then
+    python3 -m venv "$MODEL_DOWNLOAD_VENV_DIR"
+  fi
+  "$python_bin" -m pip install -U pip >/dev/null
+  "$python_bin" -m pip install -U huggingface_hub >/dev/null
+  printf '%s\n' "$python_bin"
 }
 
 get_installed_model_sizes_json() {
@@ -561,8 +573,8 @@ PY
       echo "Model path: $path"
       case "$custom_source" in
         huggingface)
-          python3 -m pip install --user -U huggingface_hub >/dev/null
-          download_huggingface_custom_model "$meta_json"
+          download_python="$(ensure_model_download_python)"
+          download_huggingface_custom_model "$meta_json" "$download_python"
           "$SCRIPT_DIR/configure-settings.sh" >/dev/null
           exit 0
           ;;

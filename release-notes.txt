@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.25
+- Linux ručni Hugging Face model download vise ne pada na Ubuntu 24.04 sa `externally-managed-environment` / PEP 668 greskom. Umesto `python3 -m pip install --user`, `manage-models.sh` sada koristi sopstveni `state/model-download-venv` i u njemu instalira `huggingface_hub`, isto kao installer tok
+- To znaci da `Dodaj HF model` + `Preuzmi model` na Linuxu vise ne zavisi od sistemskog `pip` rezima i sada ima zdravo ponasanje i na modernom Ubuntu desktopu
+
 v2.10.24
 - Linux `manage-models.sh download` sada ume da obradi i rucno dodate Hugging Face modele umesto da ih slepo salje na `install.sh` koji poznaje samo defaults katalog. Custom HF model se sada aktivira, proverava lokalni fajl i po potrebi skida direktno kroz `huggingface_hub`
 - Linux `manage-models.sh download` za rucno dodati lokalni GGUF sada daje cistu poruku ako je model vec prisutan na disku, umesto da deluje kao polovicno podrzan tok
