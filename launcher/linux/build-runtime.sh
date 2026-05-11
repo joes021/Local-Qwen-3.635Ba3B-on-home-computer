@@ -26,7 +26,19 @@ build_generator = defaults.get("linuxBuild", {}).get("generator", "Ninja")
 
 def run(cmd, cwd=None, allow_fail=False):
     print("+", " ".join(cmd))
-    result = subprocess.run(cmd, cwd=cwd)
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    for line in result.stdout.splitlines():
+        if line.strip() == "CMAKE_BUILD_TYPE=Release":
+            continue
+        print(line)
     if result.returncode != 0 and not allow_fail:
         raise SystemExit(result.returncode)
     return result.returncode == 0
@@ -42,6 +54,7 @@ cmake_args = ["cmake", "-G", build_generator]
 
 llama_build_dir = os.path.join(llama_source, "build")
 os.makedirs(llama_build_dir, exist_ok=True)
+print("Gradim upstream llama.cpp runtime...")
 llama_config = cmake_args + ["-S", llama_source, "-B", llama_build_dir]
 llama_config.append("-DGGML_CUDA=ON" if cuda_available else "-DGGML_CUDA=OFF")
 run(llama_config)
@@ -55,6 +68,7 @@ state["llamaBuildDir"] = llama_build_dir
 state["llamaServerExe"] = llama_server
 
 if cuda_available:
+    print("Gradim TurboQuant runtime...")
     turbo_build_dir = os.path.join(turbo_source, defaults["turboquant"]["buildDir"])
     os.makedirs(turbo_build_dir, exist_ok=True)
     turbo_config = cmake_args + ["-S", turbo_source, "-B", turbo_build_dir, "-DGGML_CUDA=ON"]

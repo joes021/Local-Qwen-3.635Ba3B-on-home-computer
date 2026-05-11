@@ -201,6 +201,14 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('with open(report_path, "r", encoding="utf-8-sig") as f:', content)
         self.assertIn('json.dumps(report, indent=2, ensure_ascii=False)', content)
 
+    def test_linux_build_runtime_filters_noisy_cmake_build_type_line(self):
+        content = (LINUX_LAUNCHER_DIR / "build-runtime.sh").read_text(encoding="utf-8")
+        self.assertIn('stdout=subprocess.PIPE', content)
+        self.assertIn('stderr=subprocess.STDOUT', content)
+        self.assertIn('if line.strip() == "CMAKE_BUILD_TYPE=Release":', content)
+        self.assertIn('print("Gradim upstream llama.cpp runtime...")', content)
+        self.assertIn('print("Gradim TurboQuant runtime...")', content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)

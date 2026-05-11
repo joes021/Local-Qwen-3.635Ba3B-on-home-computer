@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.44
+- Linux `repair-runtime.sh` i `build-runtime.sh` sada daju cistiji tok za rutinsko rebuild-ovanje: uklonjen je beskorisni `CMAKE_BUILD_TYPE=Release` sum i dodat je jasniji fazni izlaz za upstream i TurboQuant runtime build
+
 v2.10.43
 - Linux `show-logs.sh` sada po defaultu daje smiren preview sa poslednjim linijama logova i jasnim `--full` izlazom, umesto da korisnika odmah zatrpa kompletnim stderr/stdout dumpom iz `Control Center` toka
 
