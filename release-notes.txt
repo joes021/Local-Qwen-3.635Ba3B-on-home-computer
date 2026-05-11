@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.47
+- Linux `manage-models compare` vise ne izvlaci izmisljene `Best speed/coding/quality` favorite kada u tom konkretnom poredjenju nema jasnog kuriranog badge signala. Umesto toga sada iskreno prikazuje da nema jasnog favorita u tom poredjenju
+
 v2.10.46
 - Linux runtime vise ne dodeljuje `best-for-speed` badge custom modelima samo zato sto su mali. Time `manage-models list/compare` vise ne favorizuje rucno dodate GGUF/HF modele kao da su kurirani speed izbori za tu masinu
 

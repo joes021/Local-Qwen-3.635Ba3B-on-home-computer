@@ -224,6 +224,18 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('str(model.get("curationLevel", "")).lower() != "custom"', content)
         self.assertIn('badges.append("best-for-speed")', content)
 
+    def test_runtime_compare_summary_uses_visible_badges_without_hidden_fallbacks(self):
+        content = (REPO_ROOT / "scripts" / "local_qwen_runtime.py").read_text(encoding="utf-8")
+        self.assertIn("def visible_use_case_badges(item: dict) -> list[str]:", content)
+        self.assertIn('if badge in visible_use_case_badges(item):', content)
+        self.assertNotIn('best_speed = first_by_badge("best-for-speed") or max(compared', content)
+        self.assertNotIn('best_coding = first_by_badge("best-for-coding") or max(compared', content)
+        self.assertNotIn('best_quality = first_by_badge("best-quality-model") or max(compared', content)
+
+    def test_linux_manage_models_compare_prints_honest_no_favorite_message(self):
+        content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
+        self.assertIn("nema jasnog favorita u ovom poredjenju", content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)

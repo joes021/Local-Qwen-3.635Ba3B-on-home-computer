@@ -57,6 +57,19 @@ def to_display_gib(size_bytes: int | float) -> float:
     return 0.01 if rounded == 0 else rounded
 
 
+def visible_use_case_badges(item: dict) -> list[str]:
+    badges = list(item.get("useCaseBadges", []) or [])
+    hidden = {"balanced-agentic"}
+    badges = [badge for badge in badges if badge not in hidden]
+    if "best-starter-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-quality-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-for-coding" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    return badges
+
+
 def build_release_asset_urls(repo: str, version: str, base_name: str = "Local-Qwen-Setup") -> dict[str, str]:
     clean_version = str(version or "").lstrip("v")
     tag = f"v{clean_version}" if clean_version else ""
@@ -831,13 +844,13 @@ def command_model_compare(args: argparse.Namespace) -> int:
 
     def first_by_badge(badge: str):
         for item in compared:
-            if badge in item.get("useCaseBadges", []):
+            if badge in visible_use_case_badges(item):
                 return item
         return None
 
-    best_speed = first_by_badge("best-for-speed") or max(compared, key=lambda item: (item.get("opencodeFit", 0), -item.get("approxSizeGiB", 0)), default=None)
-    best_coding = first_by_badge("best-for-coding") or max(compared, key=lambda item: (item.get("agenticScore", 0), item.get("opencodeFit", 0)), default=None)
-    best_quality = first_by_badge("best-quality-model") or max(compared, key=lambda item: (item.get("approxSizeGiB", 0), item.get("agenticScore", 0)), default=None)
+    best_speed = first_by_badge("best-for-speed")
+    best_coding = first_by_badge("best-for-coding")
+    best_quality = first_by_badge("best-quality-model")
 
     payload = {
         "models": compared,

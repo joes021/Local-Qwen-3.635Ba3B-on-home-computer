@@ -602,9 +602,10 @@ def visible_badges(item):
     return badges
 
 print("Model compare")
-print(f"- Best speed: {payload.get('summary', {}).get('bestForSpeed')}")
-print(f"- Best coding: {payload.get('summary', {}).get('bestForCoding')}")
-print(f"- Best quality: {payload.get('summary', {}).get('bestForQuality')}")
+summary = payload.get('summary', {})
+print(f"- Best speed: {summary.get('bestForSpeed') or 'nema jasnog favorita u ovom poredjenju'}")
+print(f"- Best coding: {summary.get('bestForCoding') or 'nema jasnog favorita u ovom poredjenju'}")
+print(f"- Best quality: {summary.get('bestForQuality') or 'nema jasnog favorita u ovom poredjenju'}")
 for item in payload.get("models", []):
     print()
     print(item.get("id"))
