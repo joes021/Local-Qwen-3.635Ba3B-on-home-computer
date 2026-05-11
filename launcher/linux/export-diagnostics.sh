@@ -66,8 +66,9 @@ payload = subprocess.run(
     text=True,
     check=True,
 )
+dt = __import__("datetime")
 payload = {
-    "generatedAt": __import__("datetime").datetime.utcnow().isoformat(),
+    "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
     "appVersion": version,
     "installRoot": root,
     "healthUrl": health_url,

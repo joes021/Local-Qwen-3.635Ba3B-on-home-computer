@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.34
+- Linux `export-diagnostics.sh` vise ne emituje Python `datetime.utcnow()` deprecation warning na Ubuntu; diagnostics meta sada koristi timezone-aware UTC timestamp i ostavlja cist izlaz za rutinski diagnostics tok
+
 v2.10.33
 - Linux `export-diagnostics.sh` sada BOM-tolerantno cita `version.json`, `install-state.json` i `settings.json`, pa `Export diagnostics` na Ubuntu vise ne pada na `Unexpected UTF-8 BOM` kada instalirani JSON fajlovi sadrze BOM
 
