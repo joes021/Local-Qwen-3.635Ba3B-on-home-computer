@@ -256,6 +256,8 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('LOCAL_QWEN_SKIP_PACKAGE_INSTALL=1 \\', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('recommendation_json="$(get_recommendation_json "$gpu_mib" "$ram_gib" "$cpu_threads")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('model_browser_json="$(get_model_browser_for_current_machine "$current_id" "$installed_ids" "$installed_sizes_json" "$free_disk_gib")"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('if fit_group and fit_group not in status:', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('size_text = "nepoznato"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('compare_json="$(python3 "$(get_runtime_engine_path)" model-compare', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('get_model_metadata_json()', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('download_huggingface_custom_model()', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))

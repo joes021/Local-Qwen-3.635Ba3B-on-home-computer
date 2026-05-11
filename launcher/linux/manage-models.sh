@@ -473,10 +473,17 @@ for item in payload.get("models", []):
         status.append("installed")
     if item.get("recommended"):
         status.append("recommended")
-    status.append(item.get("fitGroup"))
+    fit_group = item.get("fitGroup")
+    if fit_group and fit_group not in status:
+        status.append(fit_group)
     if item.get("useCaseBadges"):
         status.append("badge=" + "|".join(item.get("useCaseBadges")))
-    print(f"{marker} {item.get('id')} | {item.get('family')} | {item.get('approxSizeGiB')} GiB | {'/'.join(status)} | Speed {item.get('speedEstimateLabel')} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
+    approx_size = item.get("approxSizeGiB")
+    if approx_size is None or float(approx_size) <= 0:
+        size_text = "nepoznato"
+    else:
+        size_text = f"{approx_size} GiB"
+    print(f"{marker} {item.get('id')} | {item.get('family')} | {size_text} | {'/'.join(status)} | Speed {item.get('speedEstimateLabel')} | Agentic {item.get('agenticScore')}/10 | OpenCode {item.get('opencodeFit')}/10")
     if item.get("installed"):
         installed_value = item.get("installedSizeGiB")
         if installed_value and float(installed_value) > 0:

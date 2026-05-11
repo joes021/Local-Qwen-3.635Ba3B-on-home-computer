@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.35
+- Linux `manage-models.sh list` sada cisti status liniju u `Pregled modela`: vise ne duplira `recommended/recommended` za aktivni preporuceni model, a custom Hugging Face modeli nepoznate velicine vise ne izlaze kao zbunjujuce `0.0 GiB` nego kao `nepoznato`
+
 v2.10.34
 - Linux `export-diagnostics.sh` vise ne emituje Python `datetime.utcnow()` deprecation warning na Ubuntu; diagnostics meta sada koristi timezone-aware UTC timestamp i ostavlja cist izlaz za rutinski diagnostics tok
 
