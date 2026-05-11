@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.41
+- Linux `verify-install.sh` sada BOM-tolerantno cita `install-state.json` i `install-report.json`, pa verify tok ne zavisi od toga kako su ti JSON fajlovi zapisani
+- Linux `test-prompt.sh` sada ima reasoning fallback i ispisuje `Finish reason` kada model ne vrati finalni tekst, umesto da deluje kao prazan ili polovicno uspeo smoke test
+
 v2.10.40
 - Linux `repair-install.sh` sada pored `repair-summary.json` pravi i tekstualni `install-summary.txt`, pa diagnostics i summary tok vise nisu polovicni i sada su dosledniji Windows strani
 

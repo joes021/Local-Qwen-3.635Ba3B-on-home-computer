@@ -27,7 +27,7 @@ python3 - <<'PY' "$STATE_PATH" "$PROMPT" "$(get_runtime_engine_path)" "$(get_tok
 import json, sys, urllib.request, time, tempfile, subprocess, os
 
 state_path, prompt, runtime_script, history_path = sys.argv[1:5]
-with open(state_path, "r", encoding="utf-8") as f:
+with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
 
 body = json.dumps({
@@ -65,8 +65,21 @@ metrics_result = subprocess.run(
 os.unlink(temp_response)
 metrics = json.loads(metrics_result.stdout)
 
+choice = payload["choices"][0]
+message = choice.get("message") or {}
+content = message.get("content") or ""
+reasoning = message.get("reasoning_content") or ""
+
 print("Smoke test odgovor:")
-print(payload["choices"][0]["message"]["content"])
+if content.strip():
+    print(content)
+elif reasoning.strip():
+    print(reasoning.strip())
+    print("Napomena: model nije vratio finalni tekst, pa je prikazan reasoning sadržaj.")
+    print(f"Finish reason: {choice.get('finish_reason')}")
+else:
+    print("(prazan odgovor)")
+    print(f"Finish reason: {choice.get('finish_reason')}")
 print("Benchmark:")
 print(f"Prompt tok/s: {metrics['current']['promptTokensPerSecond']}")
 print(f"Output tok/s: {metrics['current']['completionTokensPerSecond']}")

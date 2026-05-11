@@ -16,7 +16,7 @@ import json, os, sys
 import urllib.request
 
 state_path, settings_path, opencode_path, root, report_path, health_url = sys.argv[1:7]
-with open(state_path, "r", encoding="utf-8") as f:
+with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
 
 health_ok = False
@@ -44,7 +44,7 @@ for name, ok, value in checks:
 
 if os.path.isfile(report_path):
     print("\nInstall report:")
-    with open(report_path, "r", encoding="utf-8") as f:
+    with open(report_path, "r", encoding="utf-8-sig") as f:
         report = json.load(f)
     if health_ok:
         report["warnings"] = [

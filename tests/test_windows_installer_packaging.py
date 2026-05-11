@@ -182,6 +182,18 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
         self.assertIn('with open(settings_path, "r", encoding="utf-8-sig") as f:', content)
 
+    def test_linux_verify_install_reads_json_with_bom_tolerance(self):
+        content = (LINUX_LAUNCHER_DIR / "verify-install.sh").read_text(encoding="utf-8")
+        self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
+        self.assertIn('with open(report_path, "r", encoding="utf-8-sig") as f:', content)
+
+    def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
+        content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
+        self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
+        self.assertIn('reasoning = message.get("reasoning_content") or ""', content)
+        self.assertIn('Napomena: model nije vratio finalni tekst, pa je prikazan reasoning sadržaj.', content)
+        self.assertIn('print(f"Finish reason: {choice.get(\'finish_reason\')}")', content)
+
     def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")
         gui_script = (REPO_ROOT / "install" / "linux" / "installer-gui.sh").read_text(encoding="utf-8")
