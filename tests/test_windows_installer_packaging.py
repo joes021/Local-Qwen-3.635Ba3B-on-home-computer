@@ -260,8 +260,12 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('if last_error is not None:\n    raise SystemExit(str(last_error))', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('Lokalni model je vec prisutan: $path', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         repair_model_linux = (REPO_ROOT / "launcher" / "linux" / "repair-model.sh").read_text(encoding="utf-8")
+        self.assertIn('MODEL_PATH="$(python3 - <<\'PY\' "$STATE_PATH"', repair_model_linux)
+        self.assertIn('if [ -n "$MODEL_PATH" ] && model_file_looks_complete "$MODEL_PATH"; then', repair_model_linux)
         self.assertIn('if any("Model je vec prisutan:" in line for line in lines):', repair_model_linux)
         self.assertIn('print("Model je vec prisutan i deluje kompletno, pa download nije bio potreban.")', repair_model_linux)
+        self.assertIn('raw = os.environ.get("DOWNLOAD_OUTPUT", "")', repair_model_linux)
+        self.assertNotIn("printf '%s\\n' \"$DOWNLOAD_OUTPUT\" | python3 - <<'PY'", repair_model_linux)
         self.assertNotIn('local model_browser_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local compare_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
 

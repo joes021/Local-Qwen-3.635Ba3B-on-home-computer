@@ -1,5 +1,14 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.32
+- Linux `repair-model.sh` i javni release su sada numericki i git-istorijski poravnati. Rutinski healthy-model repair na Linuxu ostaje tih, cist i bez pozadinskog installer suma, a ovaj release je objavljen iz stvarno commitovanog stanja repoa
+
+v2.10.31
+- Linux `repair-model.sh` sada uopste ne ulazi u `manage-models download` tok ako je aktivni model vec kompletan. Time `Repair model` za rutinski zdrav model vraca samo cistu potvrdu umesto da provlaci interni installer sum sa putanjama i stack pripremom
+
+v2.10.30
+- Linux `repair-model.sh` vise ne gubi ceo izlaz pri internom sazetku zbog polomljenog `pipe + here-doc` obrasca. Skripta sada analizira `manage-models download` izlaz kroz bezbedan env-prenos, pa ponovo jasno prijavljuje kada je model vec prisutan i kada download zapravo nije bio potreban
+
 v2.10.29
 - Linux `repair-model.sh` vise ne prosipa polu-installer izlaz kada je aktivni model vec zdrav ili kada se repair zavrsi kroz model download tok. Skripta sada daje kraci i smisleniji sazetak, pa `Repair model` u Linux `Control Center` deluje mnogo rutinskije i manje zbunjujuce
 

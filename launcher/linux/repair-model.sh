@@ -11,17 +11,30 @@ with open(sys.argv[1], "r", encoding="utf-8") as f:
     print(json.load(f).get("modelId", ""))
 PY
 )"
+MODEL_PATH="$(python3 - <<'PY' "$STATE_PATH"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    state = json.load(f)
+print(state.get("modelFile", ""))
+PY
+)"
 
 if [ -z "$MODEL_ID" ]; then
   echo "Model ID nije pronadjen u install state-u."
   exit 1
 fi
 
-DOWNLOAD_OUTPUT="$("$SCRIPT_DIR/manage-models.sh" download "$MODEL_ID" 2>&1)"
-printf '%s\n' "$DOWNLOAD_OUTPUT" | python3 - <<'PY'
-import sys
+if [ -n "$MODEL_PATH" ] && model_file_looks_complete "$MODEL_PATH"; then
+  echo "Model je vec prisutan i deluje kompletno, pa download nije bio potreban."
+  echo "Repair model zavrsen za: $MODEL_ID"
+  exit 0
+fi
 
-raw = sys.stdin.read()
+DOWNLOAD_OUTPUT="$("$SCRIPT_DIR/manage-models.sh" download "$MODEL_ID" 2>&1)"
+DOWNLOAD_OUTPUT="$DOWNLOAD_OUTPUT" python3 - <<'PY'
+import os
+
+raw = os.environ.get("DOWNLOAD_OUTPUT", "")
 lines = [line.rstrip() for line in raw.splitlines() if line.strip()]
 
 if any("Model je vec prisutan:" in line for line in lines):
