@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.48
+- Linux `manage-models compare` sada i vizuelno zatvara custom model rezultat: kada model nema nikakav badge, izlaz vise ne ostavlja prazno `Badge:` polje nego jasno ispisuje `Badge: nema`
+
 v2.10.47
 - Linux `manage-models compare` vise ne izvlaci izmisljene `Best speed/coding/quality` favorite kada u tom konkretnom poredjenju nema jasnog kuriranog badge signala. Umesto toga sada iskreno prikazuje da nema jasnog favorita u tom poredjenju
 

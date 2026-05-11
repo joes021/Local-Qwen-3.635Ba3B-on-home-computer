@@ -217,7 +217,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('if "best-quality-model" in badges and "best-for-speed" in badges:', content)
         self.assertIn('if "best-for-coding" in badges and "best-for-speed" in badges:', content)
         self.assertIn('status.append("badge=" + "|".join(badges))', content)
-        self.assertIn("Badge: {', '.join(visible_badges(item))}", content)
+        self.assertIn('badge_text = ", ".join(visible_badges(item)) or "nema"', content)
 
     def test_runtime_does_not_assign_best_for_speed_badge_to_custom_models(self):
         content = (REPO_ROOT / "scripts" / "local_qwen_runtime.py").read_text(encoding="utf-8")
@@ -235,6 +235,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
     def test_linux_manage_models_compare_prints_honest_no_favorite_message(self):
         content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
         self.assertIn("nema jasnog favorita u ovom poredjenju", content)
+        self.assertIn('badge_text = ", ".join(visible_badges(item)) or "nema"', content)
 
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")

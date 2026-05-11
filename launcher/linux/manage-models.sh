@@ -610,7 +610,8 @@ for item in payload.get("models", []):
     print()
     print(item.get("id"))
     print(f"  Family: {item.get('family')} | Speed: {item.get('speedEstimateLabel')} | Agentic: {item.get('agenticScore')}/10 | OpenCode: {item.get('opencodeFit')}/10")
-    print(f"  Size: {item.get('approxSizeGiB')} GiB | Fit: {item.get('fitGroup')} | Badge: {', '.join(visible_badges(item))}")
+    badge_text = ", ".join(visible_badges(item)) or "nema"
+    print(f"  Size: {item.get('approxSizeGiB')} GiB | Fit: {item.get('fitGroup')} | Badge: {badge_text}")
 PY
     ;;
   use)
