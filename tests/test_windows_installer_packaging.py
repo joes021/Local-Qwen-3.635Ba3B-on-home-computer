@@ -176,6 +176,12 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('print(f"Instalacija je vec na latest verziji: v{current_version}")', content)
         self.assertIn('print(f"Release URL: {release_url}")', content)
 
+    def test_linux_export_diagnostics_reads_json_inputs_with_bom_tolerance(self):
+        content = (LINUX_LAUNCHER_DIR / "export-diagnostics.sh").read_text(encoding="utf-8")
+        self.assertIn('with open(version_path, "r", encoding="utf-8-sig") as f:', content)
+        self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
+        self.assertIn('with open(settings_path, "r", encoding="utf-8-sig") as f:', content)
+
     def test_linux_run_package_prefers_gui_wizard_but_keeps_tui_fallback(self):
         build_script = (REPO_ROOT / "packaging" / "linux" / "build-run-installer.sh").read_text(encoding="utf-8")
         gui_script = (REPO_ROOT / "install" / "linux" / "installer-gui.sh").read_text(encoding="utf-8")

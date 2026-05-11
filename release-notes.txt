@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.33
+- Linux `export-diagnostics.sh` sada BOM-tolerantno cita `version.json`, `install-state.json` i `settings.json`, pa `Export diagnostics` na Ubuntu vise ne pada na `Unexpected UTF-8 BOM` kada instalirani JSON fajlovi sadrze BOM
+
 v2.10.32
 - Linux `repair-model.sh` i javni release su sada numericki i git-istorijski poravnati. Rutinski healthy-model repair na Linuxu ostaje tih, cist i bez pozadinskog installer suma, a ovaj release je objavljen iz stvarno commitovanog stanja repoa
 

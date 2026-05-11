@@ -38,11 +38,11 @@ target, root, runtime_script, state_path, settings_path = sys.argv[1:6]
 version = "unknown"
 version_path = os.path.join(root, "version.json")
 if os.path.exists(version_path):
-    with open(version_path, "r", encoding="utf-8") as f:
+    with open(version_path, "r", encoding="utf-8-sig") as f:
         version = json.load(f).get("version", "unknown")
-with open(state_path, "r", encoding="utf-8") as f:
+with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
-with open(settings_path, "r", encoding="utf-8") as f:
+with open(settings_path, "r", encoding="utf-8-sig") as f:
     settings = json.load(f)
 health_url = f"http://127.0.0.1:{state.get('port', 8091)}/health"
 has_server = False
