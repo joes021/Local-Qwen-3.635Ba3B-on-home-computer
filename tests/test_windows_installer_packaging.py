@@ -1174,6 +1174,14 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('Write-Output "Repair summary json: $repairSummaryPath"', text)
         self.assertIn('Write-Output "Repair summary text: $summaryPath"', text)
 
+    def test_linux_repair_install_writes_text_summary_alongside_json_summary(self):
+        script_path = REPO_ROOT / "launcher" / "linux" / "repair-install.sh"
+        text = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('SUMMARY_PATH="$ROOT/state/install-summary.txt"', text)
+        self.assertIn('python3 - <<\'PY\' "$REPAIR_SUMMARY_PATH" "$SUMMARY_PATH"', text)
+        self.assertIn('echo "Repair summary text: $SUMMARY_PATH"', text)
+
     def test_repair_model_skips_download_when_active_model_is_already_complete(self):
         script_path = REPO_ROOT / "launcher" / "windows" / "repair-model.ps1"
         text = script_path.read_text(encoding="utf-8")

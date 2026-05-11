@@ -9,6 +9,7 @@ STATE_PATH="$(get_install_state_path)"
 SETTINGS_PATH="$(get_settings_path)"
 REPORT_PATH="$ROOT/state/install-report.json"
 REPAIR_SUMMARY_PATH="$ROOT/state/repair-summary.json"
+SUMMARY_PATH="$ROOT/state/install-summary.txt"
 FOUND_ITEMS=()
 FIXED_ITEMS=()
 MANUAL_ITEMS=()
@@ -183,6 +184,29 @@ print(json.dumps(sys.argv[1:]))
 PY
 )" > "$REPAIR_SUMMARY_PATH"
 
+python3 - <<'PY' "$REPAIR_SUMMARY_PATH" "$SUMMARY_PATH"
+import json, sys
+repair_path, summary_path = sys.argv[1:3]
+with open(repair_path, "r", encoding="utf-8") as f:
+    payload = json.load(f)
+lines = ["Repair summary"]
+for key, title in (
+    ("found", "Found"),
+    ("fixed", "Fixed"),
+    ("manual", "Manual"),
+    ("notes", "Notes"),
+):
+    values = payload.get(key) or []
+    if not values:
+        continue
+    lines.append("")
+    lines.append(f"{title}:")
+    lines.extend(f"- {item}" for item in values)
+with open(summary_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+
 echo "Repair zavrsen."
 echo "Install report: $REPORT_PATH"
 echo "Repair summary: $REPAIR_SUMMARY_PATH"
+echo "Repair summary text: $SUMMARY_PATH"

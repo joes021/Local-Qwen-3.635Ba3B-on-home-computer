@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.40
+- Linux `repair-install.sh` sada pored `repair-summary.json` pravi i tekstualni `install-summary.txt`, pa diagnostics i summary tok vise nisu polovicni i sada su dosledniji Windows strani
+
 v2.10.39
 - Linux custom Hugging Face download zadrzava korisne `Preuzimam...` i `HF model je preuzet...` poruke dok i dalje uklanja nezeljenu HF warning liniju. Shell filter vise ne koristi polomljeni `pipe + here-doc` obrazac koji je umeo da proguta sav izlaz
 
