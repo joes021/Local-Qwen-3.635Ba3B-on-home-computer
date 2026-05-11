@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.50
+- Linux `Export diagnostics` sada odmah ispisuje i velicinu `.tar.gz` bundle-a u MiB, pa rutiniski diagnostics tok ne ostavlja korisnika samo sa golom putanjom do arhive
+
 v2.10.49
 - Linux `Dodaj lokalni GGUF` sada daje namespacovani custom `id` (`local-...`) umesto golog filename-a, pa lokalni mirror model vise ne moze da pregazi kurirani model sa istim `.gguf` imenom u `manage-models compare/use` tokovima
 

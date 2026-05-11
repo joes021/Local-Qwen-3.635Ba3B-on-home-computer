@@ -81,3 +81,9 @@ PY
 
 tar -czf "$ARCHIVE_PATH" -C "$BUNDLE_DIR" .
 echo "Diagnostics archive: $ARCHIVE_PATH"
+python3 - <<'PY' "$ARCHIVE_PATH"
+import os, sys
+path = sys.argv[1]
+size_mib = os.path.getsize(path) / (1024 ** 2)
+print(f"Velicina bundle-a: {size_mib:.2f} MiB")
+PY

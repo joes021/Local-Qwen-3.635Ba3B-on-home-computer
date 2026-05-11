@@ -244,6 +244,10 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('str(item.get("customSource", "")).lower() == "local-file"', content)
         self.assertIn('str(item.get("filename", "")) == model["filename"]', content)
 
+    def test_linux_export_diagnostics_reports_bundle_size(self):
+        content = (LINUX_LAUNCHER_DIR / "export-diagnostics.sh").read_text(encoding="utf-8")
+        self.assertIn('print(f"Velicina bundle-a: {size_mib:.2f} MiB")', content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
