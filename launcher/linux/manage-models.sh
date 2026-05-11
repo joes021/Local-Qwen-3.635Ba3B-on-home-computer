@@ -258,6 +258,19 @@ if target_path.is_file():
         print(f"Model je vec prisutan: {target_path}")
         raise SystemExit(0)
 
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r".*local_dir_use_symlinks.*deprecated.*",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*You are sending unauthenticated requests to the HF Hub.*",
+    category=UserWarning,
+)
+
 try:
     from huggingface_hub import hf_hub_download
 except Exception:
@@ -276,7 +289,6 @@ for item in sources:
             repo_id=repo,
             filename=source_filename,
             local_dir=str(models_dir),
-            local_dir_use_symlinks=False,
         )
         if not target_path.is_file():
             candidate = models_dir / source_filename

@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.36
+- Linux custom Hugging Face model download vise ne prosipa `huggingface_hub` warning poruke o deprecated `local_dir_use_symlinks` opciji i neautentifikovanom pristupu. `Preuzmi model` za rucno dodate HF modele sada daje cistiji i rutinskiji izlaz i kada se stvarno skida novi model
+
 v2.10.35
 - Linux `manage-models.sh list` sada cisti status liniju u `Pregled modela`: vise ne duplira `recommended/recommended` za aktivni preporuceni model, a custom Hugging Face modeli nepoznate velicine vise ne izlaze kao zbunjujuce `0.0 GiB` nego kao `nepoznato`
 
