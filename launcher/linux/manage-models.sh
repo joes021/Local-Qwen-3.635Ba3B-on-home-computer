@@ -234,7 +234,9 @@ PY
 download_huggingface_custom_model() {
   local meta_json="$1"
   local download_python="$2"
-  "$download_python" - <<'PY' "$meta_json" "$MODELS_DIR"
+  local raw_output status filtered_output
+  set +e
+  raw_output="$("$download_python" - <<'PY' "$meta_json" "$MODELS_DIR" 2>&1
 import json, sys
 from pathlib import Path
 
@@ -311,6 +313,21 @@ if last_error is not None:
     raise SystemExit(str(last_error))
 raise SystemExit("HF custom model nema validan izvor za download.")
 PY
+)"
+  status=$?
+  set -e
+  filtered_output="$(printf '%s\n' "$raw_output" | python3 - <<'PY'
+import sys
+for line in sys.stdin.read().splitlines():
+    if "Warning: You are sending unauthenticated requests to the HF Hub." in line:
+        continue
+    print(line)
+PY
+)"
+  if [ -n "$filtered_output" ]; then
+    printf '%s\n' "$filtered_output"
+  fi
+  return "$status"
 }
 
 ensure_model_download_python() {

@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.38
+- Linux custom Hugging Face download sada cisti i preostalu warning liniju o neautentifikovanom HF pristupu na shell sloju, pa `Preuzmi model` za stvarno novi HF model ostavlja mnogo mirniji i korisniji izlaz
+
 v2.10.37
 - Linux custom Hugging Face download tok sada lokalno utisava i preostalu HF warning poruku o neautentifikovanom pristupu tokom rutinskog `Preuzmi model` izlaza. To ostavlja cistiji terminal/TUI rezultat kada se zaista skida novi mali HF model
 
