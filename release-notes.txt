@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.42
+- Linux `verify-install.sh` sada razlikuje `server trenutno nije aktivan` od stvarnog health kvara. Kada je instalacija zdrava, a server samo nije podignut, verify vise ne daje grubi `FAIL` kao da je setup polomljen
+
 v2.10.41
 - Linux `verify-install.sh` sada BOM-tolerantno cita `install-state.json` i `install-report.json`, pa verify tok ne zavisi od toga kako su ti JSON fajlovi zapisani
 - Linux `test-prompt.sh` sada ima reasoning fallback i ispisuje `Finish reason` kada model ne vrati finalni tekst, umesto da deluje kao prazan ili polovicno uspeo smoke test
