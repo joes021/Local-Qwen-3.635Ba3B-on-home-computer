@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.29
+- Linux `repair-model.sh` vise ne prosipa polu-installer izlaz kada je aktivni model vec zdrav ili kada se repair zavrsi kroz model download tok. Skripta sada daje kraci i smisleniji sazetak, pa `Repair model` u Linux `Control Center` deluje mnogo rutinskije i manje zbunjujuce
+
 v2.10.28
 - Linux `configure-settings.sh` vise ne pravi dupli prikaz tipa `Alpha Local Local (llama.cpp)` kada korisnik ima custom model ciji label vec sadrzi rec `Local`. Provider naziv modela se sada normalizuje i daje cistiji OpenCode prikaz
 

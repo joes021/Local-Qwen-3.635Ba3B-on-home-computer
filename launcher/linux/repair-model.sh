@@ -17,5 +17,30 @@ if [ -z "$MODEL_ID" ]; then
   exit 1
 fi
 
-"$SCRIPT_DIR/manage-models.sh" download "$MODEL_ID"
+DOWNLOAD_OUTPUT="$("$SCRIPT_DIR/manage-models.sh" download "$MODEL_ID" 2>&1)"
+printf '%s\n' "$DOWNLOAD_OUTPUT" | python3 - <<'PY'
+import sys
+
+raw = sys.stdin.read()
+lines = [line.rstrip() for line in raw.splitlines() if line.strip()]
+
+if any("Model je vec prisutan:" in line for line in lines):
+    print("Model je vec prisutan i deluje kompletno, pa download nije bio potreban.")
+else:
+    filtered = []
+    for line in lines:
+        if line.endswith("/state/settings.json"):
+            continue
+        if line.endswith("/.config/opencode/opencode.json"):
+            continue
+        if line == "Linux installer je pripremio lokalni stack.":
+            continue
+        if line in {"Install root:", "State:", "Install report:", "Launchers:", "Primary commands:", "Model:", "Napomena:"}:
+            continue
+        if line.startswith("- /"):
+            continue
+        filtered.append(line)
+    for line in filtered[:8]:
+        print(line)
+PY
 echo "Repair model zavrsen za: $MODEL_ID"
