@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.43
+- Linux `show-logs.sh` sada po defaultu daje smiren preview sa poslednjim linijama logova i jasnim `--full` izlazom, umesto da korisnika odmah zatrpa kompletnim stderr/stdout dumpom iz `Control Center` toka
+
 v2.10.42
 - Linux `verify-install.sh` sada razlikuje `server trenutno nije aktivan` od stvarnog health kvara. Kada je instalacija zdrava, a server samo nije podignut, verify vise ne daje grubi `FAIL` kao da je setup polomljen
 

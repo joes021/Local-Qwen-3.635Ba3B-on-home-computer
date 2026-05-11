@@ -190,6 +190,17 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("server trenutno nije aktivan", content)
         self.assertIn('service_state = service.get("effectiveState", "inactive")', content)
 
+    def test_linux_show_logs_defaults_to_preview_and_supports_full_mode(self):
+        content = (LINUX_LAUNCHER_DIR / "show-logs.sh").read_text(encoding="utf-8")
+        self.assertIn('MODE="${1:-}"', content)
+        self.assertIn('TAIL_LINES="${LOCAL_QWEN_LOG_TAIL_LINES:-60}"', content)
+        self.assertIn('Prikazujem poslednjih $TAIL_LINES linija. Pokreni sa --full za ceo sadrzaj.', content)
+        self.assertIn('Mode: preview (pokreni sa --full za kompletan izlaz)', content)
+        self.assertIn('Mode: full', content)
+        self.assertIn('tail -n "$TAIL_LINES" "$path"', content)
+        self.assertIn('with open(report_path, "r", encoding="utf-8-sig") as f:', content)
+        self.assertIn('json.dumps(report, indent=2, ensure_ascii=False)', content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
