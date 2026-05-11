@@ -56,6 +56,11 @@ for item in defaults.get("modelChoices", {}).values():
         selected_model = item
         break
 selected_label = selected_model.get("label") if selected_model else state["modelId"]
+normalized_label = str(selected_label).strip()
+if normalized_label.lower().endswith(" local"):
+    display_name = f"{normalized_label} (llama.cpp)"
+else:
+    display_name = f"{normalized_label} Local (llama.cpp)"
 
 settings = {
     "profile": profile,
@@ -94,7 +99,7 @@ provider["local-llamacpp"] = {
     },
     "models": {
         state["modelId"]: {
-            "name": f"{selected_label} Local (llama.cpp)"
+            "name": display_name
         }
     },
 }
