@@ -418,14 +418,17 @@ def build_model_browser(
         use_case_lower = use_case.lower()
         installed_size_bytes = int(installed_model_sizes.get(model_id, 0))
         approx_size_bytes = int(float(model.get("approxSizeGiB", 0) or 0) * (1024 ** 3))
+        min_expected_bytes = int(model.get("minExpectedBytes", 0) or 0)
         has_unknown_custom_metadata = (
             str(model.get("curationLevel", "")).lower() == "custom"
             and approx_size_bytes <= 0
-            and int(model.get("minExpectedBytes", 0) or 0) <= 0
+            and min_expected_bytes <= 0
             and int(model.get("minimumGpuMiB", 0) or 0) <= 0
             and int(model.get("recommendedGpuMiB", 0) or 0) <= 0
         )
         disk_needed_bytes = max(0, approx_size_bytes - installed_size_bytes)
+        if installed and installed_size_bytes > 0 and min_expected_bytes > 0 and installed_size_bytes >= min_expected_bytes:
+            disk_needed_bytes = 0
         disk_needed_gib = round(disk_needed_bytes / (1024 ** 3), 2) if disk_needed_bytes > 0 else 0.0
 
         if "code" in use_case_lower or "coder" in model_family.lower() or "coder" in label.lower():

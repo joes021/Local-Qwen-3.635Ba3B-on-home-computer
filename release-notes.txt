@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.51
+- Linux `Model browser` za vec kompletno instalirane custom modele vise ne prikazuje lazni `Need disk: 0.01 GiB` zbog zaokruzivanja. Ako je `minExpectedBytes` prag vec zadovoljen, potreban dodatni disk sada iskreno ostaje `0.0 GiB`
+
 v2.10.50
 - Linux `Export diagnostics` sada odmah ispisuje i velicinu `.tar.gz` bundle-a u MiB, pa rutiniski diagnostics tok ne ostavlja korisnika samo sa golom putanjom do arhive
 

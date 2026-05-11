@@ -415,6 +415,57 @@ class RuntimeEngineTests(unittest.TestCase):
             tiny = next(item for item in payload["models"] if item["id"] == "tiny.gguf")
             self.assertEqual(tiny["installedSizeGiB"], 0.01)
 
+    def test_installed_custom_model_with_satisfied_min_expected_bytes_shows_zero_needed_disk(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_defaults = pathlib.Path(temp_dir) / "defaults.json"
+            defaults = json.loads(DEFAULTS_PATH.read_text(encoding="utf-8"))
+            defaults.setdefault("modelChoices", {})["custom_local_demo"] = {
+                "key": "local-demo-local",
+                "id": "local-demo-local.gguf",
+                "label": "Demo Local",
+                "family": "Custom",
+                "agenticScore": 6,
+                "opencodeFit": 6,
+                "useCase": "agentic-general",
+                "filename": "demo-local.gguf",
+                "minExpectedBytes": 123456789,
+                "approxSizeGiB": 0.12,
+                "minimumGpuMiB": 0,
+                "recommendedGpuMiB": 0,
+                "minimumRamGiB": 8,
+                "preferredProfiles": ["speed", "balanced"],
+                "qualityTier": "compact",
+                "curationLevel": "custom",
+                "description": "Local custom demo.",
+                "sources": [],
+            }
+            temp_defaults.write_text(json.dumps(defaults), encoding="utf-8")
+            code, stdout, stderr = run_runtime_command(
+                "model-browser",
+                "--defaults",
+                str(temp_defaults),
+                "--gpu-mib",
+                "12288",
+                "--ram-gib",
+                "31",
+                "--cpu-threads",
+                "32",
+                "--current-model-id",
+                "qwen36-35b-a3b-IQ2_M.gguf",
+                "--installed-model-ids",
+                "local-demo-local.gguf",
+                "--installed-model-sizes-json",
+                json.dumps({"local-demo-local.gguf": 123456789}),
+                "--free-disk-gib",
+                "700",
+                "--search",
+                "Demo Local",
+            )
+            self.assertEqual(code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            demo = next(item for item in payload["models"] if item["id"] == "local-demo-local.gguf")
+            self.assertEqual(demo["diskNeededGiB"], 0.0)
+
     def test_settings_presets_expose_all_quick_presets(self):
         code, stdout, stderr = run_runtime_command(
             "settings-presets",
