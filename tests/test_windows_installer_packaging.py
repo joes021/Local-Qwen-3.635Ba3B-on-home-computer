@@ -209,6 +209,16 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('print("Gradim upstream llama.cpp runtime...")', content)
         self.assertIn('print("Gradim TurboQuant runtime...")', content)
 
+    def test_linux_manage_models_hides_internal_or_conflicting_badges_in_cli_output(self):
+        content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
+        self.assertIn("def visible_badges(item):", content)
+        self.assertIn('hidden = {"balanced-agentic"}', content)
+        self.assertIn('if "best-starter-model" in badges and "best-for-speed" in badges:', content)
+        self.assertIn('if "best-quality-model" in badges and "best-for-speed" in badges:', content)
+        self.assertIn('if "best-for-coding" in badges and "best-for-speed" in badges:', content)
+        self.assertIn('status.append("badge=" + "|".join(badges))', content)
+        self.assertIn("Badge: {', '.join(visible_badges(item))}", content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)

@@ -494,6 +494,19 @@ PY
 import json, sys
 current_id, recommended_id, payload_json = sys.argv[1:4]
 payload = json.loads(payload_json)
+
+def visible_badges(item):
+    badges = list(item.get("useCaseBadges", []) or [])
+    hidden = {"balanced-agentic"}
+    badges = [badge for badge in badges if badge not in hidden]
+    if "best-starter-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-quality-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-for-coding" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    return badges
+
 print(f"Hardverska klasa: {payload.get('detectedClass')}")
 print(f"Preporucen profil: {payload.get('recommendedProfile')}")
 print()
@@ -508,8 +521,9 @@ for item in payload.get("models", []):
     fit_group = item.get("fitGroup")
     if fit_group and fit_group not in status:
         status.append(fit_group)
-    if item.get("useCaseBadges"):
-        status.append("badge=" + "|".join(item.get("useCaseBadges")))
+    badges = visible_badges(item)
+    if badges:
+        status.append("badge=" + "|".join(badges))
     approx_size = item.get("approxSizeGiB")
     if approx_size is None or float(approx_size) <= 0:
         size_text = "nepoznato"
@@ -574,6 +588,19 @@ PY
     python3 - <<'PY' "$compare_json"
 import json, sys
 payload = json.loads(sys.argv[1])
+
+def visible_badges(item):
+    badges = list(item.get("useCaseBadges", []) or [])
+    hidden = {"balanced-agentic"}
+    badges = [badge for badge in badges if badge not in hidden]
+    if "best-starter-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-quality-model" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    if "best-for-coding" in badges and "best-for-speed" in badges:
+        badges = [badge for badge in badges if badge != "best-for-speed"]
+    return badges
+
 print("Model compare")
 print(f"- Best speed: {payload.get('summary', {}).get('bestForSpeed')}")
 print(f"- Best coding: {payload.get('summary', {}).get('bestForCoding')}")
@@ -582,7 +609,7 @@ for item in payload.get("models", []):
     print()
     print(item.get("id"))
     print(f"  Family: {item.get('family')} | Speed: {item.get('speedEstimateLabel')} | Agentic: {item.get('agenticScore')}/10 | OpenCode: {item.get('opencodeFit')}/10")
-    print(f"  Size: {item.get('approxSizeGiB')} GiB | Fit: {item.get('fitGroup')} | Badge: {', '.join(item.get('useCaseBadges', []))}")
+    print(f"  Size: {item.get('approxSizeGiB')} GiB | Fit: {item.get('fitGroup')} | Badge: {', '.join(visible_badges(item))}")
 PY
     ;;
   use)
