@@ -293,7 +293,7 @@ for item in sources:
         last_error = exc
 
 if last_error is not None:
-raise SystemExit(str(last_error))
+    raise SystemExit(str(last_error))
 raise SystemExit("HF custom model nema validan izvor za download.")
 PY
 }

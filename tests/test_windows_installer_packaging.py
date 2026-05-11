@@ -252,6 +252,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('ensure_model_download_python()', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('python3 -m venv "$MODEL_DOWNLOAD_VENV_DIR"', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('"$python_bin" -m pip install -U huggingface_hub >/dev/null', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
+        self.assertIn('if last_error is not None:\n    raise SystemExit(str(last_error))', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertIn('Lokalni model je vec prisutan: $path', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local model_browser_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
         self.assertNotIn('local compare_json', (REPO_ROOT / "launcher" / "linux" / "manage-models.sh").read_text(encoding="utf-8"))
