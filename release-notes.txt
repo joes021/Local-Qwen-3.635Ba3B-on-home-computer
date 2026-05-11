@@ -1,5 +1,9 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.27
+- Linux `configure-settings.sh` sada uskladjuje `opencode.json` sa stvarno aktivnim modelom i za `model` i za `small_model`, umesto da `small_model` ostane zalepljen na staru vrednost iz neke ranije instalacije. Ovo zatvara tihi OpenCode mismatch kada korisnik promeni model kroz `Control Center`
+- Provider prikazni naziv modela u Linux `opencode.json` sada koristi label aktivnog modela umesto sirovog internog ID-a, pa custom i fallback modeli izgledaju urednije i jasnije
+
 v2.10.26
 - Linux custom HF download hotfix: ispravljeno je uvodjenje embedded Python bloka u `manage-models.sh`, pa ručno dodati Hugging Face modeli više ne padaju na `IndentationError` pri pokretanju `download` toka na Ubuntu
 

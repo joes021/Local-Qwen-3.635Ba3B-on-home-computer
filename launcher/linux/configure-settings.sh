@@ -50,6 +50,12 @@ plan = int(plan_in or existing_opencode.get("planSteps", defaults["opencode"]["s
 general = int(general_in or existing_opencode.get("generalSteps", defaults["opencode"]["steps"]["general"]))
 explore = int(explore_in or existing_opencode.get("exploreSteps", defaults["opencode"]["steps"]["explore"]))
 working_directory = workdir_in or existing_opencode.get("workingDirectory", os.path.expanduser("~"))
+selected_model = None
+for item in defaults.get("modelChoices", {}).values():
+    if item.get("id") == state.get("modelId") or item.get("filename") == state.get("modelId"):
+        selected_model = item
+        break
+selected_label = selected_model.get("label") if selected_model else state["modelId"]
 
 settings = {
     "profile": profile,
@@ -88,12 +94,12 @@ provider["local-llamacpp"] = {
     },
     "models": {
         state["modelId"]: {
-            "name": f"Local model ({state['modelId']})"
+            "name": f"{selected_label} Local (llama.cpp)"
         }
     },
 }
 config["model"] = f"local-llamacpp/{state['modelId']}"
-config["small_model"] = config.get("small_model", f"local-llamacpp/{state['modelId']}")
+config["small_model"] = f"local-llamacpp/{state['modelId']}"
 permission = config.setdefault("permission", {})
 permission["webfetch"] = "allow"
 permission["websearch"] = "allow"
