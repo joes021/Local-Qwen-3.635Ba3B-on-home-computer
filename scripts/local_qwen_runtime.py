@@ -422,7 +422,8 @@ def build_model_browser(
             badges.append("best-quality")
             badges.append("best-quality-model")
         if (
-            not has_unknown_custom_metadata
+            str(model.get("curationLevel", "")).lower() != "custom"
+            and not has_unknown_custom_metadata
             and quality_tier == "compact"
             and int(model.get("recommendedGpuMiB", 0) or 0) <= 8192
         ):

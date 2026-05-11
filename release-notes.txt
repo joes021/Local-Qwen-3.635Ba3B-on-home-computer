@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.46
+- Linux runtime vise ne dodeljuje `best-for-speed` badge custom modelima samo zato sto su mali. Time `manage-models list/compare` vise ne favorizuje rucno dodate GGUF/HF modele kao da su kurirani speed izbori za tu masinu
+
 v2.10.45
 - Linux `manage-models.sh list/compare` sada prikazuje cistije badge-ove u `Control Center` toku: sakrivena je interna `balanced-agentic` oznaka, a suvisni `best-for-speed` vise se ne lepi na modele koji vec imaju jacu ulogu kao `best-starter-model`, `best-quality-model` ili `best-for-coding`
 

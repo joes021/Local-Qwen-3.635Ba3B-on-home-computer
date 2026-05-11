@@ -219,6 +219,11 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn('status.append("badge=" + "|".join(badges))', content)
         self.assertIn("Badge: {', '.join(visible_badges(item))}", content)
 
+    def test_runtime_does_not_assign_best_for_speed_badge_to_custom_models(self):
+        content = (REPO_ROOT / "scripts" / "local_qwen_runtime.py").read_text(encoding="utf-8")
+        self.assertIn('str(model.get("curationLevel", "")).lower() != "custom"', content)
+        self.assertIn('badges.append("best-for-speed")', content)
+
     def test_linux_test_prompt_has_reasoning_fallback_and_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "test-prompt.sh").read_text(encoding="utf-8")
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
