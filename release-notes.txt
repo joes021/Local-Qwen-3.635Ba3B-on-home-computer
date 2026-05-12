@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.55
+- Linux `install-update.sh` sada i u slucaju kada nema novog update-a daje citljiviji izlaz: trenutnu verziju, latest javnu verziju i release URL, umesto samo jedne kratke poruke
+
 v2.10.54
 - Linux `manage-models compare` vise ne ispisuje besmislene `Best speed/coding/quality` redove kada gledas samo jedan model. Summary se sada prikazuje samo kada se zaista poredi vise modela
 

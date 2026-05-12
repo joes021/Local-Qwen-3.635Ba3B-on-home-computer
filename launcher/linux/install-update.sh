@@ -35,9 +35,19 @@ import json, sys
 print(json.loads(sys.argv[1]).get("linuxInstallerUrl", ""))
 PY
 )"
+RELEASE_URL="$(python3 - <<'PY' "$LATEST_JSON"
+import json, sys
+print(json.loads(sys.argv[1]).get("releaseUrl", ""))
+PY
+)"
 
 if [[ "$UPDATE_AVAILABLE" != "yes" ]]; then
+  echo "Trenutna verzija: v$CURRENT_VERSION"
+  echo "Latest javna verzija: v$LATEST_VERSION"
   echo "Instalacija je vec na latest verziji: v$CURRENT_VERSION"
+  if [[ -n "$RELEASE_URL" ]]; then
+    echo "Release URL: $RELEASE_URL"
+  fi
   exit 0
 fi
 
