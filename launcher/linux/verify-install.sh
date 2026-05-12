@@ -11,12 +11,13 @@ OPENCODE_PATH="${HOME}/.config/opencode/opencode.json"
 REPORT_PATH="$ROOT/state/install-report.json"
 HEALTH_URL="$(get_health_url)"
 SERVICE_STATUS_JSON="$(get_effective_service_status_json)"
+MODE="${1:-}"
 
-python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$OPENCODE_PATH" "$ROOT" "$REPORT_PATH" "$HEALTH_URL" "$SERVICE_STATUS_JSON"
+python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$OPENCODE_PATH" "$ROOT" "$REPORT_PATH" "$HEALTH_URL" "$SERVICE_STATUS_JSON" "$MODE"
 import json, os, sys
 import urllib.request
 
-state_path, settings_path, opencode_path, root, report_path, health_url, service_status_json = sys.argv[1:8]
+state_path, settings_path, opencode_path, root, report_path, health_url, service_status_json, mode = sys.argv[1:9]
 with open(state_path, "r", encoding="utf-8-sig") as f:
     state = json.load(f)
 service = json.loads(service_status_json)
@@ -56,7 +57,6 @@ else:
     bad = True
 
 if os.path.isfile(report_path):
-    print("\nInstall report:")
     with open(report_path, "r", encoding="utf-8-sig") as f:
         report = json.load(f)
     if health_ok:
@@ -64,7 +64,16 @@ if os.path.isfile(report_path):
             warning for warning in (report.get("warnings") or [])
             if ("wdac" not in str(warning).lower()) and ("app control" not in str(warning).lower())
         ]
-    print(json.dumps(report, indent=4, ensure_ascii=False))
+    warnings = report.get("warnings") or []
+    component_count = len((report.get("components") or {}).keys())
+    print(f"\nInstall report   : {'FULL' if mode == '--full' else 'PREVIEW'} : {report_path}")
+    print(f"{'Warnings':16} : {'nema' if not warnings else len(warnings)}")
+    print(f"{'Components':16} : {component_count}")
+    if mode == "--full":
+        print("\nInstall report JSON:")
+        print(json.dumps(report, indent=4, ensure_ascii=False))
+    else:
+        print("Pokreni sa --full za kompletan install report JSON.")
 
 raise SystemExit(1 if bad else 0)
 PY

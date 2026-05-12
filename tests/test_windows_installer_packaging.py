@@ -184,11 +184,14 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
 
     def test_linux_verify_install_reads_json_with_bom_tolerance(self):
         content = (LINUX_LAUNCHER_DIR / "verify-install.sh").read_text(encoding="utf-8")
+        self.assertIn('MODE="${1:-}"', content)
         self.assertIn('with open(state_path, "r", encoding="utf-8-sig") as f:', content)
         self.assertIn('with open(report_path, "r", encoding="utf-8-sig") as f:', content)
         self.assertIn('SERVICE_STATUS_JSON="$(get_effective_service_status_json)"', content)
         self.assertIn("server trenutno nije aktivan", content)
         self.assertIn('service_state = service.get("effectiveState", "inactive")', content)
+        self.assertIn("Pokreni sa --full za kompletan install report JSON.", content)
+        self.assertIn("Install report JSON:", content)
 
     def test_linux_show_logs_defaults_to_preview_and_supports_full_mode(self):
         content = (LINUX_LAUNCHER_DIR / "show-logs.sh").read_text(encoding="utf-8")

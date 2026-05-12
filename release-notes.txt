@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.52
+- Linux `verify-install.sh` sada po defaultu daje mnogo mirniji preview umesto da odmah prospe ceo `install-report` JSON. Kompletan JSON ostaje dostupan kroz `--full`, pa je rutinski verify tok pregledniji
+
 v2.10.51
 - Linux `Model browser` za vec kompletno instalirane custom modele vise ne prikazuje lazni `Need disk: 0.01 GiB` zbog zaokruzivanja. Ako je `minExpectedBytes` prag vec zadovoljen, potreban dodatni disk sada iskreno ostaje `0.0 GiB`
 
