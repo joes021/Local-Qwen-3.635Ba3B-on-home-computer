@@ -87,10 +87,18 @@ PY
   next_action="$(get_next_action_title)"
   summary_line="$(get_last_activity_summary)"
   version="$(get_current_version)"
+  if [ "${#model_id}" -gt 34 ]; then
+    model_id="${model_id:0:31}..."
+  fi
+  if [ "${#next_action}" -gt 42 ]; then
+    next_action="${next_action:0:39}..."
+  fi
+  if [ "${#summary_line}" -gt 42 ]; then
+    summary_line="${summary_line:0:39}..."
+  fi
 
   printf '%s\n' \
-    "Local Qwen Control Center" \
-    "Verzija: $version" \
+    "Local Qwen Control Center v$version" \
     "Server: $server_title | Health: $health_state" \
     "Model: $model_id | Profil: $profile" \
     "Next: $next_action" \
@@ -304,19 +312,24 @@ build_model_menu_items() {
 import json, sys
 payload = json.loads(sys.argv[1])
 for item in payload.get("models", []):
-    flags = []
+    status_bits = []
     if item.get("active"):
-        flags.append("AKTIVAN")
-    if item.get("recommended"):
-        flags.append("PREPORUKA")
-    if item.get("installed"):
-        flags.append("SKINUT")
+        status_bits.append("AKTIVAN")
+    elif item.get("installed"):
+        status_bits.append("SKINUT")
     else:
-        flags.append("NIJE SKINUT")
-    fit = item.get("fitGroup") or "unknown"
-    left = item.get('label', item.get('id'))[:28].ljust(28)
-    right = f"{'/'.join(flags)} | {fit}"[:40]
-    label = f"{left} {right}"
+        status_bits.append("NIJE_SKINUT")
+    if item.get("installed"):
+        pass
+    if item.get("customSource") == "huggingface":
+        status_bits.append("HF")
+    elif item.get("customSource") == "local-file":
+        status_bits.append("LOKALNI")
+    if item.get("recommended"):
+        status_bits.append("PREPORUKA")
+    display_name = item.get('label', item.get('id'))
+    status_text = " / ".join(status_bits) if status_bits else "status nepoznat"
+    label = f"{display_name[:42]} [{status_text}]"
     print(item.get("id", ""))
     print(label[:72].rstrip())
 PY
@@ -384,10 +397,12 @@ show_models_menu() {
     case "$choice" in
       1)
         model_id="$(pick_model_id "Pregled modela" "Izaberi model za detalje.")" || continue
+        [ "$model_id" = "__BACK__" ] && continue
         show_model_details_screen "$model_id"
         ;;
       2)
         model_id="$(pick_model_id "Aktiviraj model" "Izaberi model za aktivaciju.")" || continue
+        [ "$model_id" = "__BACK__" ] && continue
         if [ -n "$model_id" ]; then
           run_action_with_result_screen "Aktiviraj model" "$SCRIPT_DIR/manage-models.sh" use "$model_id"
         else
@@ -396,6 +411,7 @@ show_models_menu() {
         ;;
       3)
         model_id="$(pick_model_id "Preuzmi model" "Izaberi model za preuzimanje.")" || continue
+        [ "$model_id" = "__BACK__" ] && continue
         if [ -n "$model_id" ]; then
           run_external_terminal_action_or_inline "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"
         else
@@ -412,7 +428,7 @@ show_models_menu() {
         ;;
       5)
         hf_repo="$(prompt_nonempty_input "Dodaj HF model" "Unesi Hugging Face repo, npr. Qwen/Qwen3-8B-GGUF:")" || continue
-        hf_file="$(prompt_nonempty_input "Dodaj HF model" "Unesi GGUF filename, npr. Qwen3-8B-Q4_K_M.gguf:")" || continue
+        hf_file="$(prompt_nonempty_input "Dodaj HF model" "Unesi TACAN GGUF filename sa kvantizacijom, npr. Qwen3-8B-Q4_K_M.gguf:")" || continue
         hf_label="$(prompt_input "Dodaj HF model" "Opcioni prikazni naziv modela:" "")"
         [ "$hf_label" = "__CANCEL__" ] && hf_label=""
         hf_family="$(prompt_input "Dodaj HF model" "Porodica modela (npr. Qwen, Gemma, Custom):" "Custom")"
@@ -465,12 +481,12 @@ show_settings_menu() {
       6 "Quick presets" \
       7 "Nazad")" || return
     case "$choice" in
-      1) run_action_with_result_screen "Promeni profil" "$SCRIPT_DIR/settings-tui.sh" ;;
-      2) run_action_with_result_screen "Promeni context" "$SCRIPT_DIR/settings-tui.sh" ;;
-      3) run_action_with_result_screen "Promeni output" "$SCRIPT_DIR/settings-tui.sh" ;;
-      4) run_action_with_result_screen "Promeni stepove" "$SCRIPT_DIR/settings-tui.sh" ;;
-      5) run_action_with_result_screen "Promeni working dir" "$SCRIPT_DIR/settings-tui.sh" ;;
-      6) run_action_with_result_screen "Quick presets" "$SCRIPT_DIR/settings-tui.sh" ;;
+      1) run_external_terminal_action_or_inline "Promeni profil" "$SCRIPT_DIR/settings-tui.sh" profile ;;
+      2) run_external_terminal_action_or_inline "Promeni context" "$SCRIPT_DIR/settings-tui.sh" context ;;
+      3) run_external_terminal_action_or_inline "Promeni output" "$SCRIPT_DIR/settings-tui.sh" output ;;
+      4) run_external_terminal_action_or_inline "Promeni stepove" "$SCRIPT_DIR/settings-tui.sh" steps ;;
+      5) run_external_terminal_action_or_inline "Promeni working dir" "$SCRIPT_DIR/settings-tui.sh" workdir ;;
+      6) run_external_terminal_action_or_inline "Quick presets" "$SCRIPT_DIR/settings-tui.sh" presets ;;
       7) return ;;
       *) show_warning_screen "Nepoznat izbor" "Izaberi opciju od 1 do 7." ;;
     esac

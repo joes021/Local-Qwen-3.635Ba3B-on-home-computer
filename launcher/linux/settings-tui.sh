@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/local_qwen_common.sh"
 
+mode="${1:-all}"
 current_profile="$(get_saved_profile)"
 current_workdir="$(get_saved_working_directory)"
 
@@ -59,6 +60,14 @@ selected_preset_json=""
 
 echo
 echo "Local Qwen Settings TUI"
+case "$mode" in
+  profile) echo "Fokus: profil" ;;
+  context) echo "Fokus: context size" ;;
+  output) echo "Fokus: max output tokens" ;;
+  steps) echo "Fokus: OpenCode stepovi" ;;
+  workdir) echo "Fokus: working directory" ;;
+  presets) echo "Fokus: quick presets" ;;
+esac
 echo
 echo "Quick presets"
 python3 - <<'PY' "$preset_payload"

@@ -56,6 +56,7 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('run_action_with_result_screen "Dodaj HF model" "$SCRIPT_DIR/manage-models.sh" add-hf', dashboard)
         self.assertIn('pick_model_id "Pregled modela" "Izaberi model za detalje."', dashboard)
         self.assertIn('run_external_terminal_action_or_inline "Preuzmi model" "$SCRIPT_DIR/manage-models.sh" download "$model_id"', dashboard)
+        self.assertIn('[ "$model_id" = "__BACK__" ] && continue', dashboard)
 
     def test_dashboard_uses_external_terminal_for_long_running_actions_when_possible(self):
         dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
@@ -88,19 +89,34 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         self.assertIn('"Promeni stepove"', dashboard)
         self.assertIn('"Promeni working dir"', dashboard)
         self.assertIn('"Quick presets"', dashboard)
+        self.assertIn('run_external_terminal_action_or_inline "Quick presets" "$SCRIPT_DIR/settings-tui.sh" presets', dashboard)
 
     def test_action_result_preview_does_not_use_pipefail_unfriendly_head_pipeline(self):
         actions = ACTIONS_PATH.read_text(encoding="utf-8")
 
         self.assertIn("extract_nonempty_preview_lines()", actions)
-        self.assertIn('CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-120}"', actions)
-        self.assertIn('CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-92}"', actions)
-        self.assertIn('CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-132}"', actions)
+        self.assertIn('CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-$(compute_dialog_width 120)}"', actions)
+        self.assertIn('CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-$(compute_text_width "$CONTROL_CENTER_DIALOG_WIDTH" 88)}"', actions)
+        self.assertIn('CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-$(compute_dialog_width 132)}"', actions)
         self.assertIn('summary="$(extract_nonempty_preview_lines "$output" 6)"', actions)
         self.assertIn('details="$(extract_nonempty_preview_lines "$output" 8)"', actions)
         self.assertIn('formatted = "\\n".join(lines)', actions)
         self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 6", actions)
         self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 8", actions)
+
+    def test_model_menu_labels_are_compact_and_do_not_use_padded_two_column_layout(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+        list_block = dashboard.split("build_model_menu_items() {", 1)[1].split("show_model_details_screen() {", 1)[0]
+
+        self.assertIn('status_bits = []', list_block)
+        self.assertIn('label = f"{display_name[:42]} [{status_text}]"', list_block)
+        self.assertNotIn(".ljust(28)", list_block)
+        self.assertNotIn("fitGroup", list_block)
+
+    def test_hf_prompt_requires_exact_gguf_filename_with_quantization(self):
+        dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('TACAN GGUF filename sa kvantizacijom', dashboard)
 
 
 if __name__ == "__main__":

@@ -1,13 +1,77 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTROL_CENTER_DIALOG_HEIGHT="${CONTROL_CENTER_DIALOG_HEIGHT:-28}"
-CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-120}"
+get_terminal_cols() {
+  local cols
+  cols="$(tput cols 2>/dev/null || echo 0)"
+  case "$cols" in
+    ''|*[!0-9]*) cols=0 ;;
+  esac
+  printf '%s\n' "$cols"
+}
+
+get_terminal_lines() {
+  local lines
+  lines="$(tput lines 2>/dev/null || echo 0)"
+  case "$lines" in
+    ''|*[!0-9]*) lines=0 ;;
+  esac
+  printf '%s\n' "$lines"
+}
+
+compute_dialog_width() {
+  local preferred="${1:-120}" cols candidate
+  cols="$(get_terminal_cols)"
+  if [ "$cols" -ge 84 ]; then
+    candidate=$((cols - 6))
+    if [ "$candidate" -gt "$preferred" ]; then
+      candidate="$preferred"
+    fi
+    if [ "$candidate" -lt 78 ]; then
+      candidate=78
+    fi
+    printf '%s\n' "$candidate"
+    return
+  fi
+  printf '%s\n' "$preferred"
+}
+
+compute_dialog_height() {
+  local preferred="${1:-28}" lines candidate
+  lines="$(get_terminal_lines)"
+  if [ "$lines" -ge 24 ]; then
+    candidate=$((lines - 4))
+    if [ "$candidate" -gt "$preferred" ]; then
+      candidate="$preferred"
+    fi
+    if [ "$candidate" -lt 18 ]; then
+      candidate=18
+    fi
+    printf '%s\n' "$candidate"
+    return
+  fi
+  printf '%s\n' "$preferred"
+}
+
+compute_text_width() {
+  local dialog_width="${1:-120}" preferred="${2:-88}" candidate
+  candidate=$((dialog_width - 10))
+  if [ "$candidate" -gt "$preferred" ]; then
+    candidate="$preferred"
+  fi
+  if [ "$candidate" -lt 50 ]; then
+    candidate=50
+  fi
+  printf '%s\n' "$candidate"
+}
+
+CONTROL_CENTER_DIALOG_HEIGHT="${CONTROL_CENTER_DIALOG_HEIGHT:-$(compute_dialog_height 28)}"
+CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-$(compute_dialog_width 120)}"
 CONTROL_CENTER_MENU_HEIGHT="${CONTROL_CENTER_MENU_HEIGHT:-16}"
-CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-92}"
-CONTROL_CENTER_INPUT_TEXT_WIDTH="${CONTROL_CENTER_INPUT_TEXT_WIDTH:-88}"
-CONTROL_CENTER_DETAILS_HEIGHT="${CONTROL_CENTER_DETAILS_HEIGHT:-34}"
-CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-132}"
+CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-$(compute_text_width "$CONTROL_CENTER_DIALOG_WIDTH" 88)}"
+CONTROL_CENTER_INPUT_TEXT_WIDTH="${CONTROL_CENTER_INPUT_TEXT_WIDTH:-$(compute_text_width "$CONTROL_CENTER_DIALOG_WIDTH" 84)}"
+CONTROL_CENTER_DETAILS_HEIGHT="${CONTROL_CENTER_DETAILS_HEIGHT:-$(compute_dialog_height 34)}"
+CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-$(compute_dialog_width 132)}"
 
 control_center_has_tui() {
   if [ "${LOCAL_QWEN_FORCE_PLAIN_TUI:-0}" = "1" ]; then

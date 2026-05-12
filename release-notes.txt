@@ -488,6 +488,13 @@ v1.6.0
 v1.5.0
 - Dodat centralni packaging/release-all.ps1 za build oba instalera i objavu release-a
 - Dokumentovan one-command cross-platform release tok
+v2.10.57
+- Linux TUI sada prilagodjava sirinu stvarnom terminalu umesto fiksnog sirokog layout-a, da se smanji levo seckanje teksta
+- Home header sada prikazuje verziju u prvom redu i skracuje predugacke status vrednosti
+- Modeli ekran sada ima cistiji, manje nabijen prikaz statusa i ispravno tretira Nazad pri izboru modela
+- Dodaj HF model sada eksplicitno trazi tacan GGUF filename sa kvantizacijom
+- Settings akcije, ukljucujuci Quick presets, sada se pokrecu kroz bezbedniji terminal tok umesto da izbace korisnika iz TUI-ja
+
 - Zatvoren v1.5.0 milestone za release automatizaciju
 
 v1.4.0
