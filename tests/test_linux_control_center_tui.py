@@ -93,8 +93,12 @@ class LinuxControlCenterTuiTests(unittest.TestCase):
         actions = ACTIONS_PATH.read_text(encoding="utf-8")
 
         self.assertIn("extract_nonempty_preview_lines()", actions)
+        self.assertIn('CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-120}"', actions)
+        self.assertIn('CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-92}"', actions)
+        self.assertIn('CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-132}"', actions)
         self.assertIn('summary="$(extract_nonempty_preview_lines "$output" 6)"', actions)
         self.assertIn('details="$(extract_nonempty_preview_lines "$output" 8)"', actions)
+        self.assertIn('formatted = "\\n".join(lines)', actions)
         self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 6", actions)
         self.assertNotIn("sed '/^[[:space:]]*$/d' | head -n 8", actions)
 

@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.56
+- Linux shared TUI helper je prosiren i rasterecen: veca podrazumevana sirina/visina dijaloga, siri detail prozori i uklonjen problematicki rucni levi indent u formatteru. Ovo je centralni fix za problem gde tekst deluje pojedeno sa leve strane kroz vise ekrana
+
 v2.10.55
 - Linux `install-update.sh` sada i u slucaju kada nema novog update-a daje citljiviji izlaz: trenutnu verziju, latest javnu verziju i release URL, umesto samo jedne kratke poruke
 

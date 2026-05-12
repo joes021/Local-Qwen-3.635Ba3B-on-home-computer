@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTROL_CENTER_DIALOG_HEIGHT="${CONTROL_CENTER_DIALOG_HEIGHT:-26}"
-CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-108}"
-CONTROL_CENTER_MENU_HEIGHT="${CONTROL_CENTER_MENU_HEIGHT:-14}"
+CONTROL_CENTER_DIALOG_HEIGHT="${CONTROL_CENTER_DIALOG_HEIGHT:-28}"
+CONTROL_CENTER_DIALOG_WIDTH="${CONTROL_CENTER_DIALOG_WIDTH:-120}"
+CONTROL_CENTER_MENU_HEIGHT="${CONTROL_CENTER_MENU_HEIGHT:-16}"
+CONTROL_CENTER_PANEL_TEXT_WIDTH="${CONTROL_CENTER_PANEL_TEXT_WIDTH:-92}"
+CONTROL_CENTER_INPUT_TEXT_WIDTH="${CONTROL_CENTER_INPUT_TEXT_WIDTH:-88}"
+CONTROL_CENTER_DETAILS_HEIGHT="${CONTROL_CENTER_DETAILS_HEIGHT:-34}"
+CONTROL_CENTER_DETAILS_WIDTH="${CONTROL_CENTER_DETAILS_WIDTH:-132}"
 
 control_center_has_tui() {
   if [ "${LOCAL_QWEN_FORCE_PLAIN_TUI:-0}" = "1" ]; then
@@ -14,23 +18,23 @@ control_center_has_tui() {
 
 format_panel_text() {
   local text="${1:-}"
-  local width="${2:-84}"
+  local width="${2:-$CONTROL_CENTER_PANEL_TEXT_WIDTH}"
   python3 - <<'PY' "$text" "$width"
 import sys, textwrap
 text = sys.argv[1]
 width = int(sys.argv[2])
 lines = []
 for block in text.splitlines() or [""]:
-    stripped = block.strip()
-    if not stripped:
+    if not block.strip():
         lines.append("")
         continue
+    stripped = block.rstrip()
     wrapped = textwrap.wrap(stripped, width=width, break_long_words=False, break_on_hyphens=False)
     if not wrapped:
         lines.append("")
     else:
         lines.extend(wrapped)
-formatted = "\n".join(("  " + line) if line else "" for line in lines)
+formatted = "\n".join(lines)
 print(formatted)
 PY
 }
@@ -59,7 +63,7 @@ show_info_screen() {
   local title="$1"
   local body="${2:-}"
   local formatted
-  formatted="$(format_panel_text "${body:-Nema dodatnih detalja.}" 84)"
+  formatted="$(format_panel_text "${body:-Nema dodatnih detalja.}" "$CONTROL_CENTER_PANEL_TEXT_WIDTH")"
   if control_center_has_tui; then
     whiptail --title "$title" --msgbox "$formatted" "$CONTROL_CENTER_DIALOG_HEIGHT" "$CONTROL_CENTER_DIALOG_WIDTH"
     return 0
@@ -92,7 +96,7 @@ prompt_input() {
   local prompt="$2"
   local default_value="${3:-}"
   local formatted
-  formatted="$(format_panel_text "$prompt" 78)"
+  formatted="$(format_panel_text "$prompt" "$CONTROL_CENTER_INPUT_TEXT_WIDTH")"
   if control_center_has_tui; then
     if whiptail --title "$title" --inputbox "$formatted" 16 "$CONTROL_CENTER_DIALOG_WIDTH" "$default_value" 3>&1 1>&2 2>&3; then
       return 0
@@ -111,7 +115,7 @@ run_menu() {
   local prompt="$2"
   shift 2
   local formatted
-  formatted="$(format_panel_text "$prompt" 84)"
+  formatted="$(format_panel_text "$prompt" "$CONTROL_CENTER_PANEL_TEXT_WIDTH")"
 
   if control_center_has_tui; then
     local selection
@@ -152,12 +156,12 @@ run_action_with_result_screen() {
       summary="Akcija je zavrsena bez dodatnog izlaza."
     fi
     if control_center_has_tui; then
-      summary="$(format_panel_text "$summary" 84)"
+      summary="$(format_panel_text "$summary" "$CONTROL_CENTER_PANEL_TEXT_WIDTH")"
       response=0
       if whiptail --title "$title" --yesno "$summary\n\n  Prikazi detaljan izlaz?" "$CONTROL_CENTER_DIALOG_HEIGHT" "$CONTROL_CENTER_DIALOG_WIDTH"; then
         temp_file="$(mktemp)"
         printf '%s\n' "$output" > "$temp_file"
-        whiptail --title "$title - detalji" --scrolltext --textbox "$temp_file" 30 120
+        whiptail --title "$title - detalji" --scrolltext --textbox "$temp_file" "$CONTROL_CENTER_DETAILS_HEIGHT" "$CONTROL_CENTER_DETAILS_WIDTH"
         rm -f "$temp_file"
       fi
     else
@@ -169,12 +173,12 @@ run_action_with_result_screen() {
       details="Akcija nije uspela bez korisne poruke."
     fi
     if control_center_has_tui; then
-      details="$(format_panel_text "$details" 84)"
+      details="$(format_panel_text "$details" "$CONTROL_CENTER_PANEL_TEXT_WIDTH")"
       temp_file="$(mktemp)"
       printf '%s\n' "$output" > "$temp_file"
       whiptail --title "$title - greska" --yes-button "Detalji" --no-button "Nazad" --yesno "$details" "$CONTROL_CENTER_DIALOG_HEIGHT" "$CONTROL_CENTER_DIALOG_WIDTH"
       if [ $? -eq 0 ]; then
-        whiptail --title "$title - detalji" --scrolltext --textbox "$temp_file" 30 120
+        whiptail --title "$title - detalji" --scrolltext --textbox "$temp_file" "$CONTROL_CENTER_DETAILS_HEIGHT" "$CONTROL_CENTER_DETAILS_WIDTH"
       fi
       rm -f "$temp_file"
     else
