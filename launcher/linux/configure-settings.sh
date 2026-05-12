@@ -121,6 +121,6 @@ for name, steps in {
 with open(opencode_path, "w", encoding="utf-8") as f:
     json.dump(config, f, indent=2)
 
-print(settings_path)
-print(opencode_path)
+print(f"Settings: {settings_path}")
+print(f"OpenCode config: {opencode_path}")
 PY

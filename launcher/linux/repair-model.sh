@@ -42,9 +42,9 @@ if any("Model je vec prisutan:" in line for line in lines):
 else:
     filtered = []
     for line in lines:
-        if line.endswith("/state/settings.json"):
+        if line.startswith("Settings: ") and line.endswith("/state/settings.json"):
             continue
-        if line.endswith("/.config/opencode/opencode.json"):
+        if line.startswith("OpenCode config: ") and line.endswith("/.config/opencode/opencode.json"):
             continue
         if line == "Linux installer je pripremio lokalni stack.":
             continue
