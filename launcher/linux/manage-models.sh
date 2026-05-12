@@ -612,10 +612,12 @@ def visible_badges(item):
 
 print("Model compare")
 summary = payload.get('summary', {})
-print(f"- Best speed: {summary.get('bestForSpeed') or 'nema jasnog favorita u ovom poredjenju'}")
-print(f"- Best coding: {summary.get('bestForCoding') or 'nema jasnog favorita u ovom poredjenju'}")
-print(f"- Best quality: {summary.get('bestForQuality') or 'nema jasnog favorita u ovom poredjenju'}")
-for item in payload.get("models", []):
+models = payload.get("models", [])
+if len(models) > 1:
+    print(f"- Best speed: {summary.get('bestForSpeed') or 'nema jasnog favorita u ovom poredjenju'}")
+    print(f"- Best coding: {summary.get('bestForCoding') or 'nema jasnog favorita u ovom poredjenju'}")
+    print(f"- Best quality: {summary.get('bestForQuality') or 'nema jasnog favorita u ovom poredjenju'}")
+for item in models:
     print()
     print(item.get("id"))
     print(f"  Family: {item.get('family')} | Speed: {item.get('speedEstimateLabel')} | Agentic: {item.get('agenticScore')}/10 | OpenCode: {item.get('opencodeFit')}/10")

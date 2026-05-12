@@ -1,5 +1,8 @@
 Local Qwen Home Computer - recent fixes
 
+v2.10.54
+- Linux `manage-models compare` vise ne ispisuje besmislene `Best speed/coding/quality` redove kada gledas samo jedan model. Summary se sada prikazuje samo kada se zaista poredi vise modela
+
 v2.10.53
 - Linux `configure-settings.sh` vise ne vraca dve gole putanje bez konteksta, nego jasno ispisuje `Settings: ...` i `OpenCode config: ...`. Time i `repair-config`/`start-opencode` tokovi daju citljiviji i manje zbunjujuci izlaz
 

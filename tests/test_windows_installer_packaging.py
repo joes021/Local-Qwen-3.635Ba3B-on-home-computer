@@ -239,6 +239,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
         self.assertIn("nema jasnog favorita u ovom poredjenju", content)
         self.assertIn('badge_text = ", ".join(visible_badges(item)) or "nema"', content)
+        self.assertIn('if len(models) > 1:', content)
 
     def test_linux_local_custom_models_use_namespaced_ids_to_avoid_curated_collisions(self):
         content = (LINUX_LAUNCHER_DIR / "manage-models.sh").read_text(encoding="utf-8")
