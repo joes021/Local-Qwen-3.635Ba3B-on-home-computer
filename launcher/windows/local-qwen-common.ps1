@@ -2529,7 +2529,7 @@ function Repair-DesktopShortcuts {
 
     $controlCenterIcon = Join-Path $assetsDir "icons\control-center.ico"
     $opencodeIcon = Join-Path $assetsDir "icons\opencode-local-qwen.ico"
-    $controlCenterVbs = New-HiddenVbsLauncher -LaunchersDir $launchersDir -VbsName "open-control-center.vbs" -PsScriptName "control-center.ps1"
+    $controlCenterVbs = New-HiddenVbsLauncher -LaunchersDir $launchersDir -VbsName "open-control-center.vbs" -PsScriptName "start-control-center-next.ps1"
     $openCodeCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "open-opencode.cmd" -PsScriptName "start-opencode.ps1"
     $verifyCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "verify-install.cmd" -PsScriptName "verify-install.ps1"
     $repairCmd = New-CmdLauncher -LaunchersDir $launchersDir -CmdName "repair-install.cmd" -PsScriptName "repair-install.ps1"
