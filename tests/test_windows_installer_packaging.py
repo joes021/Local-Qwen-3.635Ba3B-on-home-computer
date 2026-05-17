@@ -776,6 +776,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("function Get-OpenCodeModelDisplayName", common)
         self.assertIn("function Import-LocalGgufModel", common)
         self.assertIn("function Add-HuggingFaceCustomModel", common)
+        self.assertIn("Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -TimeoutSec 10 -ErrorAction Stop", common)
         self.assertIn('$payload = Invoke-RuntimeEngineJson -Arguments @($arguments.ToArray())', common)
         self.assertIn("Copy-FileWithRetry -SourcePath $file.FullName -DestinationPath $targetPath", common)
         self.assertIn("Copy-DirectoryContentsWithRetry -SourceDir $entry.Source -DestinationDir $entry.Destination", common)

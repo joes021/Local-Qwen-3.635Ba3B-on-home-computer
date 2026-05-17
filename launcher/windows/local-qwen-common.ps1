@@ -1695,7 +1695,7 @@ function Add-HuggingFaceCustomModel {
     $url = "https://huggingface.co/$repoText/resolve/main/$fileNameText"
     $sizeBytes = 0
     try {
-        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -TimeoutSec 10 -ErrorAction Stop
         $headerValue = $response.Headers["Content-Length"]
         if ($headerValue) {
             $sizeBytes = [int64]$headerValue
@@ -1760,7 +1760,7 @@ function Add-UnslothCustomModel {
     $url = "https://huggingface.co/$repoText/resolve/main/$fileNameText"
     $sizeBytes = 0
     try {
-        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -TimeoutSec 10 -ErrorAction Stop
         $headerValue = $response.Headers["Content-Length"]
         if ($headerValue) {
             $sizeBytes = [int64]$headerValue
