@@ -745,6 +745,7 @@ class WindowsInstallerPackagingTests(unittest.TestCase):
         self.assertIn("Clear-ModelDownloadProgress", common)
         self.assertIn("LOCAL_QWEN_INSTALL_STATUS_PATH", common)
         self.assertIn("write_install_status(payload)", common)
+        self.assertIn('$sourceJson = ConvertTo-Json -InputObject @($sources) -Depth 10 -Compress', common)
         self.assertIn("Refresh-ModelDownloadProgressView", control_center)
         self.assertIn("-OnTick", control_center)
 

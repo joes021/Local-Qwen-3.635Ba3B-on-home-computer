@@ -1936,7 +1936,7 @@ function Download-RecommendedModel {
         $sources = @([pscustomobject]@{ repo = $meta.source; filename = $meta.filename })
     }
 
-    $sourceJson = ($sources | ConvertTo-Json -Depth 10 -Compress)
+    $sourceJson = ConvertTo-Json -InputObject @($sources) -Depth 10 -Compress
     $code = @"
 import json
 import os
