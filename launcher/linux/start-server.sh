@@ -9,6 +9,7 @@ ROOT="$(get_local_qwen_root)"
 STATE_PATH="$(get_install_state_path)"
 SETTINGS_PATH="$(get_settings_path)"
 DEFAULTS_PATH="$(get_defaults_path)"
+TURBOQUANT_CONFIG_PATH="$(get_turboquant_config_path)"
 
 if [ -z "$PROFILE" ]; then
   PROFILE="$(get_saved_profile)"
@@ -31,19 +32,26 @@ PY
   exit 0
 fi
 
-python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$DEFAULTS_PATH" "$PROFILE"
+python3 - <<'PY' "$STATE_PATH" "$SETTINGS_PATH" "$DEFAULTS_PATH" "$PROFILE" "$TURBOQUANT_CONFIG_PATH"
 import json, os, subprocess, sys, time
 
-state_path, settings_path, defaults_path, profile = sys.argv[1:5]
+state_path, settings_path, defaults_path, profile, turboquant_config_path = sys.argv[1:6]
 with open(state_path, "r", encoding="utf-8") as f:
     state = json.load(f)
 with open(defaults_path, "r", encoding="utf-8") as f:
     defaults = json.load(f)
 with open(settings_path, "r", encoding="utf-8") as f:
     settings = json.load(f)
+turboquant_config = {}
+if turboquant_config_path and os.path.isfile(turboquant_config_path):
+    try:
+        with open(turboquant_config_path, "r", encoding="utf-8-sig") as f:
+            turboquant_config = json.load(f)
+    except Exception:
+        turboquant_config = {}
 
 profile_data = defaults["profiles"][profile]
-ctx = settings["llama"]["contextSize"]
+ctx = int(turboquant_config.get("context") or settings["llama"]["contextSize"])
 out_tokens = settings["llama"]["maxOutputTokens"]
 context_customized = settings.get("llama", {}).get("contextSizeCustomized")
 if context_customized is None:
@@ -57,12 +65,22 @@ if output_customized is None:
 else:
     output_customized = bool(output_customized)
 
-server = state.get("turboServerExe") or state["llamaServerExe"]
+runtime_preference = str(turboquant_config.get("runtimePreference") or "turboquant").strip().lower()
+if runtime_preference == "llama.cpp":
+    server = state["llamaServerExe"]
+else:
+    server = state.get("turboServerExe") or state["llamaServerExe"]
 model = state["modelFile"]
 port = state["port"]
 threads = state["threads"]
 gpu_layers = 999
 uses_turbo = bool(state.get("turboServerExe")) and os.path.abspath(server) == os.path.abspath(state["turboServerExe"])
+ncmoe = int(turboquant_config.get("ncmoe") or profile_data["ncmoe"])
+cache_type_k = str(turboquant_config.get("ctk") or profile_data["cacheTypeK"])
+cache_type_v = str(turboquant_config.get("ctv") or profile_data["cacheTypeV"])
+flash_attention = bool(turboquant_config.get("flashAttention", True))
+mlock = bool(turboquant_config.get("mlock", state.get("mlock", True)))
+mmap_mode = str(turboquant_config.get("mmapMode") or ("no-mmap" if state.get("noMmap", True) else "mmap")).strip().lower()
 
 if not uses_turbo:
     detected_vram_mib = None
@@ -106,17 +124,17 @@ if not uses_turbo:
 args = [
     server, "-m", model, "--port", str(port),
     "-ngl", str(gpu_layers),
-    "-ncmoe", str(profile_data["ncmoe"]),
+    "-ncmoe", str(ncmoe),
     "-c", str(ctx),
-    "-fa", "on",
+    "-fa", "on" if flash_attention else "off",
     "-n", str(out_tokens),
     "-t", str(threads),
 ]
 if uses_turbo:
-    args.extend(["-ctk", profile_data["cacheTypeK"], "-ctv", profile_data["cacheTypeV"]])
-if state.get("noMmap", True):
+    args.extend(["-ctk", cache_type_k, "-ctv", cache_type_v])
+if mmap_mode == "no-mmap":
     args.append("--no-mmap")
-if state.get("mlock", True):
+if mlock:
     args.append("--mlock")
 
 log_dir = os.path.join(state["installRoot"], "logs")

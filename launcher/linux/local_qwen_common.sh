@@ -123,6 +123,10 @@ get_settings_path() {
   echo "$(get_local_qwen_root)/state/settings.json"
 }
 
+get_turboquant_config_path() {
+  echo "$(get_local_qwen_root)/state/control-center-next-turboquant-config.json"
+}
+
 is_windows_interop_path() {
   local path="${1:-}"
   case "$path" in
@@ -213,14 +217,32 @@ PY
 get_service_lifecycle_json() {
   local lifecycle_path
   lifecycle_path="$(get_service_lifecycle_path)"
-  python3 - <<'PY' "$lifecycle_path"
+  local has_health="false"
+  local has_process="false"
+  if test_llama_health; then
+    has_health="true"
+  fi
+  if test_llama_process_running; then
+    has_process="true"
+  fi
+  python3 - <<'PY' "$lifecycle_path" "$has_health" "$has_process"
 import json, os, sys
-path = sys.argv[1]
+path, has_health, has_process = sys.argv[1:4]
+has_health = has_health.lower() == "true"
+has_process = has_process.lower() == "true"
 if os.path.exists(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
-            print(json.dumps(json.load(f)))
-            raise SystemExit(0)
+            payload = json.load(f)
+        state = str(payload.get("state", "inactive") or "inactive")
+        if state == "active" and not has_health and not has_process:
+            payload["state"] = "inactive"
+            payload["reason"] = "Sacuvani lifecycle je tvrdio da je server aktivan, ali nisu pronadjeni ni health endpoint ni llama-server proces."
+        elif state == "starting" and not has_health and not has_process:
+            payload["state"] = "failed"
+            payload["reason"] = "Server je ostao u starting stanju bez health endpoint-a i bez llama-server procesa."
+        print(json.dumps(payload))
+        raise SystemExit(0)
     except Exception:
         pass
 print(json.dumps({
@@ -286,6 +308,34 @@ test_llama_health() {
   local url
   url="$(get_health_url)"
   curl -fsS "$url" >/dev/null 2>&1
+}
+
+test_llama_process_running() {
+  python3 - <<'PY'
+import subprocess
+
+try:
+    completed = subprocess.run(
+        ["ps", "-ef"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+except OSError:
+    raise SystemExit(1)
+
+if completed.returncode != 0:
+    raise SystemExit(1)
+
+for line in completed.stdout.splitlines():
+    lowered = line.strip().replace("\\", "/").lower()
+    if "llama-server" in lowered:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
 }
 
 get_model_min_expected_bytes() {

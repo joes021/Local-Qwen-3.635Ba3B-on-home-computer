@@ -10,6 +10,15 @@ param(
 $state = Get-InstallState
 $defaults = Get-Defaults
 $settings = Get-Settings
+$turboQuantConfigPath = Get-ControlCenterNextTurboQuantConfigPath
+$turboQuantConfig = $null
+if (Test-Path $turboQuantConfigPath) {
+    try {
+        $turboQuantConfig = Get-Content -Raw $turboQuantConfigPath | ConvertFrom-Json
+    } catch {
+        $turboQuantConfig = $null
+    }
+}
 
 if (-not $Profile) {
     $Profile = if ($settings.profile) { [string]$settings.profile } else { [string]$state.defaultProfile }
@@ -23,12 +32,23 @@ if (-not $profileData) {
 $logDir = Join-Path $state.installRoot "logs"
 Ensure-Directory $logDir
 
-$serverExe = Get-LlamaServerExe
+$runtimePreference = if ($turboQuantConfig -and $turboQuantConfig.runtimePreference) { [string]$turboQuantConfig.runtimePreference } else { "turboquant" }
+$serverExe = if ($runtimePreference -eq "llama.cpp" -and $state.PSObject.Properties["llamaBinDir"] -and $state.llamaBinDir) {
+    Join-Path $state.llamaBinDir "llama-server.exe"
+} else {
+    Get-LlamaServerExe
+}
 $modelPath = Get-LlamaModelPath
 
-$ctx = if ($settings.llama.contextSize) { [int]$settings.llama.contextSize } else { [int]$profileData.contextSize }
+$ctx = if ($turboQuantConfig -and $turboQuantConfig.context) { [int]$turboQuantConfig.context } elseif ($settings.llama.contextSize) { [int]$settings.llama.contextSize } else { [int]$profileData.contextSize }
 $maxOutput = if ($settings.llama.maxOutputTokens) { [int]$settings.llama.maxOutputTokens } else { 8192 }
 $gpuLayers = 999
+$ncmoe = if ($turboQuantConfig -and $turboQuantConfig.ncmoe) { [int]$turboQuantConfig.ncmoe } else { [int]$profileData.ncmoe }
+$cacheTypeK = if ($turboQuantConfig -and $turboQuantConfig.ctk) { [string]$turboQuantConfig.ctk } else { [string]$profileData.cacheTypeK }
+$cacheTypeV = if ($turboQuantConfig -and $turboQuantConfig.ctv) { [string]$turboQuantConfig.ctv } else { [string]$profileData.cacheTypeV }
+$flashAttention = if ($turboQuantConfig -and $null -ne $turboQuantConfig.flashAttention) { [bool]$turboQuantConfig.flashAttention } else { $true }
+$useMlock = if ($turboQuantConfig -and $null -ne $turboQuantConfig.mlock) { [bool]$turboQuantConfig.mlock } else { [bool]$state.mlock }
+$mmapMode = if ($turboQuantConfig -and $turboQuantConfig.mmapMode) { [string]$turboQuantConfig.mmapMode } else { $(if ($state.noMmap) { "no-mmap" } else { "mmap" }) }
 $contextCustomized = if ($settings.llama.PSObject.Properties["contextSizeCustomized"]) {
     [bool]$settings.llama.contextSizeCustomized
 } else {
@@ -79,25 +99,25 @@ $args = @(
     "-m", $modelPath,
     "--port", $state.port,
     "-ngl", [string]$gpuLayers,
-    "-ncmoe", [string]$profileData.ncmoe,
+    "-ncmoe", [string]$ncmoe,
     "-c", [string]$ctx,
-    "-fa", "on",
+    "-fa", $(if ($flashAttention) { "on" } else { "off" }),
     "-n", [string]$maxOutput,
     "-t", [string]$state.threads
 )
 
 if ($usesTurboQuant) {
     $args += @(
-        "-ctk", [string]$profileData.cacheTypeK,
-        "-ctv", [string]$profileData.cacheTypeV
+        "-ctk", [string]$cacheTypeK,
+        "-ctv", [string]$cacheTypeV
     )
 }
 
-if ($state.noMmap) {
+if ($mmapMode -eq "no-mmap") {
     $args += "--no-mmap"
 }
 
-if ($state.mlock) {
+if ($useMlock) {
     $args += "--mlock"
 }
 

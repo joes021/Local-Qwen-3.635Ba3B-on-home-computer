@@ -240,6 +240,81 @@ print(json.dumps(model, ensure_ascii=False))
 PY
 }
 
+add_unsloth_custom_model() {
+  local repo="$1"
+  local file_name="$2"
+  local label="${3:-}"
+  local family="${4:-Unsloth}"
+  python3 - <<'PY' "$repo" "$file_name" "$label" "$family" "$CUSTOM_MODELS_PATH"
+import json, sys, urllib.request
+from pathlib import Path
+repo, file_name, label, family, registry_path = sys.argv[1:6]
+repo = repo.strip()
+file_name = file_name.strip()
+if not repo or not file_name:
+    raise SystemExit("Repo i filename su obavezni.")
+if not file_name.lower().endswith(".gguf"):
+    raise SystemExit("Unsloth model mora da pokazuje na .gguf fajl.")
+url = f"https://huggingface.co/{repo}/resolve/main/{file_name}"
+size_bytes = 0
+try:
+    request = urllib.request.Request(url, method="HEAD")
+    with urllib.request.urlopen(request, timeout=15) as response:
+        size_bytes = int(response.headers.get("Content-Length") or 0)
+except Exception:
+    size_bytes = 0
+registry = Path(registry_path)
+models = []
+if registry.exists():
+    try:
+        payload = json.loads(registry.read_text(encoding="utf-8-sig"))
+        models = payload.get("models", []) or []
+    except Exception:
+        models = []
+friendly = label.strip() or Path(file_name).stem
+family_text = family.strip() or "Unsloth"
+file_token = __import__("re").sub(r"[^a-zA-Z0-9_.-]+", "_", file_name or "custom")
+model = {
+    "key": f"unsloth-{file_token}",
+    "id": f"unsloth-{file_name}",
+    "label": friendly,
+    "family": family_text,
+    "agenticScore": 6,
+    "opencodeFit": 6,
+    "useCase": "agentic-general",
+    "source": repo,
+    "filename": file_name,
+    "minExpectedBytes": int(size_bytes * 0.9) if size_bytes > 0 else 0,
+    "approxSizeGiB": round(size_bytes / (1024 ** 3), 2) if size_bytes > 0 else 0.0,
+    "minimumGpuMiB": 0,
+    "recommendedGpuMiB": 0,
+    "minimumRamGiB": 8,
+    "preferredProfiles": ["speed", "balanced"],
+    "qualityTier": "compact",
+    "curationLevel": "custom",
+    "description": "Rucno dodat Unsloth GGUF model.",
+    "customSource": "unsloth",
+    "sources": [{"repo": repo, "filename": file_name}],
+}
+filtered = [item for item in models if str(item.get("id")) != model["id"]]
+filtered.append(model)
+registry.parent.mkdir(parents=True, exist_ok=True)
+datetime_mod = __import__("datetime")
+registry.write_text(
+    json.dumps(
+        {
+            "updatedAt": datetime_mod.datetime.now(datetime_mod.timezone.utc).isoformat(),
+            "models": filtered,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
+print(json.dumps(model, ensure_ascii=False))
+PY
+}
+
 download_huggingface_custom_model() {
   local meta_json="$1"
   local download_python="$2"
@@ -657,6 +732,12 @@ PY
           "$SCRIPT_DIR/configure-settings.sh" >/dev/null
           exit 0
           ;;
+        unsloth)
+          download_python="$(ensure_model_download_python)"
+          download_huggingface_custom_model "$meta_json" "$download_python"
+          "$SCRIPT_DIR/configure-settings.sh" >/dev/null
+          exit 0
+          ;;
         local-file)
           if [ -f "$path" ]; then
             echo "Lokalni model je vec prisutan: $path"
@@ -710,8 +791,23 @@ PY
 )"
     echo "HF model dodat: $model_file"
     ;;
+  add-unsloth)
+    [ -n "$MODEL_ID" ] || { echo "Prosledi Unsloth repo."; exit 1; }
+    unsloth_file="${POSITIONAL_ARGS[0]:-}"
+    [ -n "$unsloth_file" ] || { echo "Prosledi Unsloth filename."; exit 1; }
+    label="${POSITIONAL_ARGS[1]:-}"
+    family="${POSITIONAL_ARGS[2]:-Unsloth}"
+    result_json="$(add_unsloth_custom_model "$MODEL_ID" "$unsloth_file" "$label" "$family")"
+    model_file="$(python3 - <<'PY' "$result_json"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("id", ""))
+PY
+)"
+    echo "Unsloth model dodat: $model_file"
+    ;;
   *)
-    echo "Koriscenje: $0 [list|compare <model-id>|use <model-id>|recommend|download <model-id>|add-local <putanja> [label] [family]|add-hf <repo> <filename> [label] [family]] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"
+    echo "Koriscenje: $0 [list|compare <model-id>|use <model-id>|recommend|download <model-id>|add-local <putanja> [label] [family]|add-hf <repo> <filename> [label] [family]|add-unsloth <repo> <filename> [label] [family]] [--search tekst] [--family Gemma] [--installed-only] [--recommended-only] [--fit-only] [--coder-only] [--verified-only]"
     exit 1
     ;;
 esac

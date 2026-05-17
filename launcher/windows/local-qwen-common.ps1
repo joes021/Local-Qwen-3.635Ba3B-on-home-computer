@@ -293,6 +293,11 @@ function Save-Settings {
     Write-Utf8NoBomText -Path $settingsPath -Content ($Settings | ConvertTo-Json -Depth 20)
 }
 
+function Get-ControlCenterNextTurboQuantConfigPath {
+    $root = Get-LocalQwenStateRoot
+    return Join-Path $root "state\control-center-next-turboquant-config.json"
+}
+
 function Get-VersionFilePath {
     $root = Get-LocalQwenCodeRoot
     $path = Join-Path $root "version.json"
@@ -1724,6 +1729,69 @@ function Add-HuggingFaceCustomModel {
         curationLevel = "custom"
         description = "Rucno dodat Hugging Face GGUF model."
         customSource = "huggingface"
+        sources = @(
+            [pscustomobject]@{
+                repo = $repoText
+                filename = $fileNameText
+            }
+        )
+    }
+    Add-OrUpdateCustomModel -Model $model | Out-Null
+    return $model
+}
+
+function Add-UnslothCustomModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$FileName,
+        [string]$Label = "",
+        [string]$Family = "Unsloth"
+    )
+
+    $repoText = $Repo.Trim()
+    $fileNameText = $FileName.Trim()
+    if ([string]::IsNullOrWhiteSpace($repoText) -or [string]::IsNullOrWhiteSpace($fileNameText)) {
+        throw "Repo i filename su obavezni."
+    }
+    if ([System.IO.Path]::GetExtension($fileNameText).ToLowerInvariant() -ne ".gguf") {
+        throw "Unsloth model mora da pokazuje na .gguf fajl."
+    }
+
+    $url = "https://huggingface.co/$repoText/resolve/main/$fileNameText"
+    $sizeBytes = 0
+    try {
+        $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -ErrorAction Stop
+        $headerValue = $response.Headers["Content-Length"]
+        if ($headerValue) {
+            $sizeBytes = [int64]$headerValue
+        }
+    } catch {
+        $sizeBytes = 0
+    }
+
+    $friendlyLabel = if ([string]::IsNullOrWhiteSpace($Label)) { [System.IO.Path]::GetFileNameWithoutExtension($fileNameText) } else { $Label.Trim() }
+    $approxGiB = if ($sizeBytes -gt 0) { [math]::Round(($sizeBytes / 1GB), 2) } else { 0.0 }
+    $fileToken = ($fileNameText -replace '[^a-zA-Z0-9_.-]+', '_')
+    $model = [pscustomobject]@{
+        key = "unsloth-$fileToken"
+        id = "unsloth-$fileNameText"
+        label = $friendlyLabel
+        family = $(if ([string]::IsNullOrWhiteSpace($Family)) { "Unsloth" } else { $Family.Trim() })
+        agenticScore = 6
+        opencodeFit = 6
+        useCase = "agentic-general"
+        source = $repoText
+        filename = $fileNameText
+        minExpectedBytes = $(if ($sizeBytes -gt 0) { [int64]([math]::Floor($sizeBytes * 0.9)) } else { 0 })
+        approxSizeGiB = $approxGiB
+        minimumGpuMiB = 0
+        recommendedGpuMiB = 0
+        minimumRamGiB = 8
+        preferredProfiles = @("speed", "balanced")
+        qualityTier = "compact"
+        curationLevel = "custom"
+        description = "Rucno dodat Unsloth GGUF model."
+        customSource = "unsloth"
         sources = @(
             [pscustomobject]@{
                 repo = $repoText
