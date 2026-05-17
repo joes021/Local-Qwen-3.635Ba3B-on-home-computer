@@ -53,6 +53,7 @@ if (-not $nextLauncher) {
     exit 0
 }
 
+$env:LOCAL_QWEN_HOME = Get-LocalQwenStateRoot
 $env:CONTROL_CENTER_NEXT_TARGET_PLATFORM = "windows"
 & (Get-WindowsPowerShellExe) -NoProfile -ExecutionPolicy Bypass -File $nextLauncher
 $exitCode = $LASTEXITCODE
